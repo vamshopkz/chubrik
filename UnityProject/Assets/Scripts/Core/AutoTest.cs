@@ -258,6 +258,28 @@ namespace Chubrik
             yield return Shot("21_secret_lootbox");
             ShopUI.CloseBox();
 
+            // ---- keys and cages ----
+            Check("4 cages and 4 golden keys in world 2", Rescue.Total("w2") == 4 && Pickups.I.KeysLeft == 4, $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeft}");
+            var cage = Rescue.Cages.Find(c => c.id == "w2c0");
+            pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
+            yield return Wait(0.6f);
+            pl.yaw = cage.transform.eulerAngles.y + 180; pl.pitch = 12;
+            yield return Wait(0.3f);
+            yield return Shot("24_cage_closed");
+            Zones.Interact();
+            Check("a cage stays shut without a key", !cage.Open);
+            pl.Teleport(World2.O + new Vector3(10, 3.5f, 40), 0);
+            yield return Wait(0.4f);
+            Check("golden key picked up", Save.P.keys == 1, Save.P.keys.ToString());
+            pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
+            yield return Wait(0.6f);
+            pl.yaw = cage.transform.eulerAngles.y + 180;
+            Zones.Interact();
+            yield return Wait(0.8f);
+            yield return Shot("25_cage_open");
+            Check("key opens the cage and the friend is rescued", cage.Open && Save.P.keys == 0 && Save.P.rescued.Contains("w2c0"));
+            yield return Wait(2.5f);
+
             pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -2.2f), 0);
             yield return Wait(1.0f);
             pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -1.5f), 0);
@@ -272,6 +294,10 @@ namespace Chubrik
             Worlds.Enter(1);
             yield return Wait(1.6f);
             Check("back to the lobby", Worlds.Current == 1 && pl.transform.position.magnitude < 80);
+            Check("rescued friend walks in the lobby", GameObject.Find("Friend w2c0") != null);
+            pl.Teleport(new Vector3(0, 0.3f, -2), 0);
+            yield return Wait(1.5f);
+            yield return Shot("26_lobby_friend");
 
             // ---- water respawn ----
             pl.Teleport(new Vector3(0, 0.5f, 70), 0);

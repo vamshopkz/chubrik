@@ -8,7 +8,7 @@ namespace Chubrik
     public class Pickups : MonoBehaviour
     {
         public static Pickups I;
-        class P { public GameObject go; public Vector3 pos; public int value; public string token; public float back; public bool active = true; }
+        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key; public float back; public bool active = true; }
         readonly List<P> items = new List<P>();
         GameObject arrow;
         public int CoinsAlive { get { int n = 0; foreach (var p in items) if (p.active && p.token == null) n++; return n; } }
@@ -52,7 +52,22 @@ namespace Chubrik
             items.Add(new P { go = go, pos = pos, token = id });
         }
 
-        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && p.active) n++; return n; } }
+        /// <summary>Golden key: opens one cage with a captured friend (taken once forever).</summary>
+        public void Key(string id, Vector3 pos)
+        {
+            if (Save.P.found.Contains(id)) return;
+            Parts.Layer = Layers.Pickup;
+            var go = new GameObject("Key " + id) { layer = Layers.Pickup };
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+            KeyModel.Build(go.transform);
+            go.AddComponent<Spin>().speed = 120;
+            go.AddComponent<Bob>().amp = 0.15f;
+            items.Add(new P { go = go, pos = pos, token = id, key = true });
+        }
+
+        public int KeysLeft { get { int n = 0; foreach (var p in items) if (p.key && p.active) n++; return n; } }
+        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && p.active) n++; return n; } }
         public IEnumerable<Vector3> TokenSpots() { foreach (var p in items) if (p.token != null && p.active) yield return p.pos; }
 
         void Update()
@@ -110,6 +125,16 @@ namespace Chubrik
         {
             p.active = false;
             p.go.SetActive(false);
+            if (p.key)
+            {
+                Save.P.found.Add(p.token);
+                Save.P.keys++;
+                Save.Write();
+                AudioFx.Play("token");
+                Effects.Emit("gold", p.pos, 30, 0.5f);
+                Hud.Toast($"Золотой ключ! Открой им клетку с другом (ключей: {Save.P.keys})", UIKit.Gold);
+                return;
+            }
             if (p.token != null)
             {
                 Save.P.found.Add(p.token);
@@ -140,9 +165,9 @@ namespace Chubrik
     /// <summary>Places you can enter (shop, wardrobe, premium kiosk): the HUD shows a button while you stand there.</summary>
     public static class Zones
     {
-        public class Z { public Vector3 pos; public float r; public string label; public Action act; }
+        public class Z { public Vector3 pos; public float r; public string label; public Action act; public Func<bool> active; }
         public static readonly List<Z> All = new List<Z>();
-        public static void Add(Vector3 pos, float r, string label, Action act) => All.Add(new Z { pos = pos, r = r, label = label, act = act });
+        public static void Add(Vector3 pos, float r, string label, Action act, Func<bool> active = null) => All.Add(new Z { pos = pos, r = r, label = label, act = act, active = active });
 
         public static Z Near()
         {
@@ -150,6 +175,7 @@ namespace Chubrik
             if (p == null || p.MenuOrbit) return null;
             foreach (var z in All)
             {
+                if (z.active != null && !z.active()) continue;
                 var d = p.transform.position - z.pos; d.y = 0;
                 if (d.magnitude < z.r && Mathf.Abs(p.transform.position.y - z.pos.y) < 3) return z;
             }

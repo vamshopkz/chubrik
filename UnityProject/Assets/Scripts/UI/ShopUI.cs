@@ -56,7 +56,6 @@ namespace Chubrik
                     }, P.coins >= price, UIKit.Red);
                 }
                 else w.Row("Жизни: 6 из 6", "Максимум сердечек!", null, UIKit.Red, null, true, UIKit.Red);
-                w.Row("Премиум-наборы", "8 наборов с эксклюзивными скинами", "СМОТРЕТЬ", UIKit.Gold, PremiumUI.Open, true, UIKit.Gold);
                 w.Footer.text = "Монеты появляются снова через минуту — собирай их по всему лобби";
             }, 1100, 800);
         }
@@ -181,7 +180,7 @@ namespace Chubrik
                     var names = string.Join(", ", s.items.ConvertAll(i => i.name));
                     var set = s;
                     w.Row($"«{s.name}» — {Tenge(s.price)}", names, own ? "ОТКРЫТ" : "КУПИТЬ", own ? UIKit.Green : UIKit.Gold,
-                        own ? (System.Action)(() => { Window.Close(); WardrobeUI.Open(set.items[0].dept); }) : () => Buy(set), true, s.color);
+                        own ? (System.Action)(() => Hud.Toast("Надень вещи набора в гардеробе (розовый домик слева от фонтана)", UIKit.Pink)) : () => Buy(set), true, s.color);
                 }
                 w.Row("Есть промокод?", "Промокод разработчика открывает все 8 наборов", "ВВЕСТИ", UIKit.Violet, Menus.PromoWindow, true, UIKit.Violet);
                 w.Footer.text = Save.P.promo ? "Промокод «Артём 22 X» активирован — все наборы твои!" : "Покупки за тенге появятся позже";

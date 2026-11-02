@@ -232,8 +232,8 @@ namespace Chubrik
             if (Save.Worn(sel.dept) == sel.id) return;
             if (!Save.Owns(sel.id))
             {
-                if (sel.Premium) { PremiumUI.Open(); return; }
-                if (sel.promoOnly) { Menus.PromoWindow(); return; }
+                if (sel.Premium) { AudioFx.Play("error"); Hud.Toast($"Набор «{Catalog.Sets[sel.set].name}» — в золотом премиум-киоске у фонтана", UIKit.Gold); return; }
+                if (sel.promoOnly) { AudioFx.Play("error"); Hud.Toast("Промокод вводится в золотом премиум-киоске", UIKit.Violet); return; }
                 bool paid = sel.tokens ? Save.SpendTokens(sel.price) : Save.Spend(sel.price);
                 if (!paid)
                 {

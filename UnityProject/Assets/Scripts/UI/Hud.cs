@@ -12,14 +12,14 @@ namespace Chubrik
         public static bool Touch => Application.isMobilePlatform || Boot.Has("-touch");
         public static bool JumpButtonHeld => I != null && I.jumpBtn != null && I.jumpBtn.Held;
         RectTransform root, touchRoot, heartsRow;
-        TextMeshProUGUI coins, tokens, toast, hint, navTxt;
+        TextMeshProUGUI coins, tokens, keys, friends, toast, hint, navTxt;
         Image flash, crack;
         RectTransform glitch;
         UIButton menuBtn, enterBtn, jumpBtn, hitBtn, emoteBtn;
         readonly List<Image> hearts = new List<Image>();
         float toastUntil, flashA, crackT, glitchT, heartT;
-        int shownCoins = -1, shownTokens = -1, shownHearts = -1, shownFull = -1;
-        public static Sprite CoinSprite, TokenSprite, HeartSprite;
+        int shownCoins = -1, shownTokens = -1, shownKeys = -1, shownHearts = -1, shownFull = -1;
+        public static Sprite CoinSprite, TokenSprite, HeartSprite, KeySprite;
 
         public static void Create()
         {
@@ -44,6 +44,7 @@ namespace Chubrik
             CoinSprite = UIKit.Circle;
             TokenSprite = SpriteOf(Patterns.Shape("star"));
             HeartSprite = SpriteOf(Patterns.Shape("heart"));
+            KeySprite = SpriteOf(KeyTex());
 
             flash = UIKit.Img(root, UIKit.White, new Color(1, 0, 0, 0), "Flash");
             UIKit.Fill(flash.rectTransform);
@@ -61,7 +62,7 @@ namespace Chubrik
 
             // coins / tokens / hearts (top left)
             var bar = UIKit.Img(root, UIKit.Pill, new Color(0.05f, 0.15f, 0.35f, 0.55f), "TopBar");
-            UIKit.Place(bar.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16 + safe.x, -14 - safe.w), new Vector2(430, 64));
+            UIKit.Place(bar.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16 + safe.x, -14 - safe.w), new Vector2(560, 64));
             var ci = UIKit.Img(bar.transform, CoinSprite, UIKit.Gold, "Coin");
             UIKit.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(12, 0), new Vector2(46, 46));
             var ci2 = UIKit.Img(ci.transform, CoinSprite, Parts.Hex("FFB300"), "In");
@@ -71,9 +72,14 @@ namespace Chubrik
             var ti = UIKit.Img(bar.transform, TokenSprite, UIKit.Violet, "Token");
             UIKit.Place(ti.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(246, 0), new Vector2(50, 50));
             tokens = UIKit.Txt(bar.transform, "0", 36, Color.white, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(tokens.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(302, 0), new Vector2(120, 56));
+            UIKit.Place(tokens.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(302, 0), new Vector2(110, 56));
+            var ki = UIKit.Img(bar.transform, KeySprite, UIKit.Gold, "Key");
+            UIKit.Place(ki.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(410, 0), new Vector2(52, 52));
+            keys = UIKit.Txt(bar.transform, "0", 36, Color.white, TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(keys.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(466, 0), new Vector2(90, 56));
             heartsRow = UIKit.Rect("Hearts", root);
             UIKit.Place(heartsRow, new Vector2(0, 1), new Vector2(0, 1), new Vector2(22 + safe.x, -86 - safe.w), new Vector2(400, 50));
+            friends = T("", 26, UIKit.Gold, TextAlignmentOptions.Left, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + safe.x, -172 - safe.w), new Vector2(520, 34));
             navTxt = T("", 24, Parts.Hex("7DFF9A"), TextAlignmentOptions.Left, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + safe.x, -140 - safe.w), new Vector2(500, 34));
 
             menuBtn = UIKit.Button(root, "МЕНЮ", UIKit.Blue, () => Menus.Pause(), 26);
@@ -114,6 +120,16 @@ namespace Chubrik
             touchRoot.gameObject.SetActive(Touch);
         }
 
+        static Texture2D KeyTex()
+        {
+            var cv = new Canvas2(64, 64, new Color(1, 1, 1, 0));
+            cv.Ring(20, 32, 11, 7, Color.white);
+            cv.Rect(30, 29, 28, 7, Color.white);
+            cv.Rect(46, 20, 5, 10, Color.white);
+            cv.Rect(54, 20, 5, 10, Color.white);
+            return cv.Tex(false);
+        }
+
         static Texture2D CrackTex()
         {
             var cv = new Canvas2(512, 288, new Color(1, 1, 1, 0));
@@ -150,6 +166,8 @@ namespace Chubrik
             var P = Save.P;
             if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
+            if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }
+            friends.text = Worlds.Current == 2 ? $"Друзья спасены: {Rescue.Rescued("w2")} из {Rescue.Total("w2")}" : (P.rescued.Count > 0 ? $"Спасённых друзей: {P.rescued.Count}" : "");
             if (P.maxHearts != shownHearts) RebuildHearts();
             int full = Worlds.Current == 2 && PlayerCtl.I ? Mathf.Clamp(PlayerCtl.I.Hearts, 0, P.maxHearts) : P.maxHearts;
             if (full != shownFull)

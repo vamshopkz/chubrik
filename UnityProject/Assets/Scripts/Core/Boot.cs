@@ -42,6 +42,8 @@ namespace Chubrik
             }
             QualitySettings.shadows = shadows ? UnityEngine.ShadowQuality.All : UnityEngine.ShadowQuality.Disable;
 
+            // phones: touches drive the UI themselves; mouse events made up from touches made the camera jump to the jump button
+            if (Hud.Touch) Input.simulateMouseWithTouches = false;
             UIRoot.Create();
             AudioFx.Create();
             Updater.Create();
@@ -50,6 +52,7 @@ namespace Chubrik
             PostFx(mobile);
             Pickups.Create(null);
             Lobby.Build();
+            Rescue.SpawnLobbyFriends();
             Preview.Create();
             Hud.Create();
             Save.Changed += WardrobeUI.Changed;

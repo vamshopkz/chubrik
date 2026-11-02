@@ -25,7 +25,7 @@ namespace Chubrik
                     p.Checkpoint = World2.Spawn;
                     p.Teleport(World2.Spawn, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast("МИР 2 — ПАРЯЩИЕ РУИНЫ. Прыгай мобам на голову и дойди до кубка!", UIKit.Lime);
+                    Hud.Toast("МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 4 ключа и спаси друзей из клеток!", UIKit.Lime);
                 }
                 else
                 {
@@ -69,8 +69,12 @@ namespace Chubrik
             Isle(V(0, 0, 0), new Vector2(14, 14));
             Portal(V(0, 0, -6f));
             Lobby.Sign(V(-4.5f, 0, 3), 0, "МИР 2 · ПАРЯЩИЕ РУИНЫ", "6EDC3C", 5.4f);
-            Lobby.Sign(V(4.5f, 0, 3), 0, "ПРЫГАЙ МОБАМ НА ГОЛОВУ!", "FF9A2E", 5.4f);
+            Lobby.Sign(V(4.5f, 0, 3), 0, "НАЙДИ КЛЮЧИ — СПАСИ ДРУЗЕЙ!", "FF9A2E", 5.4f);
             Column(V(-5.5f, 0, -5.5f), 4, false); Column(V(5.5f, 0, -5.5f), 2.2f, true);
+            // stone steps up the whole column: a golden key waits on top
+            Lobby.Box(V(-3.6f, 0.6f, -3.6f), new Vector3(1.3f, 1.2f, 1.3f), stone, 10);
+            Lobby.Box(V(-4.5f, 1.3f, -4.9f), new Vector3(1.1f, 2.6f, 1.1f), stone, 25);
+            Pickups.I.Key("w2k0", V(-5.5f, 5.6f, -5.5f));
             Crate(V(4, 0.55f, -2)); Crate(V(5.2f, 0.55f, -2.3f));
             Line(V(0, 0.8f, 2), V(0, 0.8f, 6), 3);
 
@@ -86,12 +90,14 @@ namespace Chubrik
             // wide stepping stones up to the giant stump
             Isle(V(6, 1.2f, 32), new Vector2(6, 6), 1.2f);
             Isle(V(10, 2.4f, 40), new Vector2(6, 6), 1.2f);
-            Coin(V(6, 2, 32)); Coin(V(10, 3.2f, 40));
+            Coin(V(6, 2, 32));
+            Pickups.I.Key("w2k1", V(10, 4.2f, 40));
             Stump(V(10, 3.6f, 50), 6.5f, 7);
             Enemy.Spawn(EnemyKind.Bee, V(10, 3.6f, 50), 3.4f);
             Crate(V(13, 4.15f, 52)); Crate(V(7, 4.15f, 53));
             CoinRing(V(10, 4.4f, 50), 2.2f, 8);
             Checkpoint(V(6.5f, 3.6f, 47));
+            Rescue.SpawnCage("w2c0", V(14.5f, 3.6f, 47), -60, Root);
 
             // bridge → ruins plaza
             Bridge(V(8, 3.6f, 56.2f), V(1, 3.6f, 62.5f));
@@ -102,6 +108,11 @@ namespace Chubrik
             Enemy.Spawn(EnemyKind.Golem, V(4, 3.6f, 72), 2.6f, 0.5f);
             Crate(V(-7, 4.15f, 64)); Crate(V(-7, 4.15f, 65.2f)); Crate(V(-5.8f, 4.15f, 64.5f));
             GoldCrate(V(7, 4.15f, 76), "w2box0");
+            Rescue.SpawnCage("w2c1", V(-6, 3.6f, 76.3f), 150, Root);
+            // bounce mushroom up to a tiny sky island with a key
+            Lobby.Mushroom(V(5, 3.6f, 65), 19f);
+            Isle(V(11, 11.5f, 62.5f), new Vector2(4.5f, 4.5f), 1f);
+            Pickups.I.Key("w2k2", V(11, 12.4f, 62.5f));
             CoinRing(V(0, 4.4f, 70), 6, 14);
 
             // side path: round island with a bounce mushroom up to a secret grove (purple token)
@@ -111,6 +122,7 @@ namespace Chubrik
             Isle(V(-20, 10.2f, 86), new Vector2(7, 7));
             Lobby.Tree(V(-22, 10.2f, 88), 0.8f, 33);
             Crate(V(-18.5f, 10.75f, 86), 5, "w2t1");
+            Pickups.I.Key("w2k3", V(-21.5f, 11.1f, 84));
             for (int k = 0; k < 5; k++) Coin(V(-20, 6 + k * 1.2f, 77 + k * 1.6f));
             Bridge(V(-17, 10.2f, 89.6f), V(-6.5f, 5.4f, 94));   // gentle way back down to the main path
 
@@ -127,6 +139,7 @@ namespace Chubrik
             Bridge(V(4.5f, 5.4f, 101), V(10, 6.6f, 107));
             Stump(V(12, 6.6f, 112), 5.5f, 9);
             Enemy.Spawn(EnemyKind.Slime, V(12, 6.6f, 112), 2.6f);
+            Rescue.SpawnCage("w2c2", V(16.2f, 6.6f, 110.8f), -90, Root);
             CoinRing(V(12, 7.4f, 112), 2.6f, 8);
             Isle(V(6, 6.6f, 120.5f), new Vector2(6, 6), 1.2f);
             Coin(V(6, 7.4f, 120.5f));
@@ -139,6 +152,7 @@ namespace Chubrik
             Enemy.Spawn(EnemyKind.Bee, V(5, 6.6f, 134), 2.4f, 0.3f);
             Crate(V(-8, 7.15f, 131)); Crate(V(8, 7.15f, 131)); Crate(V(-8, 7.15f, 132.2f)); Crate(V(8, 7.15f, 140), 3, "w2t3");
             Checkpoint(V(-6, 6.6f, 130));
+            Rescue.SpawnCage("w2c3", V(-2.5f, 7.5f, 143.8f), 180, Root);
             Line(V(0, 7.4f, 129), V(0, 7.4f, 138), 7);
             GoalPos = V(0, 8.3f, 142.5f);
             Goal(GoalPos);

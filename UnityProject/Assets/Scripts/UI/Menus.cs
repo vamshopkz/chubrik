@@ -51,10 +51,9 @@ namespace Chubrik
                 b.Bg.rectTransform.sizeDelta = new Vector2(560, h);
             }
             Btn("ИГРАТЬ", UIKit.Green, Play, 112, 52);
-            Btn("ГАРДЕРОБ", UIKit.Pink, () => { CloseMain(); WardrobeUI.Open(); });
-            Btn("МАГАЗИН", UIKit.Orange, () => { CloseMain(); ShopUI.Open(); });
-            Btn("ПРОМОКОД", UIKit.Violet, () => { CloseMain(); PromoWindow(); });
             Btn("НАСТРОЙКИ", UIKit.Blue, () => { CloseMain(); Settings(); });
+            var tip = UIKit.Txt(col, "Гардероб, магазин и премиум-наборы — в лобби: подойди к ним", 24, Color.white);
+            tip.rectTransform.sizeDelta = new Vector2(560, 70);
             if (Updater.HasUpdate) Btn(Updater.I.ButtonText, UIKit.Orange, () => Updater.I.Press(), 80, 30);
             var ver = UIKit.Txt(dim.transform, "версия " + Application.version, 22, new Color(1, 1, 1, 0.8f), TextAlignmentOptions.BottomRight, false);
             UIKit.Place(ver.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-20, 12), new Vector2(400, 30));
@@ -92,10 +91,6 @@ namespace Chubrik
             {
                 if (Updater.HasUpdate) w.Row("Вышла новая версия " + Updater.I.LatestVersion + "!", "Скачай обновление — в нём новые штуки", Updater.I.ButtonText, UIKit.Orange, () => Updater.I.Press());
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
-                w.Row("Гардероб", "31 отдел, больше 250 вещей", "ОТКРЫТЬ", UIKit.Pink, () => { Window.Close(); WardrobeUI.Open(); });
-                w.Row("Магазин примочек", "Лутбоксы, навигатор, жетоны, жизни", "ОТКРЫТЬ", UIKit.Orange, () => ShopUI.Open());
-                w.Row("Премиум-наборы", "8 наборов с эксклюзивными скинами", "ОТКРЫТЬ", UIKit.Gold, () => PremiumUI.Open());
-                w.Row("Промокод", null, "ВВЕСТИ", UIKit.Violet, PromoWindow);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
                 if (Worlds.Current == 2)
                 {
@@ -108,7 +103,8 @@ namespace Chubrik
                     w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }
                 w.Row("Главное меню", null, "ВЫЙТИ", UIKit.Red, Main);
-                w.Footer.text = $"Жетонов найдено: {Save.P.found.Count} из {Lobby.TokenSpots.Count} · вещей: {OwnedCount()} из {Catalog.Items.Count}";
+                w.Text("Гардероб, магазин примочек и премиум-наборы открываются, когда подходишь к ним в лобби.", 24, UIKit.Muted);
+                w.Footer.text = $"Ключей: {Save.P.keys} · спасено друзей: {Save.P.rescued.Count} · вещей: {OwnedCount()} из {Catalog.Items.Count}";
             }, 1000, 800);
         }
 

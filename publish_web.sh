@@ -19,6 +19,6 @@ git init -q -b gh-pages
 git add -A
 git -c user.name="$LOGIN" -c user.email="$LOGIN@users.noreply.github.com" commit -q \
   -m "Браузерная версия $(date +%Y-%m-%d\ %H:%M)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-git -c credential.helper= -c credential.helper="!$GH auth git-credential" push -q -f "https://github.com/$REPO.git" gh-pages
+git -c http.postBuffer=524288000 -c credential.helper= -c credential.helper="!$GH auth git-credential" push -q -f "https://github.com/$REPO.git" gh-pages
 $GH api "repos/$REPO/pages" >/dev/null 2>&1 || $GH api -X POST "repos/$REPO/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null
 echo "Готово: https://$LOGIN.github.io/chubrik/"

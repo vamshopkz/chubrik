@@ -251,6 +251,7 @@ namespace Chubrik
         public void OnPointerDown(PointerEventData e)
         {
             if (pointer != int.MinValue) return;
+            if (Hud.Touch && e.pointerId < 0) return;
             pointer = e.pointerId;
             RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)transform, e.position, e.pressEventCamera, out var local);
             var r = ((RectTransform)transform).rect;
@@ -289,16 +290,29 @@ namespace Chubrik
         }
     }
 
-    /// <summary>Drag anywhere on the right part of the screen to turn the camera.</summary>
+    /// <summary>
+    /// Swipe on the right part of the screen to turn the camera (left/right, up/down). Each finger is tracked by
+    /// its own position, so pressing «ПРЫЖОК» or tapping elsewhere with another finger never jerks the camera;
+    /// a tap without a swipe does nothing.
+    /// </summary>
     public class LookArea : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
     {
         int pointer = int.MinValue;
-        public void OnPointerDown(PointerEventData e) { if (pointer == int.MinValue) { pointer = e.pointerId; UIRoot.LookActive = true; } }
+        Vector2 last;
+        public void OnPointerDown(PointerEventData e)
+        {
+            if (pointer != int.MinValue) return;
+            if (Hud.Touch && e.pointerId < 0) return;   // a mouse event made up from touches: ignore
+            pointer = e.pointerId; last = e.position; UIRoot.LookActive = true;
+        }
         public void OnDrag(PointerEventData e)
         {
             if (e.pointerId != pointer || PlayerCtl.I == null) return;
+            var d = e.position - last;
+            last = e.position;
+            if (d.magnitude > Screen.height * 0.12f) return;   // a jump between fingers, not a real swipe
             float k = 1600f / Mathf.Max(800, Screen.width) * 0.9f;
-            PlayerCtl.I.LookDelta += new Vector2(e.delta.x * k, -e.delta.y * k * 0.8f);
+            PlayerCtl.I.LookDelta += new Vector2(d.x * k, -d.y * k * 0.8f);
         }
         public void OnPointerUp(PointerEventData e) { if (e.pointerId == pointer) { pointer = int.MinValue; UIRoot.LookActive = false; } }
         void OnDisable() { pointer = int.MinValue; UIRoot.LookActive = false; }

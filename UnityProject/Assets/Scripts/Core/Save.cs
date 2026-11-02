@@ -17,6 +17,8 @@ namespace Chubrik
         public List<int> sets = new List<int>();            // premium sets unlocked
         public List<string> found = new List<string>();     // hidden tokens / secret crates already taken
         public List<int> done = new List<int>();            // worlds finished
+        public int keys;                                     // golden keys in the pocket
+        public List<string> rescued = new List<string>();   // cages opened (friends now live in the lobby)
         public int boxes;                                    // loot boxes opened
         public float volume = 0.8f, sens = 1f;
         public bool music = true;
