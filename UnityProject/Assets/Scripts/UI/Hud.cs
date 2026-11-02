@@ -18,7 +18,7 @@ namespace Chubrik
         UIButton menuBtn, enterBtn, jumpBtn, hitBtn, emoteBtn;
         readonly List<Image> hearts = new List<Image>();
         float toastUntil, flashA, crackT, glitchT, heartT;
-        int shownCoins = -1, shownTokens = -1, shownHearts = -1;
+        int shownCoins = -1, shownTokens = -1, shownHearts = -1, shownFull = -1;
         public static Sprite CoinSprite, TokenSprite, HeartSprite;
 
         public static void Create()
@@ -151,6 +151,12 @@ namespace Chubrik
             if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
             if (P.maxHearts != shownHearts) RebuildHearts();
+            int full = Worlds.Current == 2 && PlayerCtl.I ? Mathf.Clamp(PlayerCtl.I.Hearts, 0, P.maxHearts) : P.maxHearts;
+            if (full != shownFull)
+            {
+                shownFull = full;
+                for (int i = 0; i < hearts.Count; i++) hearts[i].color = i < full ? UIKit.Red : new Color(0.15f, 0.2f, 0.35f, 0.6f);
+            }
             if (heartT > 0)
             {
                 heartT -= Time.deltaTime;
@@ -168,7 +174,7 @@ namespace Chubrik
             if (z != null) enterBtn.Set((Touch ? "ВОЙТИ: " : "ВОЙТИ (E): ") + z.label);
 
             var pk = Pickups.I;
-            if (pk != null && P.navigator && P.navigatorOn && pk.NearestCoin.HasValue) navTxt.text = $"Навигатор: монета в {Mathf.RoundToInt(pk.NearestCoinDist)} м";
+            if (pk != null && P.navigator && P.navigatorOn && pk.NearestCoin.HasValue) navTxt.text = $"Навигатор: сокровище в {Mathf.RoundToInt(pk.NearestCoinDist)} м";
             else navTxt.text = "";
 
             if (Time.time > toastUntil && toast.text != "") toast.text = "";
@@ -190,6 +196,7 @@ namespace Chubrik
         void RebuildHearts()
         {
             shownHearts = Save.P.maxHearts;
+            shownFull = -1;
             foreach (var h in hearts) Destroy(h.gameObject);
             hearts.Clear();
             for (int i = 0; i < shownHearts; i++)

@@ -67,6 +67,9 @@ namespace Chubrik
             if (PlayerCtl.I.MenuOrbit)
             {
                 PlayerCtl.I.MenuOrbit = false;
+                Worlds.Current = 1;
+                PlayerCtl.I.WaterY = -0.9f;
+                PlayerCtl.I.Hearts = Save.P.maxHearts;
                 PlayerCtl.I.Teleport(Lobby.Spawn, 0);
             }
         }
@@ -94,7 +97,16 @@ namespace Chubrik
                 w.Row("Премиум-наборы", "8 наборов с эксклюзивными скинами", "ОТКРЫТЬ", UIKit.Gold, () => PremiumUI.Open());
                 w.Row("Промокод", null, "ВВЕСТИ", UIKit.Violet, PromoWindow);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
-                w.Row("Вернуться в лобби", "Телепорт к фонтану", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
+                if (Worlds.Current == 2)
+                {
+                    w.Row("Вернуться к флажку", "Последний чекпоинт мира 2", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(PlayerCtl.I.Checkpoint, 0)); });
+                    w.Row("Вернуться в лобби", null, "В ЛОББИ", UIKit.Green, () => Worlds.Enter(1));
+                }
+                else
+                {
+                    w.Row("Мир 2 — Парящие руины", Save.P.done.Contains(2) ? "Пройден! Можно пройти ещё раз" : "Лёгкий мир с мобами и ящиками", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(2));
+                    w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
+                }
                 w.Row("Главное меню", null, "ВЫЙТИ", UIKit.Red, Main);
                 w.Footer.text = $"Жетонов найдено: {Save.P.found.Count} из {Lobby.TokenSpots.Count} · вещей: {OwnedCount()} из {Catalog.Items.Count}";
             }, 1000, 800);
@@ -159,7 +171,7 @@ namespace Chubrik
                     if (Promo.Apply(input.text)) Window.Refresh();
                 }, 30);
                 UIKit.Place(go.Bg.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(0, 0), new Vector2(300, 86));
-                if (Save.P.promo) w.Text("Промокод разработчика активирован: все 8 премиум-наборов и «Ультимативный аватар» открыты!", 28, UIKit.Gold);
+                if (Save.P.promo) w.Text("Промокод разработчика активирован: 6 сердечек, все 8 премиум-наборов и «Ультимативный аватар»!", 28, UIKit.Gold);
             }, 1000, 520);
         }
     }
@@ -209,13 +221,15 @@ namespace Chubrik
             UnlockAll();
             AudioFx.Play("token");
             PlayerCtl.I?.PlayVictory();
-            Hud.Toast("ПРОМОКОД «АРТЁМ 22 X»: все 8 премиум-наборов открыты бесплатно!", UIKit.Gold);
+            Hud.Toast("ПРОМОКОД «АРТЁМ 22 X»: 6 сердечек и все 8 премиум-наборов бесплатно!", UIKit.Gold);
             return true;
         }
 
         public static void UnlockAll()
         {
             Save.P.promo = true;
+            Save.P.maxHearts = 6;
+            if (PlayerCtl.I) PlayerCtl.I.Hearts = 6;
             foreach (var s in Catalog.Sets) UnlockSet(s, false);
             Save.Give("secret_7");
             Save.Write();

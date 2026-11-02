@@ -12,7 +12,7 @@ namespace Chubrik
     /// </summary>
     public static class Lobby
     {
-        static Transform root;
+        internal static Transform root;
         public static readonly Vector3 Spawn = new Vector3(0, 0.3f, -4);
         public static readonly List<Vector3> TokenSpots = new List<Vector3>();
 
@@ -40,7 +40,7 @@ namespace Chubrik
 
         // ---------------- helpers ----------------
 
-        static GameObject Solid(PrimitiveType t, Vector3 pos, Vector3 scale, Material m, Vector3 euler = default, Transform parent = null)
+        internal static GameObject Solid(PrimitiveType t, Vector3 pos, Vector3 scale, Material m, Vector3 euler = default, Transform parent = null)
         {
             Parts.Layer = Layers.World;
             var go = Prim.Make(t, parent ?? root, pos, scale, m, t.ToString(), Layers.World);
@@ -55,17 +55,17 @@ namespace Chubrik
             return go;
         }
 
-        static GameObject Box(Vector3 pos, Vector3 size, Material m, float yaw = 0) => Solid(PrimitiveType.Cube, pos, size, m, new Vector3(0, yaw, 0));
-        static GameObject Disc(Vector3 top, float r, float h, Material m) => Solid(PrimitiveType.Cylinder, top - Vector3.up * h / 2, new Vector3(r * 2, h / 2, r * 2), m);
+        internal static GameObject Box(Vector3 pos, Vector3 size, Material m, float yaw = 0) => Solid(PrimitiveType.Cube, pos, size, m, new Vector3(0, yaw, 0));
+        internal static GameObject Disc(Vector3 top, float r, float h, Material m) => Solid(PrimitiveType.Cylinder, top - Vector3.up * h / 2, new Vector3(r * 2, h / 2, r * 2), m);
 
-        static Material Tiled(Texture2D t, float tile, float smooth = 0.15f)
+        internal static Material Tiled(Texture2D t, float tile, float smooth = 0.15f)
         {
             var m = Mats.Tex(t, Color.white, smooth);
             m.mainTextureScale = new Vector2(tile, tile);
             return m;
         }
 
-        static void Sign(Vector3 pos, float yaw, string text, string col = "FFC83A", float w = 4f)
+        internal static void Sign(Vector3 pos, float yaw, string text, string col = "FFC83A", float w = 4f)
         {
             var s = Node("Sign", root, pos, new Vector3(0, yaw, 0));
             var wood = M("8D5524", 0.2f);
@@ -78,7 +78,7 @@ namespace Chubrik
             t.transform.localRotation = Quaternion.identity;
         }
 
-        static ChubrikModel Npc(Vector3 pos, float yaw, params string[] items)
+        internal static ChubrikModel Npc(Vector3 pos, float yaw, params string[] items)
         {
             var look = Look.Default();
             foreach (var id in items) { var it = Catalog.Get(id); if (it != null) look[it.dept] = id; }
@@ -307,10 +307,11 @@ namespace Chubrik
                 s2.AddComponent<Pulse>();
                 var t = Prim.Text(root, $"МИР {n}", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
                 t.transform.rotation = Quaternion.identity;
-                var t2 = Prim.Text(root, "СКОРО ОТКРОЕТСЯ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex("FFE14D"));
+                var t2 = Prim.Text(root, n == 2 ? "ПАРЯЩИЕ РУИНЫ" : "СКОРО ОТКРОЕТСЯ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex(n == 2 ? "7DFF9A" : "FFE14D"));
                 t2.transform.rotation = Quaternion.identity;
                 int world = n;
-                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, $"МИР {n}", () => { AudioFx.Play("error"); Hud.Toast($"Мир {world} ещё строится — скоро откроется!", UIKit.Violet); });
+                if (n == 2) Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 2: ПАРЯЩИЕ РУИНЫ", () => Worlds.Enter(2));
+                else Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, $"МИР {n}", () => { AudioFx.Play("error"); Hud.Toast($"Мир {world} ещё строится — скоро откроется!", UIKit.Violet); });
             }
             Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
             Mushroom(new Vector3(14, 0, 31), 19.5f);
@@ -373,7 +374,7 @@ namespace Chubrik
             Island(new Vector3(-17, 9.5f, -34), 3.6f);
         }
 
-        static void Pad(Vector3 pos, Vector3 to, float yaw, string col)
+        internal static void Pad(Vector3 pos, Vector3 to, float yaw, string col)
         {
             Disc(pos + Vector3.up * 0.05f, 0.9f, 0.12f, M("2E3440", 0.6f, 0.4f));
             var ring = Ring(root, pos + Vector3.up * 0.1f, 0.75f, 0.07f, G(col, 2.2f));
@@ -384,7 +385,7 @@ namespace Chubrik
             t.transform.position = pos; t.target = to; t.faceYaw = yaw;
         }
 
-        static void Mushroom(Vector3 p, float power)
+        internal static void Mushroom(Vector3 p, float power)
         {
             var stem = Solid(PrimitiveType.Cylinder, p + Vector3.up * 0.5f, new Vector3(0.7f, 0.5f, 0.7f), M("FFF3D6", 0.3f));
             var capRoot = Node("Cap", root, p + Vector3.up * 1.0f);
@@ -517,7 +518,7 @@ namespace Chubrik
 
         // ---------------- nature ----------------
 
-        static void Tree(Vector3 p, float s, int seed)
+        internal static void Tree(Vector3 p, float s, int seed)
         {
             var r = new Rng(seed);
             Solid(PrimitiveType.Cylinder, p + Vector3.up * 1.6f * s, new Vector3(0.5f * s, 1.6f * s, 0.5f * s), Mats.Tex(Tex.Bark(), Color.white, 0.1f));
@@ -530,18 +531,18 @@ namespace Chubrik
             if (r.Chance(0.4f)) for (int k = 0; k < 4; k++) S(root, p + new Vector3(r.F(-1.2f, 1.2f), r.F(3.6f, 4.8f), r.F(-1.2f, 1.2f)) * s, 0.25f * s, M("FF5252", 0.5f));
         }
 
-        static void Pine(Vector3 p, float s)
+        internal static void Pine(Vector3 p, float s)
         {
             Solid(PrimitiveType.Cylinder, p + Vector3.up * 0.8f * s, new Vector3(0.4f * s, 0.8f * s, 0.4f * s), M("6D4C41"));
             for (int k = 0; k < 3; k++) Cone(root, p + Vector3.up * (1.3f + k * 1.2f) * s, new Vector3((3 - k * 0.7f) * s, 2.2f * s, (3 - k * 0.7f) * s), M("2E7D32", 0.15f));
         }
 
-        static void Bush(Vector3 p, float s)
+        internal static void Bush(Vector3 p, float s)
         {
             for (int k = 0; k < 3; k++) S(root, p + new Vector3((k - 1) * 0.5f * s, 0.5f * s, (k % 2) * 0.3f * s), 1.2f * s, M("388E3C", 0.15f));
         }
 
-        static void Flowers(Vector3 c, float r, int n, int seed)
+        internal static void Flowers(Vector3 c, float r, int n, int seed)
         {
             var rng = new Rng(seed);
             var g = new Geo();

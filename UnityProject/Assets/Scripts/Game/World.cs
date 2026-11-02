@@ -73,6 +73,13 @@ namespace Chubrik
                 if (d < reach) { Collect(p); continue; }
                 if (p.token == null && d < best) { best = d; bestPos = p.pos; }
             }
+            // the navigator also leads to whole crates (coins, tokens, secret loot boxes inside)
+            foreach (var b in Breakable.All)
+            {
+                if (b == null || !b.Intact) continue;
+                float d = Vector3.Distance(c, b.transform.position);
+                if (d < best) { best = d; bestPos = b.transform.position + Vector3.up * 0.6f; }
+            }
             NearestCoin = bestPos; NearestCoinDist = best;
 
             // coin navigator
@@ -246,14 +253,26 @@ namespace Chubrik
     {
         public int coins = 3;
         public bool dummy;
+        public string token;       // purple token inside (once)
+        public string lootbox;     // golden crate: a free loot box (once, id saved)
         float back = -1;
         Renderer[] rs; Collider[] cs;
+        public static readonly List<Breakable> All = new List<Breakable>();
+        /// <summary>Whole crate standing there (the coin navigator also leads to these).</summary>
+        public bool Intact => back < 0 && !dummy && isActiveAndEnabled;
 
-        void Awake() { rs = GetComponentsInChildren<Renderer>(); cs = GetComponentsInChildren<Collider>(); }
+        void Awake() { rs = GetComponentsInChildren<Renderer>(); cs = GetComponentsInChildren<Collider>(); All.Add(this); }
+        void OnDestroy() { All.Remove(this); }
 
         public void Break()
         {
             if (back > 0) return;
+            if (!string.IsNullOrEmpty(token) && !Save.P.found.Contains(token)) Pickups.I.Token(token, transform.position + Vector3.up * 1.2f);
+            if (!string.IsNullOrEmpty(lootbox) && !Save.P.found.Contains(lootbox))
+            {
+                Save.P.found.Add(lootbox);
+                ShopUI.FreeBox();
+            }
             AudioFx.Play(dummy ? "bonk" : "crate");
             Effects.Emit(dummy ? "star" : "dust", transform.position + Vector3.up * 0.5f, 14, 0.4f);
             Effects.Emit("coin", transform.position + Vector3.up * 0.6f, coins * 2, 0.3f, Vector3.up * 2);

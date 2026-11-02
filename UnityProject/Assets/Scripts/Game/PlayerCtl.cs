@@ -33,6 +33,10 @@ namespace Chubrik
         float orbitT;
         public float RunSpeed = 6.8f;
         public float WaterY = -0.9f;
+        public int Hearts = 3;
+        public Vector3 Checkpoint;
+        float invuln;
+        Renderer[] rends;
         Look look;
         public int Jumps { get; private set; }   // total jumps made (autotest)
 
@@ -76,6 +80,8 @@ namespace Chubrik
             float s = Model.SizeScale;
             CC.radius = 0.38f * Mathf.Clamp(s, 0.6f, 1.6f); CC.height = 1.45f * s; CC.center = new Vector3(0, 0.74f * s, 0);
             camDist = 6.5f * Mathf.Clamp(s, 0.8f, 1.5f);
+            rends = Model.GetComponentsInChildren<Renderer>(true);
+            Hearts = Mathf.Clamp(Hearts, 1, Save.P.maxHearts);
         }
 
         public void Teleport(Vector3 pos, float faceYaw = float.NaN)
@@ -196,7 +202,13 @@ namespace Chubrik
                 safeT += dt;
                 if (safeT > 0.5f) { safeT = 0; SafePos = transform.position + Vector3.up * 0.2f; }
             }
-            if (transform.position.y < WaterY - 0.5f) FellInWater();
+            if (transform.position.y < WaterY - 0.5f) { if (Worlds.Current == 2) FellOff(); else FellInWater(); }
+            if (invuln > 0)
+            {
+                invuln -= dt;
+                bool show = invuln <= 0 || ((int)(invuln * 12)) % 2 == 0;
+                if (rends != null) foreach (var r in rends) if (r) r.enabled = show;
+            }
 
             // ---- animation ----
             Anim.speed01 = Mathf.Clamp01(new Vector3(vel.x, 0, vel.z).magnitude / RunSpeed);
@@ -271,6 +283,41 @@ namespace Chubrik
             Hud.HeartFlash();
         }
 
+        /// <summary>World 2: a mob touched you from the side — knock back and lose a heart.</summary>
+        public void HurtBy(Vector3 from)
+        {
+            if (invuln > 0) return;
+            var away = transform.position - from; away.y = 0;
+            if (away.sqrMagnitude < 0.01f) away = -transform.forward;
+            vel = away.normalized * 8 + Vector3.up * 6;
+            Grounded = false;
+            Effects.Damage(Mathf.Max(0, look.Idx("dmg")), Model);
+            LoseHeart();
+        }
+
+        /// <summary>World 2: fell off the islands — a heart less, back to the last safe spot.</summary>
+        void FellOff()
+        {
+            Effects.Damage(Mathf.Max(0, look.Idx("dmg")), Model);
+            invuln = 0;
+            LoseHeart();
+            if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast("Упал с острова! −1 сердечко", UIKit.Red); }
+        }
+
+        void LoseHeart()
+        {
+            Hearts--;
+            invuln = 1.5f;
+            Hud.HeartFlash();
+            if (Hearts > 0) return;
+            Hearts = Save.P.maxHearts;
+            Hud.Toast("Ой! Сердечки кончились — начинаем с флажка", UIKit.Orange);
+            Frozen = true;
+            PlayVictory(() => { Teleport(Checkpoint); Frozen = UIRoot.Open != null; });
+        }
+
+        public bool Invulnerable => invuln > 0;
+
         public void PlayVictory(System.Action mid = null) => Effects.Victory(Mathf.Max(0, look.Idx("win")), Model, mid);
 
         void Step(bool left)
@@ -321,6 +368,8 @@ namespace Chubrik
             {
                 var b = c.GetComponentInParent<Breakable>();
                 if (b != null) { b.Break(); any = true; }
+                var e = c.GetComponentInParent<Enemy>();
+                if (e != null && !e.Dead) { e.Die(); any = true; }
             }
             return any;
         }

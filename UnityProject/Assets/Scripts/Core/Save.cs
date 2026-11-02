@@ -15,7 +15,8 @@ namespace Chubrik
         public List<string> owned = new List<string>();     // item ids
         public List<string> look = new List<string>();      // "dept=item" (item "" = taken off)
         public List<int> sets = new List<int>();            // premium sets unlocked
-        public List<string> found = new List<string>();     // hidden tokens picked up in the lobby
+        public List<string> found = new List<string>();     // hidden tokens / secret crates already taken
+        public List<int> done = new List<int>();            // worlds finished
         public int boxes;                                    // loot boxes opened
         public float volume = 0.8f, sens = 1f;
         public bool music = true;
@@ -44,6 +45,7 @@ namespace Chubrik
             foreach (var d in Catalog.Depts)
                 if (!string.IsNullOrEmpty(d.def) && !P.owned.Contains(d.def)) P.owned.Add(d.def);
             P.maxHearts = Mathf.Clamp(P.maxHearts, 3, 6);
+            if (P.promo) P.maxHearts = 6;   // developer promo code: 6 hearts
         }
 
         public static void Write()

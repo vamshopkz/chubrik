@@ -211,6 +211,68 @@ namespace Chubrik
             pl.MoveInput = Vector2.zero;
             Check("cactus bumps back", Vector3.Distance(pl.transform.position, new Vector3(-11, 0, -10)) > 1.2f);
 
+            // ---- world 2: floating ruins ----
+            Check("promo gives 6 hearts", Save.P.maxHearts == 6);
+            Worlds.Enter(2);
+            yield return Wait(2f);
+            Check("world 2 entered", Worlds.Current == 2 && Vector3.Distance(pl.transform.position, World2.Spawn) < 3, pl.transform.position.ToString());
+            Check("world 2 has easy mobs", World2.Enemies.Count >= 8, World2.Enemies.Count.ToString());
+            Check("hearts full in world 2", pl.Hearts == 6);
+            pl.yaw = 0; pl.pitch = 14;
+            yield return Wait(0.3f);
+            yield return Shot("19_world2_start");
+            pl.Teleport(World2.O + new Vector3(0, 3.9f, 63.5f), 0);
+            yield return Wait(0.8f);
+            yield return Shot("20_world2_plaza");
+
+            var slime = World2.Enemies.Find(e => e.kind == EnemyKind.Slime);
+            int cs0 = Save.P.coins;
+            pl.Teleport(slime.transform.position + Vector3.up * 2.4f, 0);
+            for (float t = 0; t < 1.5f && !slime.Dead; t += Time.deltaTime) yield return null;
+            Check("jump on a mob's head beats it", slime.Dead && Save.P.coins > cs0, $"coins {cs0} → {Save.P.coins}");
+            Check("stomp bounces you up", pl.Velocity.y > 2 || !pl.Grounded);
+            yield return Wait(1.2f);
+
+            var golem = World2.Enemies.Find(e => e.kind == EnemyKind.Golem && !e.Dead);
+            yield return Wait(1.6f);   // let the stomp invulnerability pass
+            int hp0 = pl.Hearts;
+            pl.Teleport(golem.transform.position + golem.transform.right * 0.75f + Vector3.up * 0.05f, 0);
+            yield return Wait(0.3f);
+            Check("touching a mob from the side costs a heart", pl.Hearts == hp0 - 1, $"{hp0} → {pl.Hearts}");
+            yield return Wait(1.8f);
+
+            int hp1 = pl.Hearts;
+            pl.Teleport(World2.O + new Vector3(0, 0.3f, 20), 0);
+            yield return Wait(0.8f);
+            pl.Teleport(World2.O + new Vector3(30, 2f, 22), 0);
+            yield return Wait(2.6f);
+            Check("falling off an island: −1 heart and back on land", pl.Hearts == hp1 - 1 && pl.transform.position.y > World2.O.y - 2, $"hearts {hp1} → {pl.Hearts}, y {pl.transform.position.y:0.0}");
+
+            int tk0 = Pickups.I.TokensLeft;
+            Breakable.All.Find(b => b.token == "w2t0").Break();
+            Check("crate with a purple token drops it", Pickups.I.TokensLeft == tk0 + 1);
+            int own0 = Menus.OwnedCount();
+            Breakable.All.Find(b => b.lootbox == "w2box0").Break();
+            yield return Wait(1.8f);
+            Check("golden crate gives a secret loot box", Menus.OwnedCount() == own0 + 1);
+            yield return Shot("21_secret_lootbox");
+            ShopUI.CloseBox();
+
+            pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -2.2f), 0);
+            yield return Wait(1.0f);
+            pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -1.5f), 0);
+            yield return Wait(1.2f);
+            Check("golden cup finishes world 2", Save.P.done.Contains(2));
+            yield return Shot("22_world2_done");
+            Window.Close();
+            pl.Teleport(World2.GoalPos + new Vector3(0, -0.5f, -6f), 0);
+            pl.yaw = 0;
+            yield return Wait(0.8f);
+            yield return Shot("23_temple");
+            Worlds.Enter(1);
+            yield return Wait(1.6f);
+            Check("back to the lobby", Worlds.Current == 1 && pl.transform.position.magnitude < 80);
+
             // ---- water respawn ----
             pl.Teleport(new Vector3(0, 0.5f, 70), 0);
             yield return Wait(2f);

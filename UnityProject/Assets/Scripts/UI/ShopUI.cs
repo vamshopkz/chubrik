@@ -79,6 +79,17 @@ namespace Chubrik
             ShowBox(it);
         }
 
+        /// <summary>Secret golden crate in a world: a loot box for free.</summary>
+        public static void FreeBox()
+        {
+            var it = Roll();
+            if (it == null) { Save.AddCoins(BoxPrice); Hud.Toast($"Секретный лутбокс: +{BoxPrice} монет (все вещи уже есть)", UIKit.Gold); return; }
+            Save.Give(it.id);
+            Save.P.boxes++;
+            Save.Write();
+            ShowBox(it);
+        }
+
         /// <summary>Loot box opening: names flicker like a slot machine, then the prize with its picture.</summary>
         static void ShowBox(Item it)
         {
