@@ -40,6 +40,58 @@ namespace Chubrik
             return m;
         });
 
+        /// <summary>Low-poly sphere of diameter 1 (for small details: ~1/6 of Unity's sphere).</summary>
+        public static Mesh Ball(int seg = 10, int rings = 7) => C($"ball{seg}_{rings}", () =>
+        {
+            var v = new List<Vector3>(); var n = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
+            for (int j = 0; j <= rings; j++)
+            {
+                float th = j * Mathf.PI / rings;
+                for (int i = 0; i <= seg; i++)
+                {
+                    float a = i * Mathf.PI * 2 / seg;
+                    var d = new Vector3(Mathf.Sin(th) * Mathf.Cos(a), Mathf.Cos(th), Mathf.Sin(th) * Mathf.Sin(a));
+                    v.Add(d * 0.5f); n.Add(d); uv.Add(new Vector2((float)i / seg, 1 - (float)j / rings));
+                }
+            }
+            for (int j = 0; j < rings; j++)
+                for (int i = 0; i < seg; i++)
+                {
+                    int a = j * (seg + 1) + i, b = a + seg + 1;
+                    t.Add(a); t.Add(a + 1); t.Add(b); t.Add(a + 1); t.Add(b + 1); t.Add(b);
+                }
+            var m = new Mesh(); m.SetVertices(v); m.SetNormals(n); m.SetUVs(0, uv); m.SetTriangles(t, 0);
+            m.RecalculateBounds();
+            return m;
+        });
+
+        /// <summary>Low-poly cylinder like Unity's (radius 0.5, y from −1 to 1), with caps.</summary>
+        public static Mesh Tube(int seg = 8) => C("tube" + seg, () =>
+        {
+            var v = new List<Vector3>(); var n = new List<Vector3>(); var t = new List<int>();
+            for (int i = 0; i < seg; i++)
+            {
+                float a0 = i * Mathf.PI * 2 / seg, a1 = (i + 1) * Mathf.PI * 2 / seg;
+                var d0 = new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0)); var d1 = new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1));
+                int s = v.Count;
+                v.Add(d0 * 0.5f + Vector3.down); v.Add(d0 * 0.5f + Vector3.up); v.Add(d1 * 0.5f + Vector3.up); v.Add(d1 * 0.5f + Vector3.down);
+                n.Add(d0); n.Add(d0); n.Add(d1); n.Add(d1);
+                t.Add(s); t.Add(s + 1); t.Add(s + 2); t.Add(s); t.Add(s + 2); t.Add(s + 3);
+                s = v.Count;
+                v.Add(Vector3.up); v.Add(d1 * 0.5f + Vector3.up); v.Add(d0 * 0.5f + Vector3.up);
+                n.Add(Vector3.up); n.Add(Vector3.up); n.Add(Vector3.up);
+                t.Add(s); t.Add(s + 1); t.Add(s + 2);
+                s = v.Count;
+                v.Add(Vector3.down); v.Add(d0 * 0.5f + Vector3.down); v.Add(d1 * 0.5f + Vector3.down);
+                n.Add(Vector3.down); n.Add(Vector3.down); n.Add(Vector3.down);
+                t.Add(s); t.Add(s + 1); t.Add(s + 2);
+            }
+            var m = new Mesh(); m.SetVertices(v); m.SetNormals(n); m.SetTriangles(t, 0);
+            m.SetUVs(0, new List<Vector2>(new Vector2[v.Count]));
+            m.RecalculateBounds();
+            return m;
+        });
+
         /// <summary>Torus in the XZ plane: ring radius R, tube radius r.</summary>
         public static Mesh Torus(float R = 0.5f, float r = 0.1f, int seg = 24, int side = 10) => C($"torus{R}_{r}_{seg}", () =>
         {

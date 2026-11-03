@@ -63,8 +63,12 @@ namespace Chubrik
             return t;
         }
 
+        /// <summary>Parts made so far (every primitive / mesh call adds one): the wardrobe counts the parts of each item.</summary>
+        public static int Made;
+
         static GameObject P(PrimitiveType type, Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler)
         {
+            Made++;
             var go = Prim.Make(type, p, pos, sc, m, type.ToString(), Layer);
             go.transform.localEulerAngles = euler;
             return go;
@@ -79,11 +83,23 @@ namespace Chubrik
 
         public static GameObject Msh(Mesh mesh, Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler = default)
         {
+            Made++;
             var go = Prim.MeshGO(mesh, p, m, mesh.name);
             go.layer = Layer;
             go.transform.localPosition = pos;
             go.transform.localScale = sc;
             go.transform.localEulerAngles = euler;
+            return go;
+        }
+
+        // low-poly versions for small details (rivets, stitches, fur, beads): same sizes as S / Cy / Rod
+        public static GameObject Ls(Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler = default) => Msh(Meshes.Ball(), p, pos, sc, m, euler);
+        public static GameObject Ls(Transform p, Vector3 pos, float d, Material m) => Msh(Meshes.Ball(), p, pos, Vector3.one * d, m);
+        public static GameObject Lc(Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler = default) => Msh(Meshes.Tube(), p, pos, sc, m, euler);
+        public static GameObject LRod(Transform p, Vector3 a, Vector3 b, float d, Material m)
+        {
+            var go = Lc(p, (a + b) / 2, new Vector3(d, (b - a).magnitude / 2, d), m);
+            go.transform.localRotation = Quaternion.FromToRotation(Vector3.up, (b - a).normalized);
             return go;
         }
 
