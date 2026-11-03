@@ -15,6 +15,7 @@ namespace Chubrik
         public List<string> owned = new List<string>();     // item ids
         public List<string> look = new List<string>();      // "dept=item" (item "" = taken off)
         public List<int> sets = new List<int>();            // premium sets unlocked
+        public List<int> setBonus = new List<int>();        // sets whose bonus coins/tokens were already given (once ever)
         public List<string> found = new List<string>();     // hidden tokens / secret crates already taken
         public List<int> done = new List<int>();            // worlds finished
         public int keys;                                     // golden keys in the pocket
@@ -48,6 +49,14 @@ namespace Chubrik
                 if (!string.IsNullOrEmpty(d.def) && !P.owned.Contains(d.def)) P.owned.Add(d.def);
             P.maxHearts = Mathf.Clamp(P.maxHearts, 3, 6);
             if (P.promo) P.maxHearts = 6;   // developer promo code: 6 hearts
+            foreach (var set in P.sets) if (!P.setBonus.Contains(set)) P.setBonus.Add(set);
+        }
+
+        /// <summary>Gives a premium set back: its items are no longer owned and are taken off (it can be bought or unlocked by code again).</summary>
+        public static void CancelSet(int set)
+        {
+            P.sets.Remove(set);
+            P.look.RemoveAll(e => { int k = e.IndexOf('='); return k > 0 && Catalog.SetOf(e.Substring(k + 1)) == set; });
         }
 
         public static void Write()

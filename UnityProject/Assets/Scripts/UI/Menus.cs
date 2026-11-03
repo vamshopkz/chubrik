@@ -209,7 +209,8 @@ namespace Chubrik
                 Hud.Toast("Такого промокода нет", UIKit.Red);
                 return false;
             }
-            if (Save.P.promo)
+            bool again = Save.P.promo;
+            if (again && Save.P.sets.Count >= Catalog.Sets.Count)
             {
                 Hud.Toast("Промокод уже активирован — всё открыто!", UIKit.Gold);
                 return true;
@@ -217,7 +218,7 @@ namespace Chubrik
             UnlockAll();
             AudioFx.Play("token");
             PlayerCtl.I?.PlayVictory();
-            Hud.Toast("ПРОМОКОД «АРТЁМ 22 X»: 6 сердечек и все 8 премиум-наборов бесплатно!", UIKit.Gold);
+            Hud.Toast(again ? "Промокод снова сработал — все 8 премиум-наборов опять твои!" : "ПРОМОКОД «АРТЁМ 22 X»: 6 сердечек и все 8 премиум-наборов бесплатно!", UIKit.Gold);
             return true;
         }
 
@@ -235,8 +236,13 @@ namespace Chubrik
         {
             if (Save.P.sets.Contains(s.index)) return;
             Save.P.sets.Add(s.index);
-            Save.P.coins += s.bonusCoins;
-            Save.P.tokens += s.bonusTokens;
+            if (!Save.P.setBonus.Contains(s.index))
+            {
+                // the bonus comes once: cancelling and unlocking again doesn't pay twice
+                Save.P.setBonus.Add(s.index);
+                Save.P.coins += s.bonusCoins;
+                Save.P.tokens += s.bonusTokens;
+            }
             if (write) Save.Write();
         }
     }

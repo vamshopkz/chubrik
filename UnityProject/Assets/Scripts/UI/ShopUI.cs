@@ -168,9 +168,14 @@ namespace Chubrik
     {
         public static string Tenge(int v) => UIKit.Num(v) + (UIKit.Font != null && UIKit.Font.HasCharacter('₸') ? " ₸" : " тг");
 
+        static readonly string[] Short = { "Дракон", "Лёд", "Космос", "Ниндзя", "Самурай", "Магнат", "Единорог", "Король" };
+        /// <summary>Owned sets picked for cancelling (several at once).</summary>
+        static readonly HashSet<int> picked = new HashSet<int>();
+
         public static void Open()
         {
             Menus.Unlock();
+            picked.RemoveWhere(i => !Save.P.sets.Contains(i));
             Window.Show("ПРЕМИУМ-НАБОРЫ", w =>
             {
                 w.Text("Внутри каждого набора — эксклюзивные скины, которых нет в лутбоксах, плюс 300 монет и 2 жетона.", 26, UIKit.Muted);
@@ -179,12 +184,56 @@ namespace Chubrik
                     bool own = Save.P.sets.Contains(s.index);
                     var names = string.Join(", ", s.items.ConvertAll(i => i.name));
                     var set = s;
-                    w.Row($"«{s.name}» — {Tenge(s.price)}", names, own ? "ОТКРЫТ" : "КУПИТЬ", own ? UIKit.Green : UIKit.Gold,
-                        own ? (System.Action)(() => Hud.Toast("Надень вещи набора в гардеробе (розовый домик слева от фонтана)", UIKit.Pink)) : () => Buy(set), true, s.color);
+                    w.Row($"«{s.name}» — {Tenge(s.price)}" + (own ? " · ОТКРЫТ" : ""), names, own ? "ОТМЕНИТЬ" : "КУПИТЬ", own ? UIKit.Orange : UIKit.Gold,
+                        own ? (System.Action)(() => AskCancel(new List<int> { set.index })) : () => Buy(set), true, s.color);
                 }
-                w.Row("Есть промокод?", "Промокод разработчика открывает все 8 наборов", "ВВЕСТИ", UIKit.Violet, Menus.PromoWindow, true, UIKit.Violet);
-                w.Footer.text = Save.P.promo ? "Промокод «Артём 22 X» активирован — все наборы твои!" : "Покупки за тенге появятся позже";
+                var owned = Catalog.Sets.FindAll(s => Save.P.sets.Contains(s.index));
+                if (owned.Count > 1)
+                {
+                    // pick several (or all) and cancel them in one go
+                    var chips = new List<(string, Color, bool, System.Action)>();
+                    foreach (var s in owned)
+                    {
+                        int k = s.index;
+                        chips.Add((Short[k], picked.Contains(k) ? s.color : new Color(0.25f, 0.3f, 0.4f), picked.Contains(k), () => { if (!picked.Remove(k)) picked.Add(k); Window.Refresh(); }));
+                    }
+                    w.Chips("Выбери наборы для отмены (нажми на нужные):", chips);
+                    bool all = picked.Count == owned.Count;
+                    w.Row(all ? "Выбраны все наборы" : "Выбрать все открытые наборы", null, all ? "СНЯТЬ ВЫБОР" : "ВЫБРАТЬ ВСЕ", UIKit.Blue, () =>
+                    {
+                        if (all) picked.Clear(); else foreach (var s in owned) picked.Add(s.index);
+                        Window.Refresh();
+                    });
+                    w.Row($"Отменить выбранные: {picked.Count}", "Вещи этих наборов снимутся. Вернуть их можно покупкой или промокодом", "ОТМЕНИТЬ", UIKit.Orange,
+                        () => AskCancel(new List<int>(picked)), picked.Count > 0);
+                }
+                w.Row("Есть промокод?", "Промокод разработчика открывает все 8 наборов (и снова возвращает отменённые)", "ВВЕСТИ", UIKit.Violet, Menus.PromoWindow, true, UIKit.Violet);
+                w.Footer.text = Save.P.promo ? $"Промокод «Артём 22 X» активирован · открыто наборов: {owned.Count} из {Catalog.Sets.Count}" : "Покупки за тенге появятся позже";
             }, 1200, 820);
+        }
+
+        static void AskCancel(List<int> sets)
+        {
+            if (sets.Count == 0) return;
+            var names = string.Join(", ", sets.ConvertAll(i => "«" + Catalog.Sets[i].name + "»"));
+            Window.Show(sets.Count == 1 ? "ОТМЕНИТЬ НАБОР?" : "ОТМЕНИТЬ НАБОРЫ?", w =>
+            {
+                w.Text((sets.Count == 1 ? "Набор " : "Наборы ") + names + (sets.Count == 1 ? " будет отменён." : " будут отменены."), 30);
+                w.Text("Вещи из них снимутся с чубрика и пропадут из гардероба. Потом их можно снова купить или получить промокодом.", 26, UIKit.Muted);
+                w.Row("Да, отменить", null, "ОТМЕНИТЬ", UIKit.Orange, () => { Cancel(sets); Open(); });
+                w.Row("Нет, оставить", null, "НАЗАД", UIKit.Blue, Open);
+            }, 1000, 560);
+        }
+
+        public static void Cancel(IEnumerable<int> sets)
+        {
+            int n = 0;
+            foreach (var i in sets) if (Save.P.sets.Contains(i)) { Save.CancelSet(i); picked.Remove(i); n++; }
+            if (n == 0) return;
+            Save.Write();
+            if (PlayerCtl.I) PlayerCtl.I.ApplyLook(Save.CurrentLook());
+            AudioFx.Play("click");
+            Hud.Toast(n == 1 ? "Набор отменён" : $"Отменено наборов: {n}", UIKit.Orange);
         }
 
         static void Buy(PremiumSet s)

@@ -37,6 +37,18 @@ namespace Chubrik
 
         public static void SpawnCage(string id, Vector3 pos, float yaw, Transform parent) => new GameObject("Cage " + id).AddComponent<Cage>().Build(id, pos, yaw, parent);
 
+        /// <summary>The player hit something: a closed cage within reach opens (if there's a key).</summary>
+        public static bool HitNear(Vector3 pos)
+        {
+            foreach (var c in Cages)
+            {
+                if (c.Open || !c.isActiveAndEnabled) continue;
+                var d = c.transform.position - pos; d.y = 0;
+                if (d.magnitude < Cage.Reach && Mathf.Abs(c.transform.position.y - pos.y) < 2.5f) { c.TryOpen(); return true; }
+            }
+            return false;
+        }
+
         public static int Rescued(string prefix) { int n = 0; foreach (var c in Cages) if (c.id.StartsWith(prefix) && c.Open) n++; return n; }
         public static int Total(string prefix) { int n = 0; foreach (var c in Cages) if (c.id.StartsWith(prefix)) n++; return n; }
 
@@ -107,10 +119,12 @@ namespace Chubrik
             anim.model = friend; anim.Preview = true; anim.emote = 6; anim.PlayEmote();   // shrugging, waiting for help
             Rescue.Cages.Add(this);
             if (Open) { bars.gameObject.SetActive(false); friend.gameObject.SetActive(false); tag.gameObject.SetActive(false); col.enabled = false; }
-            else Zones.Add(transform.position, 2.4f, "ОТКРЫТЬ КЛЕТКУ", TryOpen, () => !Open);
         }
 
-        void TryOpen()
+        public const float Reach = 2.6f;
+        float hintT;
+
+        public void TryOpen()
         {
             if (Open) return;
             if (Save.P.keys <= 0)
@@ -137,6 +151,18 @@ namespace Chubrik
 
         void Update()
         {
+            if (!Open && PlayerCtl.I != null)
+            {
+                // standing next to the cage: tell how to open it
+                var d = transform.position - PlayerCtl.I.transform.position; d.y = 0;
+                hintT -= Time.deltaTime;
+                if (d.magnitude < Reach + 0.6f && hintT <= 0)
+                {
+                    Hud.Toast(Save.P.keys > 0 ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен золотой ключ! Ищи ключи на островах", Save.P.keys > 0 ? UIKit.Lime : UIKit.Orange);
+                    hintT = 6;
+                }
+                else if (d.magnitude > Reach + 2) hintT = 0;
+            }
             if (openT < 0) return;
             openT += Time.deltaTime;
             bars.localPosition = Vector3.up * Mathf.Min(openT * 4, 4);

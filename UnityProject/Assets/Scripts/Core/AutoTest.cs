@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -31,6 +32,20 @@ namespace Chubrik
             Directory.CreateDirectory(dir);
             yield return null;
             yield return null;
+            if (Boot.Arg("-gallery") != null)
+            {
+                // contact sheets of every detailed item, one per department, for a visual check
+                yield return Gallery(Boot.Arg("-gallery"));
+                Application.Quit();
+                yield break;
+            }
+            if (Boot.Arg("-icons") != null)
+            {
+                // only render the app icon
+                yield return IconMaker.Make(Boot.Arg("-icons"));
+                Application.Quit();
+                yield break;
+            }
             var pl = PlayerCtl.I;
 
             // ---- catalogue ----
@@ -45,6 +60,10 @@ namespace Chubrik
             var test = ChubrikModel.Create("TestModel", null, Look.Default(), Layers.Preview);
             test.transform.position = new Vector3(200, -300, 0);
             int bad = 0; var badList = new List<string>();
+            var few = new List<string>();
+            var report = new StringBuilder();
+            int maxVerts = 0; string maxVertsId = "";
+            var detailed = new HashSet<string> { "hair", "ears", "hat", "eyes", "mask", "neck", "top", "wings", "hands", "wrist", "back", "tail", "pants", "belt", "shoes", "weapon", "pet" };
             var sw = System.Diagnostics.Stopwatch.StartNew();
             foreach (var it in Catalog.Items.Values)
             {
@@ -52,12 +71,30 @@ namespace Chubrik
                 try
                 {
                     test.Build(l);
-                    if (it.dept == "pet") { var t = new GameObject("p").transform; Pet.Build(it.Premium ? 100 + it.set : Catalog.Index(it.id), t); Destroy(t.gameObject); }
-                    if (test.GetComponentsInChildren<Renderer>().Length < 10) { bad++; badList.Add(it.id + ":few"); }
+                    int parts = test.PartCount.TryGetValue(it.dept, out var pc) ? pc : 0;
+                    if (it.dept == "pet")
+                    {
+                        var t = new GameObject("p").transform;
+                        int made = Parts.Made;
+                        Pet.Build(it.Premium ? 100 + it.set : Catalog.Index(it.id), t);
+                        parts = Parts.Made - made;
+                        Destroy(t.gameObject);
+                    }
+                    int verts = 0;
+                    foreach (var mf in test.GetComponentsInChildren<MeshFilter>()) if (mf.sharedMesh) verts += mf.sharedMesh.vertexCount;
+                    if (verts > maxVerts) { maxVerts = verts; maxVertsId = it.id; }
+                    if (detailed.Contains(it.dept) || it.dept == "head")
+                    {
+                        report.AppendLine($"{it.id}\t{parts}\t{verts}\t{it.name}");
+                        if (parts < (it.dept == "head" ? 60 : 100)) few.Add($"{it.id}:{parts}");
+                    }
                 }
                 catch (Exception e) { bad++; badList.Add(it.id + ":" + e.Message); }
             }
+            File.WriteAllText(Path.Combine(dir, "parts.txt"), report.ToString());
             Check("every item builds", bad == 0, $"{Catalog.Items.Count} items, {sw.ElapsedMilliseconds} ms" + (bad > 0 ? " bad: " + string.Join(", ", badList.GetRange(0, Mathf.Min(10, badList.Count))) : ""));
+            Check("every skin is detailed (100+ parts, heads 60+)", few.Count == 0, few.Count == 0 ? "parts.txt" : few.Count + " items: " + string.Join(", ", few.GetRange(0, Mathf.Min(20, few.Count))));
+            Check("a dressed-up item stays light for phones", maxVerts < 45000, $"max {maxVerts} verts ({maxVertsId})");
             Destroy(test.gameObject);
             yield return null;
 
@@ -160,6 +197,22 @@ namespace Chubrik
             Check("promo «артем 22 x» accepted", Promo.Apply("  артем 22 x "));
             Check("all 8 premium sets unlocked", Save.P.sets.Count == 8);
             Check("premium items owned", Save.Owns("hat_p7") && Save.Owns("wings_p0") && Save.Owns("secret_7"));
+
+            // ---- cancelling premium sets ----
+            Save.Wear("hat", "hat_p0"); pl.ApplyLook(Save.CurrentLook());
+            int coinsBefore = Save.P.coins, tokensBefore = Save.P.tokens;
+            PremiumUI.Cancel(new[] { 0 });
+            Check("cancel one set: its items are gone and taken off", !Save.P.sets.Contains(0) && !Save.Owns("hat_p0") && Save.Worn("hat") != "hat_p0" && Save.P.sets.Count == 7);
+            PremiumUI.Open();
+            yield return Wait(0.3f);
+            yield return Shot("29_premium_cancel");
+            Window.Close();
+            PremiumUI.Cancel(new[] { 1, 2, 3 });
+            Check("cancel several sets at once", Save.P.sets.Count == 4 && !Save.Owns("top_p1"));
+            PremiumUI.Cancel(new[] { 4, 5, 6, 7 });
+            Check("cancel all sets", Save.P.sets.Count == 0 && !Save.Owns("hat_p7") && Save.Owns("secret_7"));
+            Check("promo code returns the cancelled sets", Promo.Apply("Артём 22 X") && Save.P.sets.Count == 8 && Save.Owns("hat_p0"));
+            Check("set bonus is paid only once", Save.P.coins == coinsBefore && Save.P.tokens == tokensBefore, $"coins {coinsBefore} → {Save.P.coins}");
 
             // ---- wardrobe ----
             WardrobeUI.Open("hat");
@@ -284,7 +337,7 @@ namespace Chubrik
             pl.yaw = cage.transform.eulerAngles.y + 180; pl.pitch = 12;
             yield return Wait(0.3f);
             yield return Shot("24_cage_closed");
-            Zones.Interact();
+            pl.Attack();
             Check("a cage stays shut without a key", !cage.Open);
             pl.Teleport(World2.O + new Vector3(10, 3.5f, 40), 0);
             yield return Wait(0.4f);
@@ -292,10 +345,11 @@ namespace Chubrik
             pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
             yield return Wait(0.6f);
             pl.yaw = cage.transform.eulerAngles.y + 180;
-            Zones.Interact();
+            yield return Wait(0.5f);   // attack cooldown
+            pl.Attack();
             yield return Wait(0.8f);
             yield return Shot("25_cage_open");
-            Check("key opens the cage and the friend is rescued", cage.Open && Save.P.keys == 0 && Save.P.rescued.Contains("w2c0"));
+            Check("a hit next to the cage opens it with a key, the friend is rescued", cage.Open && Save.P.keys == 0 && Save.P.rescued.Contains("w2c0"));
             yield return Wait(2.5f);
 
             pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -2.2f), 0);
@@ -335,6 +389,33 @@ namespace Chubrik
         }
 
         static IEnumerator Wait(float s) { for (float t = 0; t < s; t += Time.unscaledDeltaTime) yield return null; }
+
+        IEnumerator Gallery(string outDir)
+        {
+            Directory.CreateDirectory(outDir);
+            const int cell = 300, cols = 5;
+            foreach (var d in Catalog.Depts)
+            {
+                if (d.view == "fx" && d.id != "pet") continue;
+                if (d.id == "color" || d.id == "skin" || d.id == "secret" || d.id == "wcolor") continue;
+                var items = Catalog.Items.Values.Where(i => i.dept == d.id).ToList();
+                int rows = (items.Count + cols - 1) / cols;
+                var sheet = new Texture2D(cols * cell, rows * cell, TextureFormat.RGB24, false);
+                var fill = new Color[sheet.width * sheet.height];
+                for (int i = 0; i < fill.Length; i++) fill[i] = new Color(0.1f, 0.12f, 0.16f);
+                sheet.SetPixels(fill);
+                for (int k = 0; k < items.Count; k++)
+                {
+                    var t = Preview.I.Big(items[k], cell - 4);
+                    sheet.SetPixels((k % cols) * cell + 2, (rows - 1 - k / cols) * cell + 2, cell - 4, cell - 4, t.GetPixels());
+                    Destroy(t);
+                    yield return null;
+                }
+                sheet.Apply();
+                File.WriteAllBytes(Path.Combine(outDir, d.id + ".png"), sheet.EncodeToPNG());
+                Destroy(sheet);
+            }
+        }
 
         IEnumerator Shot(string name)
         {

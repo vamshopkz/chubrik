@@ -76,7 +76,9 @@ namespace Chubrik
             FootL = Node("FootL", LegL, new Vector3(0, -0.3f, 0.04f));
             FootR = Node("FootR", LegR, new Vector3(0, -0.3f, 0.04f));
 
+            int made = Parts.Made;
             HeadShape(look.Idx("head"));
+            PartCount["head"] = Parts.Made - made;
             Do("hat", Hat);
             Do("hair", Hair);
             Do("ears", Ears);

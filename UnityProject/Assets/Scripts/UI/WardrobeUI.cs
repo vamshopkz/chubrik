@@ -212,6 +212,8 @@ namespace Chubrik
             if (sel == null) { selName.text = ""; selInfo.text = ""; action.gameObject.SetActive(false); takeOff.gameObject.SetActive(false); return; }
             selName.text = sel.name;
             selInfo.text = sel.Premium ? $"Премиум-набор «{Catalog.Sets[sel.set].name}»" : d.name;
+            var pm = Preview.I.Model;
+            if (pm && pm.look.Of(sel.dept) == sel.id && pm.PartCount.TryGetValue(sel.dept, out var pc) && pc >= 20) selInfo.text += $" · {pc} деталей";
             bool isWorn = Save.Worn(sel.dept) == sel.id, owns = Save.Owns(sel.id);
             action.gameObject.SetActive(true);
             action.Interactable = true;

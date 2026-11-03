@@ -11,3 +11,5 @@ web-publish/
 *.apk
 .DS_Store
 UnityProject/.utmp/
+gallery*/
+icons/

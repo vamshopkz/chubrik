@@ -340,6 +340,7 @@ namespace Chubrik
             if (Frozen || attackCd > 0) return;
             attackCd = 0.4f;
             Anim.Attack();
+            Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
             var id = look.Of("weapon");
             int set = Catalog.SetOf(id), i = Catalog.Index(id);
             int kind = set >= 0 ? 100 + set : i;
