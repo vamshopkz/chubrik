@@ -39,6 +39,7 @@ namespace Chubrik
         Renderer[] rends;
         Look look;
         public int Jumps { get; private set; }   // total jumps made (autotest)
+        public int Flips { get; private set; }   // somersaults made (autotest)
 
         public static void Create()
         {
@@ -233,7 +234,9 @@ namespace Chubrik
             if (air)
             {
                 Effects.Emit(Model.HasJet ? "fire" : "dust", transform.position + Vector3.up * 0.2f, 8, 0.25f, Vector3.down);
-                Model.Body.localRotation = Quaternion.identity;
+                Anim.Flip();   // the second jump is a somersault
+                AudioFx.Play("swing");
+                Flips++;
             }
             if (Anim.emoting) Anim.StopEmote();
             idle = 0;

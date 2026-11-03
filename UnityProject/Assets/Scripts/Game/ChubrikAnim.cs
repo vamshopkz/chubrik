@@ -23,6 +23,10 @@ namespace Chubrik
 
         public void Land(float impact) { land = Mathf.Clamp01(impact); }
         public void Attack() { attackT = 0; }
+        /// <summary>Somersault (the second jump in the air).</summary>
+        public void Flip() { flipT = 0; }
+        public bool Flipping => flipT >= 0;
+        float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
         public void PlayEmote() { emoting = true; emoteT = 0; }
@@ -127,6 +131,13 @@ namespace Chubrik
                 armL = gliding ? Quaternion.Euler(0, 0, -95) : Quaternion.Euler(-20, 0, -60 - k * 40);
                 armR = gliding ? Quaternion.Euler(0, 0, 95) : Quaternion.Euler(-20, 0, 60 + k * 40);
                 if (gliding) m.Torso.localRotation = Quaternion.Euler(20, 0, 0);
+                if (flipT >= 0 && !gliding)
+                {
+                    // tucked into a ball for the somersault
+                    legL = Quaternion.Euler(-75, 0, -6); legR = Quaternion.Euler(-75, 0, 6);
+                    armL = Quaternion.Euler(-70, 0, -25); armR = Quaternion.Euler(-70, 0, 25);
+                    sy = 0.92f; sx = 1.04f;
+                }
             }
 
             // emote (idle only)
@@ -148,6 +159,21 @@ namespace Chubrik
             }
 
             m.Body.localPosition += Vector3.up * lift;
+            if (flipT >= 0)
+            {
+                flipT += dt;
+                float t = flipT / FlipTime;
+                if (t >= 1 || grounded || gliding) flipT = -1;
+                else
+                {
+                    // one full forward turn around the belly (not the feet), fast in the middle
+                    float e = t * t * (3 - 2 * t);
+                    var r = Quaternion.Euler(e * 360, 0, 0);
+                    var pivot = new Vector3(0, 0.62f, 0);
+                    m.Body.localRotation = r;
+                    m.Body.localPosition += pivot - r * pivot;
+                }
+            }
             m.Body.localScale = new Vector3(sx * Mathf.Sign(bs.x) * Mathf.Abs(BaseScale(m).x), sy * BaseScale(m).y, sx * BaseScale(m).z);
             m.ArmL.localRotation = armL; m.ArmR.localRotation = armR;
             m.LegL.localRotation = legL; m.LegR.localRotation = legR;
@@ -164,6 +190,7 @@ namespace Chubrik
         }
 
         bool winkL;
+        const float FlipTime = 0.55f;
 
         static Vector3 BaseScale(ChubrikModel m)
         {

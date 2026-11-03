@@ -81,11 +81,22 @@ namespace Chubrik
             pl.QueueJump();
             for (float t = 0; t < 0.5f; t += Time.deltaTime) { top = Mathf.Max(top, pl.transform.position.y); yield return null; }
             Check("jump", top - y0 > 1.4f, (top - y0).ToString("0.00") + " m");
+            int fl0 = pl.Flips;
             pl.QueueJump();
-            for (float t = 0; t < 0.6f; t += Time.deltaTime) { top = Mathf.Max(top, pl.transform.position.y); yield return null; }
+            float maxTurn = 0;
+            bool shot = false;
+            for (float t = 0; t < 0.6f; t += Time.deltaTime)
+            {
+                top = Mathf.Max(top, pl.transform.position.y);
+                maxTurn = Mathf.Max(maxTurn, Quaternion.Angle(Quaternion.identity, pl.Model.Body.localRotation));
+                if (!shot && t > 0.22f) { shot = true; yield return Shot("27_somersault"); }
+                yield return null;
+            }
             Check("double jump goes higher", top - y0 > 2.5f, (top - y0).ToString("0.00") + " m");
+            Check("second jump is a somersault", pl.Flips == fl0 + 1 && maxTurn > 120, $"turn {maxTurn:0}°");
             yield return Wait(1.2f);
             Check("lands again", pl.Grounded);
+            Check("lands upright after the somersault", !pl.Anim.Flipping && Quaternion.Angle(Quaternion.identity, pl.Model.Body.localRotation) < 1);
 
             // ---- bounce mushroom ----
             pl.Teleport(new Vector3(-6, 2.6f, -18), 0);
@@ -93,14 +104,13 @@ namespace Chubrik
             for (float t = 0; t < 1.6f; t += Time.deltaTime) { bTop = Mathf.Max(bTop, pl.transform.position.y); yield return null; }
             Check("bounce mushroom launches", bTop > 5f, bTop.ToString("0.0") + " m");
 
-            // ---- coins ----
-            pl.Teleport(Lobby.Spawn, 0);
-            yield return Wait(0.3f);
-            int c0 = Save.P.coins;
-            pl.Teleport(new Vector3(11.5f, 0.1f, 0), 90);
-            yield return Wait(0.4f);
-            Check("coin pickup by touch", Save.P.coins > c0, $"{c0} → {Save.P.coins}");
-            Check("coins on the map", Pickups.I.CoinsTotal >= 120, Pickups.I.CoinsTotal.ToString());
+            // ---- no coins in the lobby, coins live in the worlds ----
+            Check("no coins in the lobby", Pickups.I.CoinsWithin(Vector3.zero, 150) == 0, Pickups.I.CoinsWithin(Vector3.zero, 150).ToString());
+            Hud.I.ForceTouch = true;
+            yield return Wait(0.2f);
+            yield return Shot("28_touch_controls");
+            Check("«ВОЙТИ» gets the tap on a phone (not the camera area)", Hud.I.EnterButtonGetsTap(), Hud.I.TapReport);
+            Hud.I.ForceTouch = false;
             Check("10 hidden tokens", Lobby.TokenSpots.Count == 10, Lobby.TokenSpots.Count.ToString());
 
             // ---- teleport pad ----
@@ -140,8 +150,6 @@ namespace Chubrik
             Save.Spend(ShopUI.HeartPrice(Save.P.maxHearts)); Save.P.maxHearts++;
             Check("extra heart", Save.P.maxHearts == h0 + 1);
             Save.P.navigator = true; Save.P.navigatorOn = true;
-            yield return Wait(0.3f);
-            Check("coin navigator points somewhere", Pickups.I.NearestCoin.HasValue);
 
             // ---- premium + promo ----
             PremiumUI.Open();
@@ -218,6 +226,16 @@ namespace Chubrik
             Check("world 2 entered", Worlds.Current == 2 && Vector3.Distance(pl.transform.position, World2.Spawn) < 3, pl.transform.position.ToString());
             Check("world 2 has easy mobs", World2.Enemies.Count >= 8, World2.Enemies.Count.ToString());
             Check("hearts full in world 2", pl.Hearts == 6);
+            yield return Wait(0.2f);
+            Check("coins in world 2", Pickups.I.CoinsWithin(World2.O, 300) >= 30, Pickups.I.CoinsWithin(World2.O, 300).ToString());
+            Check("coin navigator points somewhere", Pickups.I.NearestCoin.HasValue);
+            var coinPos = Pickups.I.CoinNear(pl.transform.position).Value;
+            int c0 = Save.P.coins;
+            pl.Teleport(coinPos - Vector3.up * 0.7f, 0);
+            yield return Wait(0.2f);
+            Check("coin pickup by touch", Save.P.coins > c0, $"{c0} → {Save.P.coins}");
+            pl.Teleport(World2.Spawn, 0);
+            yield return Wait(0.4f);
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.3f);
             yield return Shot("19_world2_start");

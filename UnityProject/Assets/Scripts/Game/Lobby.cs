@@ -8,7 +8,7 @@ namespace Chubrik
     /// <summary>
     /// World 1 — the lobby: a sunny safe island without enemies. Plaza with a fountain, the gadget shop, the
     /// premium kiosk, the wardrobe, closed portals to future worlds, a jump course with a tower, bounce mushrooms,
-    /// floating islands, crates, target dummies, a training cactus, a musical path, coins and 10 hidden tokens.
+    /// floating islands, crates, target dummies, a training cactus, a musical path and 10 hidden tokens (no coins here: coins are earned in the worlds).
     /// </summary>
     public static class Lobby
     {
@@ -33,7 +33,6 @@ namespace Chubrik
             House(new Vector3(-24, 0, 24));
             TreeHouse(new Vector3(26, 0, -26));
             Nature();
-            Coins();
             Tokens();
             return root;
         }
@@ -360,7 +359,7 @@ namespace Chubrik
             Pad(tc + new Vector3(-1.8f, 6.05f, 1.6f), Spawn + new Vector3(3, 0, 0), 0, "6EDC3C");
             Pad(new Vector3(-5, 0.07f, -7), new Vector3(0, 6.3f, -30), 180, "35E0FF");
 
-            // spinning disc with coins
+            // spinning disc
             var spin = Disc(new Vector3(9, 4.2f, -32), 2.6f, 0.5f, M("9B6BFF", 0.4f));
             spin.AddComponent<Mover>().spin = 35;
             Solid(PrimitiveType.Cylinder, new Vector3(9, 2, -32), new Vector3(0.4f, 2f, 0.4f), M("B0BAC6", 0.5f, 0.4f));
@@ -421,7 +420,7 @@ namespace Chubrik
                 var p = new Vector3(11 + (k % 4) * 1.8f, 0.55f + (k / 4) * 1.1f, -12 - (k % 2) * 1.8f);
                 var b = Box(p, Vector3.one * 1.1f, crate, rng.F(-10, 10));
                 B(b.transform, Vector3.zero, new Vector3(1.04f, 0.15f, 1.04f), M("6D4425"));
-                b.AddComponent<Breakable>().coins = 3;
+                b.AddComponent<Breakable>().coins = 0;   // training only: no coins in the lobby
             }
             for (int k = 0; k < 3; k++)
             {
@@ -431,7 +430,7 @@ namespace Chubrik
                 S(d, new Vector3(0, 2.25f, 0), 0.6f, M("F2D7A0", 0.1f));
                 Cy(d, new Vector3(0, 1.6f, 0.45f), new Vector3(0.5f, 0.01f, 0.5f), Mats.UnlitTex(Tex.Target(), Color.white), new Vector3(90, 0, 0));
                 d.gameObject.AddComponent<Breakable>().dummy = true;
-                d.GetComponent<Breakable>().coins = 1;
+                d.GetComponent<Breakable>().coins = 0;
             }
             Sign(new Vector3(14, 0, -8.5f), 180, "ЯЩИКИ И МИШЕНИ: БЕЙ (F / УДАР)", "FF5252", 5.4f);
 
@@ -611,31 +610,7 @@ namespace Chubrik
             }
         }
 
-        // ---------------- coins & tokens ----------------
-
-        static void Coins()
-        {
-            var p = Pickups.I;
-            for (int k = 0; k < 16; k++) { float a = k * Mathf.PI / 8; p.Coin(new Vector3(Mathf.Cos(a) * 11.5f, 0.8f, Mathf.Sin(a) * 11.5f)); }
-            for (int k = 0; k < 6; k++) { p.Coin(new Vector3(8 + k * 1.6f, 0.8f, 0)); p.Coin(new Vector3(-8 - k * 1.6f, 0.8f, 0)); p.Coin(new Vector3(0, 0.8f, 10 + k * 2.6f)); }
-            foreach (var t in new[] { new Vector3(0, 1.2f, -18), new Vector3(3, 2.4f, -21), new Vector3(6, 3.6f, -24), new Vector3(4, 4.8f, -27.5f) })
-                p.Coin(t + Vector3.up * 0.8f);
-            for (int k = 0; k < 7; k++) { float a = k * 60 * Mathf.Deg2Rad; p.Coin(new Vector3(Mathf.Cos(a) * 2.6f, 8.1f + k * 1.15f, -45 + Mathf.Sin(a) * 2.3f)); }
-            for (int k = 0; k < 8; k++) { float a = k * Mathf.PI / 4; p.Coin(new Vector3(9 + Mathf.Cos(a) * 1.8f, 5f, -32 + Mathf.Sin(a) * 1.8f)); }
-            for (int k = 0; k < 5; k++) p.Coin(new Vector3(-6, 3 + k * 1.2f, -18));     // over the first mushroom
-            for (int k = 0; k < 6; k++) { float a = k * Mathf.PI / 3; p.Coin(new Vector3(-17 + Mathf.Cos(a) * 2.2f, 10.4f, -34 + Mathf.Sin(a) * 2.2f), 10); }
-            for (int k = 0; k < 10; k++) p.Coin(new Vector3(-18 + k * 4, 0.5f, -61));      // beach
-            for (int k = 0; k < 8; k++) p.Coin(new Vector3(-24 + k * 1.5f - 5.25f, 0.9f, -18));
-            for (int k = 0; k < 6; k++) p.Coin(new Vector3(14, 3 + k * 1.3f, 31));        // over the portal mushroom
-            for (int k = 0; k < 5; k++) p.Coin(new Vector3(5 + k * 1.8f, 0.8f, 5 + k * 1.8f));
-            p.Coin(new Vector3(0, 6.9f, -30.5f), 10);
-            p.Coin(new Vector3(0, 2.6f, 6), 10);
-            for (int k = 0; k < 12; k++) { float a = k * Mathf.PI / 6; p.Coin(new Vector3(-24 + Mathf.Cos(a) * 6.5f, 0.8f, 24 + Mathf.Sin(a) * 6.5f)); }
-            for (int k = 0; k < 14; k++) { float a = k * Mathf.PI / 7; p.Coin(new Vector3(16 + Mathf.Cos(a) * 6f, 0.8f, 17 + Mathf.Sin(a) * 6f)); }     // around the premium kiosk
-            for (int k = 0; k < 8; k++) p.Coin(new Vector3(-10 - k * 1.2f, 0.8f, 0.0f + Mathf.Sin(k) * 0.5f + 8));
-            for (int k = 0; k < 8; k++) { float a = k * Mathf.PI / 4; p.Coin(new Vector3(26 + Mathf.Cos(a) * 1.4f, 5.4f, -26 + Mathf.Sin(a) * 1.4f)); }   // treehouse
-            for (int k = 0; k < 6; k++) p.Coin(new Vector3(-30 + k * 2.5f, 0.8f, -6));
-        }
+        // ---------------- hidden tokens ----------------
 
         static void Tokens()
         {

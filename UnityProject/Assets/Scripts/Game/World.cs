@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Chubrik
 {
-    /// <summary>Coins, big coins and hidden tokens; coins come back after a while so the lobby never runs dry.</summary>
+    /// <summary>Coins, big coins and hidden tokens; coins come back after a while so a world never runs dry.</summary>
     public class Pickups : MonoBehaviour
     {
         public static Pickups I;
@@ -13,6 +13,8 @@ namespace Chubrik
         GameObject arrow;
         public int CoinsAlive { get { int n = 0; foreach (var p in items) if (p.active && p.token == null) n++; return n; } }
         public int CoinsTotal { get { int n = 0; foreach (var p in items) if (p.token == null) n++; return n; } }
+        public Vector3? CoinNear(Vector3 c) { Vector3? b = null; float bd = float.MaxValue; foreach (var p in items) if (p.token == null && p.active && Vector3.Distance(p.pos, c) < bd) { bd = Vector3.Distance(p.pos, c); b = p.pos; } return b; }
+        public int CoinsWithin(Vector3 c, float r) { int n = 0; foreach (var p in items) if (p.token == null && Vector3.Distance(p.pos, c) < r) n++; return n; }
         public float NearestCoinDist { get; private set; }
         public Vector3? NearestCoin { get; private set; }
 
@@ -91,7 +93,7 @@ namespace Chubrik
             // the navigator also leads to whole crates (coins, tokens, secret loot boxes inside)
             foreach (var b in Breakable.All)
             {
-                if (b == null || !b.Intact) continue;
+                if (b == null || !b.Intact || !b.HasLoot) continue;
                 float d = Vector3.Distance(c, b.transform.position);
                 if (d < best) { best = d; bestPos = b.transform.position + Vector3.up * 0.6f; }
             }
@@ -286,6 +288,8 @@ namespace Chubrik
         public static readonly List<Breakable> All = new List<Breakable>();
         /// <summary>Whole crate standing there (the coin navigator also leads to these).</summary>
         public bool Intact => back < 0 && !dummy && isActiveAndEnabled;
+        /// <summary>Something inside worth the navigator's attention (lobby training crates are empty).</summary>
+        public bool HasLoot => coins > 0 || (!string.IsNullOrEmpty(token) && !Save.P.found.Contains(token)) || (!string.IsNullOrEmpty(lootbox) && !Save.P.found.Contains(lootbox));
 
         void Awake() { rs = GetComponentsInChildren<Renderer>(); cs = GetComponentsInChildren<Collider>(); All.Add(this); }
         void OnDestroy() { All.Remove(this); }
@@ -301,9 +305,12 @@ namespace Chubrik
             }
             AudioFx.Play(dummy ? "bonk" : "crate");
             Effects.Emit(dummy ? "star" : "dust", transform.position + Vector3.up * 0.5f, 14, 0.4f);
-            Effects.Emit("coin", transform.position + Vector3.up * 0.6f, coins * 2, 0.3f, Vector3.up * 2);
-            Save.AddCoins(coins);
-            Effects.Float("+" + coins, transform.position + Vector3.up * 1.4f, UIKit.Gold);
+            if (coins > 0)
+            {
+                Effects.Emit("coin", transform.position + Vector3.up * 0.6f, coins * 2, 0.3f, Vector3.up * 2);
+                Save.AddCoins(coins);
+                Effects.Float("+" + coins, transform.position + Vector3.up * 1.4f, UIKit.Gold);
+            }
             if (dummy) { StartCoroutine(Wobble()); back = Time.time + 1f; return; }
             foreach (var r in rs) r.enabled = false;
             foreach (var c in cs) c.enabled = false;

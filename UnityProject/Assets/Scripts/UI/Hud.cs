@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Chubrik
@@ -118,6 +119,22 @@ namespace Chubrik
             emoteBtn = UIKit.Round(touchRoot, "ЭМОЦИЯ", UIKit.Violet, () => PlayerCtl.I.Emote(), 120, 22);
             UIKit.Place(emoteBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-300 - safe.z, 300 + safe.y), new Vector2(120, 120));
             touchRoot.gameObject.SetActive(Touch);
+            // the enter button must stay above the invisible camera/joystick areas, or they swallow the tap on phones
+            enterBtn.transform.SetAsLastSibling();
+        }
+
+        /// <summary>Autotest: show the phone controls and «ВОЙТИ» on a computer.</summary>
+        public bool ForceTouch;
+        public string TapReport;
+
+        /// <summary>Autotest: does a tap in the middle of «ВОЙТИ» reach the button itself (not the camera area)?</summary>
+        public bool EnterButtonGetsTap()
+        {
+            var pos = RectTransformUtility.WorldToScreenPoint(null, enterBtn.Bg.rectTransform.TransformPoint(enterBtn.Bg.rectTransform.rect.center));
+            var hits = new List<RaycastResult>();
+            EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = pos }, hits);
+            TapReport = $"at {pos}, hits: " + string.Join(", ", hits.ConvertAll(h => h.gameObject.name));
+            return hits.Count > 0 && hits[0].gameObject.GetComponentInParent<UIButton>() == enterBtn;
         }
 
         static Texture2D KeyTex()
@@ -182,13 +199,13 @@ namespace Chubrik
             }
             bool menus = Menus.AnyOpen;
             root.gameObject.SetActive(!Menus.MainOpen);
-            touchRoot.gameObject.SetActive(Touch && !menus);
+            touchRoot.gameObject.SetActive((Touch || ForceTouch) && !menus);
             hint.gameObject.SetActive(!menus && Time.time < 60f);
             menuBtn.Bg.color = Updater.HasUpdate ? UIKit.Orange : UIKit.Blue;
             menuBtn.Set(Updater.HasUpdate ? "ОБНОВИТЬ" : "МЕНЮ");
 
             var z = menus ? null : Zones.Near();
-            enterBtn.gameObject.SetActive(z != null);
+            enterBtn.gameObject.SetActive(z != null || ForceTouch && !menus);
             if (z != null) enterBtn.Set((Touch ? "ВОЙТИ: " : "ВОЙТИ (E): ") + z.label);
 
             var pk = Pickups.I;
