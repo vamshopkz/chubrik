@@ -72,6 +72,30 @@ public static class BuildScript
         Finish(report, "WebGL");
     }
 
+    /// <summary>
+    /// Signs the APK with our own release key (../keys/chubrik.keystore, kept out of git) instead of Unity's debug key:
+    /// Play Protect distrusts debug-signed apps. Every release must use this same key, or phones refuse the update.
+    /// </summary>
+    static void UseReleaseKey()
+    {
+        var dir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "keys"));
+        var store = Path.Combine(dir, "chubrik.keystore");
+        var props = Path.Combine(dir, "keystore.properties");
+        if (!File.Exists(store) || !File.Exists(props))
+        {
+            Debug.LogError("[Build] release key missing: " + store);
+            EditorApplication.Exit(1);
+            return;
+        }
+        var kv = new System.Collections.Generic.Dictionary<string, string>();
+        foreach (var line in File.ReadAllLines(props)) { int i = line.IndexOf('='); if (i > 0) kv[line.Substring(0, i).Trim()] = line.Substring(i + 1).Trim(); }
+        PlayerSettings.Android.useCustomKeystore = true;
+        PlayerSettings.Android.keystoreName = store;
+        PlayerSettings.Android.keystorePass = kv["storePass"];
+        PlayerSettings.Android.keyaliasName = kv["alias"];
+        PlayerSettings.Android.keyaliasPass = kv["keyPass"];
+    }
+
     public static void BuildAndroid()
     {
         ApplyVersionArgs();
@@ -80,6 +104,7 @@ public static class BuildScript
         EditorUserBuildSettings.androidBuildSystem = AndroidBuildSystem.Gradle;
         if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
+        UseReleaseKey();
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
             scenes = new[] { ScenePath },
