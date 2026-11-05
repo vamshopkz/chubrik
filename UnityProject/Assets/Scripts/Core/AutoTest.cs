@@ -376,6 +376,76 @@ namespace Chubrik
             yield return Wait(2f);
             Check("falling into water returns you to the shore", pl.transform.position.y > -0.5f && new Vector2(pl.transform.position.x, pl.transform.position.z).magnitude < 66, pl.transform.position.ToString());
 
+            // ---- world 3: crystal caves ----
+            Worlds.Enter(3);
+            yield return Wait(2f);
+            Check("world 3 entered", Worlds.Current == 3 && Vector3.Distance(pl.transform.position, World3.Spawn) < 3, pl.transform.position.ToString());
+            Check("cave light (no sky)", RenderSettings.skybox == null);
+            Check("world 3 has cave mobs", World3.Enemies.Count >= 6, World3.Enemies.Count.ToString());
+            Check("30 rare crystals", Pickups.I.CrystalsLeft + World3.Crystals() == World3.CrystalsTotal, (Pickups.I.CrystalsLeft + World3.Crystals()).ToString());
+            Check("4 cages and 4 keys in world 3", Rescue.Total("w3") == 4 && Pickups.I.KeysLeftIn("w3") == 4, $"cages {Rescue.Total("w3")}, keys {Pickups.I.KeysLeftIn("w3")}");
+            pl.yaw = 0; pl.pitch = 14;
+            yield return Wait(0.4f);
+            yield return Shot("30_world3_start");
+            int cr0 = World3.Crystals();
+            var cp = Pickups.I.CrystalPos().Value;
+            pl.Teleport(cp - Vector3.up * 0.7f, 0);
+            yield return Wait(0.2f);
+            Check("crystal pickup", World3.Crystals() == cr0 + 1, $"{cr0} → {World3.Crystals()}");
+            Check("the gate is shut with few crystals", !World3.Gate.Open);
+
+            int hp3 = pl.Hearts;
+            pl.Teleport(World3.O + new Vector3(0, 0.3f, 2.5f), 0);
+            yield return Wait(0.6f);
+            pl.Teleport(World3.O + new Vector3(20, 2f, 40), 0);
+            yield return Wait(2.2f);
+            Check("lava: −1 heart and back on stone", pl.Hearts == hp3 - 1 && pl.transform.position.y > World3.LavaY + 3, $"hearts {hp3} → {pl.Hearts}, y {pl.transform.position.y:0.0}");
+
+            pl.Teleport(World3.O + new Vector3(0, 2.7f, 55), 0);
+            pl.yaw = 0; pl.pitch = 12;
+            yield return Wait(0.8f);
+            yield return Shot("31_song_hall");
+            World3.Sing(1);
+            Check("wrong song order does nothing", !World3.SongSolved);
+            World3.Sing(2); World3.Sing(0); World3.Sing(3); World3.Sing(1);
+            Check("the Masters' song opens the secret bridge", World3.SongSolved && GameObject.Find("SecretBridge") != null);
+
+            for (int i = 0; i < World3.GateNeed; i++) if (!Save.P.found.Contains("w3cr" + i)) Save.P.found.Add("w3cr" + i);
+            yield return Wait(0.3f);
+            Check("enough crystals open the gate", World3.Gate.Open);
+            pl.Teleport(World3.O + new Vector3(0, 3.5f, 99), 0);
+            pl.yaw = 0;
+            yield return Wait(1.6f);
+            yield return Shot("32_gate_open");
+
+            pl.Teleport(World3.ArenaC + new Vector3(0, 0.3f, -8), 0);
+            pl.yaw = 0; pl.pitch = 10;
+            yield return Wait(1.2f);
+            yield return Shot("33_guardian");
+            World3.Boss.TestHit(); World3.Boss.TestHit(); World3.Boss.TestHit();
+            Check("three stomps beat the Crystal Guardian", World3.Boss.Defeated);
+            yield return Wait(1.5f);
+            pl.Teleport(World3.GoalPos + new Vector3(0, -0.9f, -3f), 0);
+            yield return Wait(0.8f);
+            pl.Teleport(World3.GoalPos + new Vector3(0, -0.9f, -1f), 0);
+            yield return Wait(1.2f);
+            Check("the Crystal facet finishes world 3", Save.P.done.Contains(3));
+            yield return Shot("34_world3_done");
+            Window.Close();
+            Worlds.Enter(1);
+            yield return Wait(1.6f);
+            Check("back in the sunny lobby", Worlds.Current == 1 && RenderSettings.skybox != null);
+
+            // ---- story ----
+            Story.Show("w3end", null, false);
+            yield return Wait(0.3f);
+            yield return Shot("35_story");
+            Window.Close();
+            Story.Book();
+            yield return Wait(0.3f);
+            Check("story book lists read chapters", Save.P.seen.Contains("w3end"));
+            Window.Close();
+
             // ---- main menu ----
             Menus.Main();
             yield return Wait(1f);

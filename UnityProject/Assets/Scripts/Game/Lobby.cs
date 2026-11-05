@@ -306,11 +306,15 @@ namespace Chubrik
                 s2.AddComponent<Pulse>();
                 var t = Prim.Text(root, $"МИР {n}", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
                 t.transform.rotation = Quaternion.identity;
-                var t2 = Prim.Text(root, n == 2 ? "ПАРЯЩИЕ РУИНЫ" : "СКОРО ОТКРОЕТСЯ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex(n == 2 ? "7DFF9A" : "FFE14D"));
+                var t2 = Prim.Text(root, n == 2 ? "ПАРЯЩИЕ РУИНЫ" : "КРИСТАЛЬНЫЕ ПЕЩЕРЫ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex(n == 2 ? "7DFF9A" : "8FD0FF"));
                 t2.transform.rotation = Quaternion.identity;
-                int world = n;
                 if (n == 2) Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 2: ПАРЯЩИЕ РУИНЫ", () => Worlds.Enter(2));
-                else Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, $"МИР {n}", () => { AudioFx.Play("error"); Hud.Toast($"Мир {world} ещё строится — скоро откроется!", UIKit.Violet); });
+                else Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 3: КРИСТАЛЬНЫЕ ПЕЩЕРЫ", () =>
+                {
+                    // the portal wakes up once the Sky facet from World 2 is back
+                    if (Save.P.done.Contains(2)) Worlds.Enter(3);
+                    else { AudioFx.Play("error"); Hud.Toast("Портал спит. Пройди Мир 2 — Небесная грань разбудит его!", UIKit.Violet); }
+                });
             }
             Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
             Mushroom(new Vector3(14, 0, 31), 19.5f);

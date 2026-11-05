@@ -78,8 +78,8 @@ namespace Chubrik
             CloseMain();
             AudioFx.Play("portal");
             PlayerCtl.I.PlayVictory();
-            Hud.Toast("Добро пожаловать в лобби! Собирай монеты и ищи 10 жетонов", UIKit.Gold);
-            LockCursor();
+            Hud.Toast("Добро пожаловать в Центральную долину! Ищи 10 жетонов и заходи в порталы", UIKit.Gold);
+            if (!Story.Show("intro", LockCursor)) LockCursor();
         }
 
         // ---------------- pause ----------------
@@ -92,16 +92,19 @@ namespace Chubrik
                 if (Updater.HasUpdate) w.Row("Вышла новая версия " + Updater.I.LatestVersion + "!", "Скачай обновление — в нём новые штуки", Updater.I.ButtonText, UIKit.Orange, () => Updater.I.Press());
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
-                if (Worlds.Current == 2)
+                if (Worlds.Level)
                 {
-                    w.Row("Вернуться к флажку", "Последний чекпоинт мира 2", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(PlayerCtl.I.Checkpoint, 0)); });
+                    w.Row("Вернуться к флажку", "Последний чекпоинт мира " + Worlds.Current, "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(PlayerCtl.I.Checkpoint, 0)); });
                     w.Row("Вернуться в лобби", null, "В ЛОББИ", UIKit.Green, () => Worlds.Enter(1));
                 }
                 else
                 {
                     w.Row("Мир 2 — Парящие руины", Save.P.done.Contains(2) ? "Пройден! Можно пройти ещё раз" : "Лёгкий мир с мобами и ящиками", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(2));
+                    bool open3 = Save.P.done.Contains(2);
+                    w.Row("Мир 3 — Кристальные пещеры", !open3 ? "Откроется после Мира 2" : Save.P.done.Contains(3) ? "Пройден! Можно пройти ещё раз" : "Лава, кристаллы и Страж", "ВПЕРЁД", UIKit.Violet, () => Worlds.Enter(3), open3);
                     w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }
+                w.Row("История Чубрика", "Сюжет: прочитанные главы", "ЧИТАТЬ", UIKit.Pink, Story.Book);
                 w.Row("Главное меню", null, "ВЫЙТИ", UIKit.Red, Main);
                 w.Text("Гардероб, магазин примочек и премиум-наборы открываются, когда подходишь к ним в лобби.", 24, UIKit.Muted);
                 w.Footer.text = $"Ключей: {Save.P.keys} · спасено друзей: {Save.P.rescued.Count} · вещей: {OwnedCount()} из {Catalog.Items.Count}";

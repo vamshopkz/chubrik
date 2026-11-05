@@ -8,7 +8,7 @@ namespace Chubrik
     public class Pickups : MonoBehaviour
     {
         public static Pickups I;
-        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key; public float back; public bool active = true; }
+        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key, crystal; public float back; public bool active = true; }
         readonly List<P> items = new List<P>();
         GameObject arrow;
         public int CoinsAlive { get { int n = 0; foreach (var p in items) if (p.active && p.token == null) n++; return n; } }
@@ -68,8 +68,28 @@ namespace Chubrik
             items.Add(new P { go = go, pos = pos, token = id, key = true });
         }
 
+        /// <summary>Rare crystal of World 3 (taken once forever): powers the Guardian's gate.</summary>
+        public void Crystal(string id, Vector3 pos)
+        {
+            if (Save.P.found.Contains(id)) return;
+            Parts.Layer = Layers.Pickup;
+            var go = new GameObject("Crystal " + id) { layer = Layers.Pickup };
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+            var m = Parts.G(id.GetHashCode() % 2 == 0 ? "6FA8FF" : "B57CFF", 1.8f);
+            Parts.Msh(Meshes.Cone(6), go.transform, Vector3.zero, new Vector3(0.36f, 0.42f, 0.36f), m);
+            Parts.Msh(Meshes.Cone(6), go.transform, Vector3.zero, new Vector3(0.36f, 0.3f, 0.36f), m, new Vector3(180, 0, 0));
+            Parts.Ls(go.transform, Vector3.zero, 0.9f, Parts.Add("BFE8FF", 0.15f));
+            go.AddComponent<Spin>().speed = 100;
+            go.AddComponent<Bob>().amp = 0.12f;
+            items.Add(new P { go = go, pos = pos, token = id, crystal = true });
+        }
+
         public int KeysLeft { get { int n = 0; foreach (var p in items) if (p.key && p.active) n++; return n; } }
-        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && p.active) n++; return n; } }
+        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && !p.crystal && p.active) n++; return n; } }
+        public Vector3? CrystalPos() { foreach (var p in items) if (p.crystal && p.active) return p.pos; return null; }
+        public int KeysLeftIn(string prefix) { int n = 0; foreach (var p in items) if (p.key && p.active && p.token.StartsWith(prefix)) n++; return n; }
+        public int CrystalsLeft { get { int n = 0; foreach (var p in items) if (p.crystal && p.active) n++; return n; } }
         public IEnumerable<Vector3> TokenSpots() { foreach (var p in items) if (p.token != null && p.active) yield return p.pos; }
 
         void Update()
@@ -135,6 +155,17 @@ namespace Chubrik
                 AudioFx.Play("token");
                 Effects.Emit("gold", p.pos, 30, 0.5f);
                 Hud.Toast($"Золотой ключ! Открой им клетку с другом (ключей: {Save.P.keys})", UIKit.Gold);
+                return;
+            }
+            if (p.crystal)
+            {
+                Save.P.found.Add(p.token);
+                Save.P.coins += 2;
+                Save.Write();
+                AudioFx.Play("note" + (World3.Crystals() % 8));
+                Effects.Emit("magic", p.pos, 24, 0.4f);
+                int n = World3.Crystals();
+                Hud.Toast(n < World3.GateNeed ? $"Кристалл! {n} из {World3.GateNeed} для Врат Стража" : $"Кристаллов: {n} из {World3.CrystalsTotal}", UIKit.Cyan);
                 return;
             }
             if (p.token != null)

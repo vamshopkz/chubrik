@@ -203,7 +203,7 @@ namespace Chubrik
                 safeT += dt;
                 if (safeT > 0.5f) { safeT = 0; SafePos = transform.position + Vector3.up * 0.2f; }
             }
-            if (transform.position.y < WaterY - 0.5f) { if (Worlds.Current == 2) FellOff(); else FellInWater(); }
+            if (transform.position.y < WaterY - 0.5f) { if (Worlds.Level) FellOff(); else FellInWater(); }
             if (invuln > 0)
             {
                 invuln -= dt;
@@ -304,7 +304,8 @@ namespace Chubrik
             Effects.Damage(Mathf.Max(0, look.Idx("dmg")), Model);
             invuln = 0;
             LoseHeart();
-            if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast("Упал с острова! −1 сердечко", UIKit.Red); }
+            if (Worlds.Current == 3) Effects.Emit("fire", transform.position, 40, 0.5f, Vector3.up * 4);
+            if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast(Worlds.Current == 3 ? "Ой, лава! −1 сердечко" : "Упал с острова! −1 сердечко", UIKit.Red); }
         }
 
         void LoseHeart()
@@ -341,6 +342,7 @@ namespace Chubrik
             attackCd = 0.4f;
             Anim.Attack();
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
+            World3.HitNear(transform.position);   // singing crystals of the Masters' riddle
             var id = look.Of("weapon");
             int set = Catalog.SetOf(id), i = Catalog.Index(id);
             int kind = set >= 0 ? 100 + set : i;

@@ -21,6 +21,7 @@ namespace Chubrik
         public int keys;                                     // golden keys in the pocket
         public List<string> rescued = new List<string>();   // cages opened (friends now live in the lobby)
         public int boxes;                                    // loot boxes opened
+        public List<string> seen = new List<string>();      // story chapters already shown
         public float volume = 0.8f, sens = 1f;
         public bool music = true;
         public int quality = -1;

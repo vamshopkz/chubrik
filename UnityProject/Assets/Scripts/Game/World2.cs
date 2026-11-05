@@ -13,19 +13,22 @@ namespace Chubrik
         {
             var p = PlayerCtl.I;
             if (w == 2 && World2.Root == null) World2.Build();
+            if (w == 3 && World3.Root == null) World3.Build();
             Window.Close();
             AudioFx.Play("portal");
             p.Frozen = true;
             p.PlayVictory(() =>
             {
                 Current = w;
-                if (w == 2)
+                World3.Env(w == 3);
+                if (w == 2 || w == 3)
                 {
-                    p.WaterY = World2.O.y - 18f;
-                    p.Checkpoint = World2.Spawn;
-                    p.Teleport(World2.Spawn, 0);
+                    bool caves = w == 3;
+                    p.WaterY = caves ? World3.LavaY + 0.5f : World2.O.y - 18f;
+                    p.Checkpoint = caves ? World3.Spawn : World2.Spawn;
+                    p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast("МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 4 ключа и спаси друзей из клеток!", UIKit.Lime);
+                    Hud.Toast(caves ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, не падай в лаву!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 4 ключа и спаси друзей из клеток!", caves ? UIKit.Cyan : UIKit.Lime);
                 }
                 else
                 {
@@ -37,8 +40,12 @@ namespace Chubrik
                 }
                 p.SafePos = p.transform.position + Vector3.up * 0.2f;
                 p.Frozen = UIRoot.Open != null;
+                if (w >= 2) Story.Show("w" + w, null, true);
             });
         }
+
+        /// <summary>A level world (hearts, enemies, falling off), not the safe lobby.</summary>
+        public static bool Level => Current >= 2;
     }
 
     /// <summary>
@@ -391,7 +398,7 @@ namespace Chubrik
         }
     }
 
-    public enum EnemyKind { Golem, Bee, Slime }
+    public enum EnemyKind { Golem, Bee, Slime, Beetle, Magma, Bat }
 
     /// <summary>
     /// Easy enemy: walks slowly in a circle. Jump on its head to beat it (you bounce up and get coins);
@@ -400,23 +407,24 @@ namespace Chubrik
     public class Enemy : MonoBehaviour
     {
         public EnemyKind kind;
+        public int world = 2;
         Vector3 center; float radius, angle, speed = 0.32f;
         Transform body, armL, armR, key, wingL, wingR;
         public bool Dead { get; private set; }
         float deadT, back, hitCd;
-        public float Height => kind == EnemyKind.Slime ? 1.0f : kind == EnemyKind.Bee ? 1.6f : 1.5f;
-        float R => kind == EnemyKind.Slime ? 0.7f : 0.6f;
+        public float Height => kind == EnemyKind.Slime || kind == EnemyKind.Magma ? 1.0f : kind == EnemyKind.Bee || kind == EnemyKind.Bat ? 1.6f : kind == EnemyKind.Beetle ? 1.1f : 1.5f;
+        float R => kind == EnemyKind.Slime || kind == EnemyKind.Magma || kind == EnemyKind.Beetle ? 0.7f : 0.6f;
 
-        public static Enemy Spawn(EnemyKind k, Vector3 center, float radius, float phase = 0)
+        public static Enemy Spawn(EnemyKind k, Vector3 center, float radius, float phase = 0, int world = 2)
         {
             var go = new GameObject("Enemy " + k) { layer = Layers.World };
-            go.transform.SetParent(World2.Root, false);
+            go.transform.SetParent(world == 3 ? World3.Root : World2.Root, false);
             var e = go.AddComponent<Enemy>();
-            e.kind = k; e.center = center; e.radius = radius; e.angle = phase * Mathf.PI * 2;
+            e.kind = k; e.world = world; e.center = center; e.radius = radius; e.angle = phase * Mathf.PI * 2;
             e.Build();
             var col = go.AddComponent<SphereCollider>();
             col.isTrigger = true; col.center = new Vector3(0, e.Height * 0.5f, 0); col.radius = 0.7f;
-            World2.Enemies.Add(e);
+            (world == 3 ? World3.Enemies : World2.Enemies).Add(e);
             e.Place();
             return e;
         }
@@ -468,6 +476,49 @@ namespace Chubrik
                     foreach (var (wg, sd) in new[] { (wingL, -1), (wingR, 1) }) S(wg, new Vector3(sd * 0.3f, 0.1f, 0), new Vector3(0.55f, 0.08f, 0.35f), Glass("E8F6FF", 0.55f));
                     break;
                 }
+                case EnemyKind.Beetle:  // Кристальный жук
+                {
+                    var shell = M("2B2540", 0.7f, 0.3f);
+                    var crys = G("8F6BFF", 1.4f);
+                    S(body, new Vector3(0, 0.45f, 0), new Vector3(1.1f, 0.6f, 1.3f), shell);
+                    S(body, new Vector3(0, 0.4f, 0.62f), new Vector3(0.6f, 0.45f, 0.45f), M("1C1830", 0.6f));
+                    Eyes(body, 0.15f, 0.5f, 0.8f, 0.13f, G("FF9A2E", 2.5f));
+                    for (int k = 0; k < 5; k++)
+                    {
+                        var b = new Vector3(Mathf.Sin(k * 2.5f) * 0.3f, 0.7f, -0.2f + (k % 3) * 0.2f);
+                        Spike(body, b, b + new Vector3(Mathf.Sin(k * 2.5f) * 0.15f, 0.45f + (k % 2) * 0.2f, -0.1f), 0.22f, crys);
+                    }
+                    for (int k = 0; k < 3; k++) foreach (var sd in new[] { -1, 1 })
+                            Rod(body, new Vector3(sd * 0.45f, 0.35f, -0.35f + k * 0.35f), new Vector3(sd * 0.75f, 0.05f, -0.4f + k * 0.4f), 0.07f, shell);
+                    foreach (var sd in new[] { -1, 1 }) Rod(body, new Vector3(sd * 0.12f, 0.55f, 0.82f), new Vector3(sd * 0.3f, 0.75f, 1.05f), 0.04f, shell);
+                    break;
+                }
+                case EnemyKind.Magma:   // Магмовый слизень
+                {
+                    var lava = G("FF6A1E", 2.2f);
+                    S(body, new Vector3(0, 0.45f, 0), new Vector3(1.25f, 0.9f, 1.15f), lava);
+                    var crust = M("3A2A26", 0.2f);
+                    for (int k = 0; k < 7; k++) S(body, new Vector3(Mathf.Sin(k * 2.1f) * 0.42f, 0.55f + (k % 3) * 0.15f, Mathf.Cos(k * 1.9f) * 0.38f), 0.3f, crust);
+                    Eyes(body, 0.18f, 0.6f, 0.5f, 0.2f);
+                    B(body, new Vector3(0, 0.35f, 0.56f), new Vector3(0.3f, 0.06f, 0.03f), black);
+                    break;
+                }
+                case EnemyKind.Bat:     // Летучая мышь-самоцвет
+                {
+                    var fur = M("4A2E6B", 0.3f);
+                    S(body, new Vector3(0, 1.0f, 0), new Vector3(0.6f, 0.65f, 0.6f), fur);
+                    Eyes(body, 0.12f, 1.08f, 0.26f, 0.13f, G("7DFFEA", 2.4f));
+                    foreach (var sd in new[] { -1, 1 }) Cone(body, new Vector3(sd * 0.16f, 1.25f, 0), new Vector3(0.16f, 0.3f, 0.16f), fur, new Vector3(0, 0, -sd * 15));
+                    Msh(Meshes.Star(6, 0.5f), body, new Vector3(0, 0.95f, 0.3f), new Vector3(0.18f, 0.18f, 0.06f), G("FF5FD2", 2f));
+                    wingL = Node("WingL", body, new Vector3(-0.28f, 1.05f, 0)); wingR = Node("WingR", body, new Vector3(0.28f, 1.05f, 0));
+                    var wm = M("6B3FA0", 0.3f);
+                    foreach (var (wg, sd) in new[] { (wingL, -1), (wingR, 1) })
+                    {
+                        B(wg, new Vector3(sd * 0.35f, 0, 0), new Vector3(0.7f, 0.04f, 0.4f), wm);
+                        for (int k = 0; k < 3; k++) Spike(wg, new Vector3(sd * (0.2f + k * 0.2f), 0, -0.18f), new Vector3(sd * (0.25f + k * 0.2f), 0, -0.36f), 0.1f, wm);
+                    }
+                    break;
+                }
                 default:                 // Медленный Каменный Слайм
                 {
                     var rock = M("8F949B", 0.35f);
@@ -517,6 +568,15 @@ namespace Chubrik
                     wingL.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * 40) * 30);
                     wingR.localRotation = Quaternion.Euler(0, 0, -Mathf.Sin(t * 40) * 30);
                     break;
+                case EnemyKind.Bat:
+                    body.localPosition = Vector3.up * (0.2f + Mathf.Sin(t * 3f) * 0.18f);
+                    wingL.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * 22) * 40);
+                    wingR.localRotation = Quaternion.Euler(0, 0, -Mathf.Sin(t * 22) * 40);
+                    break;
+                case EnemyKind.Beetle:
+                    body.localPosition = Vector3.up * Mathf.Abs(Mathf.Sin(t * 6)) * 0.04f;
+                    body.localRotation = Quaternion.Euler(0, Mathf.Sin(t * 6) * 4, 0);
+                    break;
                 default:
                     float s = Mathf.Sin(t * 2.2f);
                     body.localScale = new Vector3(1 - s * 0.08f, 1 + s * 0.12f, 1 - s * 0.08f);
@@ -524,7 +584,7 @@ namespace Chubrik
             }
 
             var p = PlayerCtl.I;
-            if (p == null || Worlds.Current != 2 || p.Frozen) return;
+            if (p == null || Worlds.Current != world || p.Frozen) return;
             var d = p.transform.position - transform.position;
             float horiz = new Vector2(d.x, d.z).magnitude;
             float pr = 0.38f * p.Model.SizeScale;
@@ -553,7 +613,7 @@ namespace Chubrik
             AudioFx.Play("bonk");
             var c = transform.position + Vector3.up * Height * 0.6f;
             Effects.Emit("star", c, 16, 0.4f);
-            Effects.Emit(kind == EnemyKind.Golem ? "dust" : kind == EnemyKind.Bee ? "stardust" : "smoke", c, 14, 0.5f);
+            Effects.Emit(kind == EnemyKind.Golem ? "dust" : kind == EnemyKind.Bee ? "stardust" : kind == EnemyKind.Magma ? "fire" : kind == EnemyKind.Beetle || kind == EnemyKind.Bat ? "magic" : "smoke", c, 14, 0.5f);
             Effects.Emit("coin", c, 8, 0.3f, Vector3.up * 2);
             Save.AddCoins(5);
             Effects.Float("+5", c + Vector3.up, UIKit.Gold);
@@ -634,12 +694,13 @@ namespace Chubrik
                 AudioFx.Play("token");
                 Effects.Emit("confetti", transform.position + Vector3.up * 2, 160, 0.5f, Vector3.up * 5);
                 p.PlayVictory();
-                Window.Show("МИР 2 ПРОЙДЕН!", w =>
+                void Done() => Window.Show("МИР 2 ПРОЙДЕН!", w =>
                 {
-                    w.Text(first ? "Ура! Ты дошёл до золотого кубка. Награда: 300 монет и 1 жетон!" : "Кубок снова твой! +50 монет.", 32, UIKit.Gold);
+                    w.Text(first ? "Ура! Ты дошёл до золотого кубка. Награда: 300 монет и 1 жетон! Портал «МИР 3» в лобби проснулся." : "Кубок снова твой! +50 монет.", 32, UIKit.Gold);
                     w.Row("Вернуться в лобби", null, "В ЛОББИ", UIKit.Green, () => Worlds.Enter(1));
                     w.Row("Остаться в мире", "Собрать монеты и найти жетоны", "ОСТАТЬСЯ", UIKit.Blue, Window.Close);
                 }, 960, 520);
+                if (!(first && Story.Show("w2end", Done))) Done();
             }
         }
     }

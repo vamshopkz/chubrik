@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+
+namespace Chubrik
+{
+    /// <summary>
+    /// The story of «Чубрик и Сердце Долины» (full text: STORY.md): short chapters shown once — at the first game,
+    /// on entering a world for the first time and after taking a facet of the Heart. All read chapters are in the
+    /// pause menu («История Чубрика»).
+    /// </summary>
+    public static class Story
+    {
+        class Chapter { public string key, title; public string[] pages; }
+
+        static readonly List<Chapter> chapters = new List<Chapter>
+        {
+            new Chapter { key = "intro", title = "Пролог. Сердце Долины", pages = new[]
+            {
+                "Над фонтаном Центральной долины много лет парило Сердце Долины — огромный кристалл с семью гранями. Каждая грань держала в равновесии свой мир, а порталы светились, как ночники.",
+                "Однажды утром раздался звон: Сердце треснуло! Осколки разлетелись по мирам, в небе появились кривые трещины, а друзья Чубрика пропали.",
+                "Профессор Тетраэдр прибежал в тапочках: «Это Кривогран! Если не собрать грани, порталы схлопнутся навсегда». Чубрик надел любимую кепку: «Тогда я пошёл собирать!»",
+                "Долина — твой дом. Тут безопасно: учись прыгать (второй прыжок — сальто!), бей ящики, заглядывай в гардероб и магазин. А когда будешь готов — в портал «МИР 2»!",
+            } },
+            new Chapter { key = "w2", title = "Глава 2. Парящие руины", pages = new[]
+            {
+                "Когда-то здесь стоял воздушный город. Трещинники Кривограна разнесли его на острова и подвесили над облаками.",
+                "Прыгай по островам, побеждай голем-роботов, пчелоидов и слаймов прыжком на голову. Найди 4 золотых ключа — в клетках ждут друзья!",
+                "В храме на вершине спрятан золотой кубок, а в нём — Небесная грань Сердца.",
+            } },
+            new Chapter { key = "w2end", title = "Небесная грань", pages = new[]
+            {
+                "Чубрик поднял кубок — и внутри засияла Небесная грань! Где-то далеко, в долине, вспыхнул второй портал.",
+                "Профессор закричал по радио-кристаллу так громко, что Чубрик чуть не упал с острова: «Пещеры! Путь в Кристальные пещеры открыт!»",
+            } },
+            new Chapter { key = "w3", title = "Глава 3. Кристальные пещеры", pages = new[]
+            {
+                "Глубоко под землёй дорожки из тёмного камня вьются над озером лавы, а стены мерцают сине-фиолетовыми кристаллами. Здесь жили Мастера Кристаллов, умевшие петь камням.",
+                $"Собирай редкие кристаллы: {World3.GateNeed} из {World3.CrystalsTotal} откроют Врата Стража. Не падай в лаву и беги мимо гейзеров, пока они молчат.",
+                "В Зале Песни разгадай загадку Мастеров: ударь поющие кристаллы в том порядке, что нарисован на стене. И не забудь про друзей в клетках!",
+            } },
+            new Chapter { key = "w3end", title = "Кристальная грань", pages = new[]
+            {
+                "Страж Кристаллов рассыпался, и из камней прозвучал добрый голос: «Спасибо, маленький круглый герой. Кривогран заставил меня забыть, кого я охраняю. Возьми Кристальную грань — она всегда была вашей».",
+                "Над лавой зажёгся мост света. Но в отражении кристаллов мелькнула угловатая тень: «Две грани — это ещё не Сердце, круглый. Посмотрим, как ты справишься с тем, что дальше…»",
+                "Продолжение следует: Туманный лес Эха, Ледяная обсерватория, город Шестерёнск и Облачная крепость Кривограна.",
+            } },
+        };
+
+        static Chapter Find(string key) => chapters.Find(c => c.key == key);
+
+        /// <summary>Shows a chapter page by page; firstTimeOnly skips chapters already read. Returns false when nothing is shown.</summary>
+        public static bool Show(string key, Action done = null, bool firstTimeOnly = true)
+        {
+            var ch = Find(key);
+            if (ch == null) return false;
+            if (firstTimeOnly && (Save.P.seen.Contains(key) || Boot.Testing)) return false;
+            if (!Save.P.seen.Contains(key)) { Save.P.seen.Add(key); Save.Write(); }
+            Menus.Unlock();
+            Page(ch, 0, done);
+            return true;
+        }
+
+        static void Page(Chapter ch, int i, Action done)
+        {
+            bool last = i == ch.pages.Length - 1;
+            bool finished = false;
+            var w = Window.Show(ch.title, win =>
+            {
+                win.Text(ch.pages[i], 32);
+                win.Row(last ? "Вперёд, к приключениям!" : $"Страница {i + 1} из {ch.pages.Length}", null, last ? "ВПЕРЁД!" : "ДАЛЕЕ", last ? UIKit.Green : UIKit.Blue, () =>
+                {
+                    finished = true;
+                    if (last) { Window.Close(); done?.Invoke(); }
+                    else Page(ch, i + 1, done);
+                });
+                win.Footer.text = "История Чубрика · все прочитанные главы — в меню";
+            }, 1060, 520);
+            // closed with X: the story is skipped, the game goes on
+            w.OnClose = () => { if (!finished) { finished = true; done?.Invoke(); } };
+        }
+
+        /// <summary>The story book: chapters read so far.</summary>
+        public static void Book()
+        {
+            Window.Show("ИСТОРИЯ ЧУБРИКА", w =>
+            {
+                int n = 0;
+                foreach (var ch in chapters)
+                {
+                    var c = ch;
+                    if (!Save.P.seen.Contains(c.key)) continue;
+                    n++;
+                    w.Row(c.title, c.pages[0].Length > 70 ? c.pages[0].Substring(0, 70) + "…" : c.pages[0], "ЧИТАТЬ", UIKit.Pink, () => Show(c.key, Book, false));
+                }
+                if (n == 0) w.Text("Пока ни одной главы. Начни игру — история начнётся!", 28, UIKit.Muted);
+                w.Footer.text = $"Прочитано глав: {n} из {chapters.Count}";
+            }, 1060, 760);
+        }
+    }
+}

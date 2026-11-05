@@ -80,13 +80,13 @@ namespace Chubrik
             UIKit.Place(keys.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(466, 0), new Vector2(90, 56));
             heartsRow = UIKit.Rect("Hearts", root);
             UIKit.Place(heartsRow, new Vector2(0, 1), new Vector2(0, 1), new Vector2(22 + safe.x, -86 - safe.w), new Vector2(400, 50));
-            friends = T("", 26, UIKit.Gold, TextAlignmentOptions.Left, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + safe.x, -172 - safe.w), new Vector2(520, 34));
+            friends = T("", 26, UIKit.Gold, TextAlignmentOptions.Left, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + safe.x, -172 - safe.w), new Vector2(820, 34));
             navTxt = T("", 24, Parts.Hex("7DFF9A"), TextAlignmentOptions.Left, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + safe.x, -140 - safe.w), new Vector2(500, 34));
 
             menuBtn = UIKit.Button(root, "МЕНЮ", UIKit.Blue, () => Menus.Pause(), 26);
             UIKit.Place(menuBtn.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-16 - safe.z, -14 - safe.w), new Vector2(150, 66));
 
-            toast = T("", 32, Color.white, TextAlignmentOptions.Center, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -100 - safe.w), new Vector2(1300, 50));
+            toast = T("", 32, Color.white, TextAlignmentOptions.Center, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -238 - safe.w), new Vector2(1300, 50));
             hint = T(Touch ? "" : "WASD — бег · ПРОБЕЛ — прыжок (держи с крыльями — полёт) · F — удар · Q — эмоция · E — войти · мышь — камера",
                 20, new Color(1, 1, 1, 0.85f), TextAlignmentOptions.Center, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 10 + safe.y), new Vector2(1500, 30));
 
@@ -184,9 +184,10 @@ namespace Chubrik
             if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
             if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }
-            friends.text = Worlds.Current == 2 ? $"Друзья спасены: {Rescue.Rescued("w2")} из {Rescue.Total("w2")}" : (P.rescued.Count > 0 ? $"Спасённых друзей: {P.rescued.Count}" : "");
+            string wp = "w" + Worlds.Current;
+            friends.text = Worlds.Level ? (Worlds.Current == 3 ? $"Кристаллы: {World3.Crystals()} из {World3.CrystalsTotal}  ·  " : "") + $"Друзья спасены: {Rescue.Rescued(wp)} из {Rescue.Total(wp)}" : (P.rescued.Count > 0 ? $"Спасённых друзей: {P.rescued.Count}" : "");
             if (P.maxHearts != shownHearts) RebuildHearts();
-            int full = Worlds.Current == 2 && PlayerCtl.I ? Mathf.Clamp(PlayerCtl.I.Hearts, 0, P.maxHearts) : P.maxHearts;
+            int full = Worlds.Level && PlayerCtl.I ? Mathf.Clamp(PlayerCtl.I.Hearts, 0, P.maxHearts) : P.maxHearts;
             if (full != shownFull)
             {
                 shownFull = full;
