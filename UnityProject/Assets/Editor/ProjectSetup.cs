@@ -232,7 +232,7 @@ public static class ProjectSetup
         PlayerSettings.productName = "Chubrik";
         PlayerSettings.colorSpace = ColorSpace.Linear;
         PlayerSettings.runInBackground = true;
-        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.aleksandrkuzmenko.chubrik");
+        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.vamshopkz.chubrik");   // new id since 0.5.2: installs next to old debug-signed copies instead of failing
         PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "com.aleksandrkuzmenko.chubrik");
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel28;
         PlayerSettings.Android.forceInternetPermission = true;   // updates download from GitHub
