@@ -131,6 +131,16 @@ namespace Chubrik
             Boss = new GameObject("Guardian").AddComponent<Guardian>();
             Boss.Build(ArenaC, Root);
 
+            // four more friends and keys: 8 per world
+            Rescue.SpawnCage("w3c4", V(-4.6f, 0, -4.2f), 40, Root);
+            Rescue.SpawnCage("w3c5", V(20.2f, 2.4f, 62.8f), -70, Root);   // the riddle's treasure ledge
+            Rescue.SpawnCage("w3c6", V(-6.5f, 3.2f, 127), 140, Root);      // the Guardian's island
+            Rescue.SpawnCage("w3c7", V(4.2f, 0, 24), -130, Root);
+            Pickups.I.Key("w3k4", V(5.6f, 1.9f, 33.4f));
+            Pickups.I.Key("w3k5", V(-6.5f, 3.4f, 57));
+            Pickups.I.Key("w3k6", V(-3.3f, 3.7f, 72.5f));                  // between the geysers
+            Pickups.I.Key("w3k7", V(8, 4.2f, 116));
+
             Cave();
             Lobby.root = keep;
             Debug.Log($"[World3] crystals placed: {crystalN}");
@@ -483,7 +493,18 @@ namespace Chubrik
         {
             float t = Mathf.Repeat(Time.time / Period + phase, 1) * Period;
             bool on = t > Period - Burst;
-            if (on != Erupting) { Erupting = on; jet.gameObject.SetActive(on); if (on) AudioFx.Play("splash", 0.4f); }
+            if (on != Erupting)
+            {
+                Erupting = on; jet.gameObject.SetActive(on);
+                // only heard in the caves, and only nearby (the caves keep running while you are in the lobby)
+                var pl = PlayerCtl.I;
+                if (on && pl != null && Worlds.Current == 3)
+                {
+                    float dist = Vector3.Distance(pl.transform.position, transform.position);
+                    if (dist < 18) AudioFx.Play("splash", 0.45f * (1 - dist / 18));
+                }
+            }
+            if (Worlds.Current != 3) return;   // nothing to see or hear from the lobby
             if (!on && t > Period - Burst - 0.8f && Time.frameCount % 4 == 0) Effects.Emit("fire", transform.position + Vector3.up * 0.2f, 2, 0.2f, Vector3.up * 2);
             if (on)
             {
@@ -695,6 +716,7 @@ namespace Chubrik
                 }
                 case St.Windup:
                 {
+                    if (!active) { st = St.Idle; armL.localRotation = armR.localRotation = Quaternion.identity; break; }
                     float k = Mathf.Clamp01(t / 0.8f);
                     armL.localRotation = Quaternion.Euler(-160 * k, 0, 0); armR.localRotation = Quaternion.Euler(-160 * k, 0, 0);
                     body.localPosition = Vector3.up * k * 0.3f;

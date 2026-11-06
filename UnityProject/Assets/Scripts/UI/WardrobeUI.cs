@@ -119,7 +119,7 @@ namespace Chubrik
         {
             dept = id;
             var d = Catalog.Dept(id);
-            foreach (var kv in deptBtns) kv.Value.Bg.color = kv.Key == id ? UIKit.Orange : UIKit.Blue;
+            foreach (var kv in deptBtns) kv.Value.Bg.color = kv.Key == id ? UIKit.BlueSel : UIKit.Blue;
             for (int i = grid.childCount - 1; i >= 0; i--) Object.Destroy(grid.GetChild(i).gameObject);
             tiles.Clear();
             var raws = new Dictionary<string, RawImage>();

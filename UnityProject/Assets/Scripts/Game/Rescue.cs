@@ -10,11 +10,19 @@ namespace Chubrik
     /// </summary>
     public static class Rescue
     {
-        static readonly string[] Names = { "Пухлик", "Бублик", "Шнурок", "Кексик", "Пончик", "Чипсик", "Зефирка", "Тыковка", "Вафелька", "Ириска", "Мармелад", "Плюшка" };
+        static readonly string[] Names = { "Пончик", "Бублик", "Зефирка", "Кексик", "Пухлик", "Шнурок", "Чипсик", "Тыковка",
+                                           "Вафелька", "Ириска", "Мармелад", "Плюшка", "Сырник", "Леденец", "Пряник", "Карамелька", "Ватрушка", "Крендель" };
         public static readonly List<Cage> Cages = new List<Cage>();
         static readonly List<GameObject> lobbyFriends = new List<GameObject>();
 
-        public static string NameOf(string id) => Names[Mathf.Abs(id.GetHashCode()) % Names.Length];
+        /// <summary>Cage "w2c5" → its own name: 8 different friends per world.</summary>
+        public static string NameOf(string id)
+        {
+            int c = id.IndexOf('c');
+            if (id.Length > 1 && id[0] == 'w' && c > 1 && int.TryParse(id.Substring(1, c - 1), out var w) && int.TryParse(id.Substring(c + 1), out var n))
+                return Names[((w - 2) * 8 + n) % Names.Length];
+            return Names[Mathf.Abs(id.GetHashCode()) % Names.Length];
+        }
 
         /// <summary>A random but stable look for the friend of cage <paramref name="id"/>.</summary>
         public static Look LookOf(string id)

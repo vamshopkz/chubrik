@@ -39,6 +39,13 @@ namespace Chubrik
                 Application.Quit();
                 yield break;
             }
+            if (Boot.Arg("-sounds") != null)
+            {
+                while (!AudioFx.MusicReady) yield return null;
+                AudioFx.Export(Boot.Arg("-sounds"), "music", "jump0", "jump1", "flip", "punch", "swing", "step0", "step1", "coin", "click", "token", "land0", "note0", "win0");
+                Application.Quit();
+                yield break;
+            }
             if (Boot.Arg("-icons") != null)
             {
                 // only render the app icon
@@ -330,7 +337,7 @@ namespace Chubrik
             ShopUI.CloseBox();
 
             // ---- keys and cages ----
-            Check("4 cages and 4 golden keys in world 2", Rescue.Total("w2") == 4 && Pickups.I.KeysLeft == 4, $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeft}");
+            Check("8 cages and 8 golden keys in world 2", Rescue.Total("w2") == 8 && Pickups.I.KeysLeftIn("w2") == 8, $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeftIn("w2")}");
             var cage = Rescue.Cages.Find(c => c.id == "w2c0");
             pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
             yield return Wait(0.6f);
@@ -383,7 +390,7 @@ namespace Chubrik
             Check("cave light (no sky)", RenderSettings.skybox == null);
             Check("world 3 has cave mobs", World3.Enemies.Count >= 6, World3.Enemies.Count.ToString());
             Check("30 rare crystals", Pickups.I.CrystalsLeft + World3.Crystals() == World3.CrystalsTotal, (Pickups.I.CrystalsLeft + World3.Crystals()).ToString());
-            Check("4 cages and 4 keys in world 3", Rescue.Total("w3") == 4 && Pickups.I.KeysLeftIn("w3") == 4, $"cages {Rescue.Total("w3")}, keys {Pickups.I.KeysLeftIn("w3")}");
+            Check("8 cages and 8 keys in world 3", Rescue.Total("w3") == 8 && Pickups.I.KeysLeftIn("w3") == 8, $"cages {Rescue.Total("w3")}, keys {Pickups.I.KeysLeftIn("w3")}");
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.4f);
             yield return Shot("30_world3_start");

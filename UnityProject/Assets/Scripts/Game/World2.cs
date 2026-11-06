@@ -28,7 +28,7 @@ namespace Chubrik
                     p.Checkpoint = caves ? World3.Spawn : World2.Spawn;
                     p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast(caves ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, не падай в лаву!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 4 ключа и спаси друзей из клеток!", caves ? UIKit.Cyan : UIKit.Lime);
+                    Hud.Toast(caves ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 8 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 8 ключей и спаси 8 друзей из клеток!", caves ? UIKit.Cyan : UIKit.Lime);
                 }
                 else
                 {
@@ -163,6 +163,16 @@ namespace Chubrik
             Line(V(0, 7.4f, 129), V(0, 7.4f, 138), 7);
             GoalPos = V(0, 8.3f, 142.5f);
             Goal(GoalPos);
+
+            // four more friends and keys: 8 per world
+            Rescue.SpawnCage("w2c4", V(5.2f, 0, 1.8f), -90, Root);
+            Rescue.SpawnCage("w2c5", V(-4.3f, 0, 26), 120, Root);
+            Rescue.SpawnCage("w2c6", V(-23, 3.6f, 73.5f), 60, Root);
+            Rescue.SpawnCage("w2c7", V(5, 5.4f, 99.3f), -120, Root);
+            Pickups.I.Key("w2k4", V(0, 1.6f, 11.5f));
+            Pickups.I.Key("w2k5", V(6, 2.6f, 32));
+            Pickups.I.Key("w2k6", V(6, 8f, 121.5f));
+            Pickups.I.Key("w2k7", V(3.5f, 8.2f, 141.5f));
 
             Sky();
             Lobby.root = keep;

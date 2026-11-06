@@ -15,7 +15,7 @@ namespace Chubrik
             Ink = Hex("13213F"), Muted = Hex("D6E8FF"), Violet = Hex("9B6BFF"), Orange = Hex("FF9A2E"), Blue = Hex("3D8BFF"), Green = Hex("3FC24F");
         public static TMP_FontAsset Font;
         public static Material TextOutline, TextPlain;
-        public static Sprite Panel, Glass, Btn, Circle, Ring, White, Pill;
+        public static Sprite Panel, Glass, Btn, BtnFrame, Circle, Ring, RimRing, White, Pill;
 
         public static Color Hex(string hex) { ColorUtility.TryParseHtmlString("#" + hex, out var c); return c; }
 
@@ -38,9 +38,11 @@ namespace Chubrik
             Panel = Round(128, 128, 30, 5, Hex("4BA8F7"), Hex("2E68CC"), Color.white);
             Glass = Round(96, 96, 22, 3, new Color(1f, 1f, 1f, 0.22f), new Color(1f, 1f, 1f, 0.12f), new Color(1f, 1f, 1f, 0.6f));
             Btn = Round(128, 128, 26, 4, Color.white, new Color(0.8f, 0.8f, 0.8f), new Color(1f, 1f, 1f, 1f));
+            BtnFrame = Round(128, 128, 26, 7, new Color(1, 1, 1, 0), new Color(1, 1, 1, 0), Color.white);   // just the rim
             Pill = Round(128, 64, 31, 0, Color.white, Color.white, Color.white);
             Circle = Disc(128, 0, Color.white, Color.white);
             Ring = Disc(256, 8, new Color(1, 1, 1, 0.1f), new Color(1, 1, 1, 0.65f));
+            RimRing = Disc(256, 14, new Color(1, 1, 1, 0), Color.white);   // solid rim of round buttons
             var w = new Texture2D(4, 4); var px = new Color32[16];
             for (int i = 0; i < 16; i++) px[i] = new Color32(255, 255, 255, 255);
             w.SetPixels32(px); w.Apply();
@@ -133,9 +135,20 @@ namespace Chubrik
             return t;
         }
 
+        /// <summary>Every button is blue with a green rim; grey (disabled) and other blues stay as they are.</summary>
+        public static readonly Color BtnRim = Hex("4CE35A"), BlueSel = Hex("1D4FB8");
+        public static Color BtnFill(Color c)
+        {
+            Color.RGBToHSV(c, out var h, out var sat, out _);
+            if (sat < 0.25f || (h > 0.55f && h < 0.7f)) return c;
+            return Blue;
+        }
+
         public static UIButton Button(Transform parent, string label, Color color, Action onClick, float font = 30, string name = "Button")
         {
-            var img = Img(parent, Btn, color, name, true);
+            var img = Img(parent, Btn, BtnFill(color), name, true);
+            var rim = Img(img.transform, BtnFrame, BtnRim, "Rim");
+            Fill(rim.rectTransform, -3, -3, -3, -3);
             var b = img.gameObject.AddComponent<UIButton>();
             b.OnClick = onClick;
             b.Bg = img;
@@ -149,9 +162,9 @@ namespace Chubrik
 
         public static UIButton Round(Transform parent, string label, Color color, Action onClick, float size, float font = 28)
         {
-            var img = Img(parent, Circle, color, "Round " + label, true);
+            var img = Img(parent, Circle, BtnFill(color), "Round " + label, true);
             img.rectTransform.sizeDelta = new Vector2(size, size);
-            var ring = Img(img.transform, Ring, Color.white, "Ring");
+            var ring = Img(img.transform, RimRing, BtnRim, "Ring");
             Fill(ring.rectTransform);
             var b = img.gameObject.AddComponent<UIButton>();
             b.OnClick = onClick; b.Bg = img;
@@ -233,7 +246,7 @@ namespace Chubrik
         public void Set(string label, Color? color = null)
         {
             if (Label != null && Label.text != label) Label.text = label;
-            if (color.HasValue && Bg != null) Bg.color = color.Value;
+            if (color.HasValue && Bg != null) Bg.color = UIKit.BtnFill(color.Value);
         }
     }
 

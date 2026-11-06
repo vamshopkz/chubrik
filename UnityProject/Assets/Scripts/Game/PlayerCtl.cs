@@ -235,7 +235,7 @@ namespace Chubrik
             {
                 Effects.Emit(Model.HasJet ? "fire" : "dust", transform.position + Vector3.up * 0.2f, 8, 0.25f, Vector3.down);
                 Anim.Flip();   // the second jump is a somersault
-                AudioFx.Play("swing");
+                AudioFx.Play("flip");
                 Flips++;
             }
             if (Anim.emoting) Anim.StopEmote();
@@ -350,7 +350,7 @@ namespace Chubrik
             bool ranged = kind == 0 || kind == 2 || kind == 4 || kind == 5 || kind == 101;
             if (string.IsNullOrEmpty(id))
             {
-                AudioFx.Play("swing");
+                AudioFx.Play("punch");
                 Hit(origin + transform.forward * 0.4f, 0.8f);   // a punch
                 return;
             }

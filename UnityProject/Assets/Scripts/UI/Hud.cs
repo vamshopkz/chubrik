@@ -202,7 +202,7 @@ namespace Chubrik
             root.gameObject.SetActive(!Menus.MainOpen);
             touchRoot.gameObject.SetActive((Touch || ForceTouch) && !menus);
             hint.gameObject.SetActive(!menus && Time.time < 60f);
-            menuBtn.Bg.color = Updater.HasUpdate ? UIKit.Orange : UIKit.Blue;
+            menuBtn.Bg.color = UIKit.Blue;
             menuBtn.Set(Updater.HasUpdate ? "ОБНОВИТЬ" : "МЕНЮ");
 
             var z = menus ? null : Zones.Near();
