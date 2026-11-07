@@ -104,6 +104,8 @@ namespace Chubrik
                     w.Row("Мир 3 — Кристальные пещеры", !open3 ? "Откроется после Мира 2" : Save.P.done.Contains(3) ? "Пройден! Можно пройти ещё раз" : "Лава, кристаллы и Страж", "ВПЕРЁД", UIKit.Violet, () => Worlds.Enter(3), open3);
                     bool open4 = Save.P.done.Contains(3);
                     w.Row("Мир 4 — Снежная Долина", !open4 ? "Откроется после Мира 3" : Save.P.done.Contains(4) ? "Пройден! Можно пройти ещё раз" : "Лёд, снеговики и Король Йети", "ВПЕРЁД", UIKit.Cyan, () => Worlds.Enter(4), open4);
+                    bool open5 = Save.P.done.Contains(4);
+                    w.Row("Мир 5: Джунгли", !open5 ? "Откроется после Мира 4" : Save.P.done.Contains(5) ? "Пройден! Можно пройти ещё раз" : "Река, болото, пирамида и Древний Голем", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(5), open5);
                     w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }
                 w.Row("История Чубрика", "Сюжет: прочитанные главы", "ЧИТАТЬ", UIKit.Pink, Story.Book);

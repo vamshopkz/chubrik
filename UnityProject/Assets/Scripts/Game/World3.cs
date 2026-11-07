@@ -160,7 +160,7 @@ namespace Chubrik
             var sun = RenderSettings.sun;
             if (!saved)
             {
-                if (world != 3 && world != 4) return;
+                if (world < 3 || world > 5) return;
                 saved = true;
                 skyS = RenderSettings.skybox; ambMode = RenderSettings.ambientMode;
                 ambS = RenderSettings.ambientSkyColor; ambE = RenderSettings.ambientEquatorColor; ambG = RenderSettings.ambientGroundColor;
@@ -182,6 +182,13 @@ namespace Chubrik
                 RenderSettings.fogColor = Hex("241838"); RenderSettings.fogStartDistance = 30; RenderSettings.fogEndDistance = 130;
                 if (sun) { sun.color = Hex("FFD2B0"); sun.intensity = 0.75f; }
                 if (cam) { cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = Hex("241838"); }
+            }
+            else if (world == 5)
+            {
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = Hex("CFF2C8"); RenderSettings.ambientEquatorColor = Hex("A8D89A"); RenderSettings.ambientGroundColor = Hex("6A7A3A");
+                RenderSettings.fogColor = Hex("CDEBD0"); RenderSettings.fogStartDistance = 50; RenderSettings.fogEndDistance = 190;
+                if (sun) { sun.color = Hex("FFF0C8"); sun.intensity = 1.3f; }
             }
             else if (world == 4)
             {

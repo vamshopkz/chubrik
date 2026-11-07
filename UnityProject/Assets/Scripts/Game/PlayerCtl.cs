@@ -327,6 +327,13 @@ namespace Chubrik
             invuln = 0;
             LoseHeart();
             if (Worlds.Current == 3) Effects.Emit("fire", transform.position, 40, 0.5f, Vector3.up * 4);
+            if (Worlds.Current == 5)
+            {
+                // the poisonous swamp: a heart less and back to the start of the level
+                Effects.Emit("bubble", transform.position, 30, 0.6f, Vector3.up * 2, new Color(0.8f, 0.5f, 1f));
+                if (Hearts > 0) { Teleport(World5.Spawn, 0); invuln = 1.5f; Hud.Toast("Ядовитое болото! −1 сердечко, назад на старт", UIKit.Violet); }
+                return;
+            }
             if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast(Worlds.Current == 3 ? "Ой, лава! −1 сердечко" : Worlds.Current == 4 ? "Брр, ледяная вода! −1 сердечко" : "Упал с острова! −1 сердечко", UIKit.Red); }
         }
 

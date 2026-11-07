@@ -610,6 +610,65 @@ namespace Chubrik
             yield return Wait(1.6f);
             Check("back from the snow: no snowmobile in the lobby", Worlds.Current == 1 && !pl.Snowmobile);
 
+            // ---- world 5: jungle ----
+            Worlds.Enter(5);
+            yield return Wait(2f);
+            Check("world 5 entered", Worlds.Current == 5 && Vector3.Distance(pl.transform.position, World5.Spawn) < 3, pl.transform.position.ToString());
+            Check("8 cages and 8 keys in the jungle", Rescue.Total("w5") == 8 && Pickups.I.KeysLeftIn("w5") == 8, $"cages {Rescue.Total("w5")}, keys {Pickups.I.KeysLeftIn("w5")}");
+            pl.yaw = 0; pl.pitch = 14;
+            yield return Wait(0.4f);
+            yield return Shot("45_world5_start");
+            var log0 = World5.Logs[0].transform.position;
+            yield return Wait(0.8f);
+            Check("logs drift on the river", Vector3.Distance(log0, World5.Logs[0].transform.position) > 0.3f);
+            pl.Teleport(World5.O + new Vector3(0, 0.3f, 12), 0);
+            pl.yaw = 0; pl.pitch = 12;
+            yield return Wait(0.6f);
+            yield return Shot("46_river_logs");
+
+            // the pink mushroom throws you up to the tree-house
+            pl.Teleport(World5.O + new Vector3(4.5f, 2.6f, 6.5f), 0);
+            float mTop = 0;
+            for (float tt = 0; tt < 2f; tt += Time.deltaTime) { mTop = Mathf.Max(mTop, pl.transform.position.y - World5.O.y); yield return null; }
+            Check("a pink mushroom throws you high", mTop > 8.5f, mTop.ToString("0.0"));
+
+            // the poisonous swamp: −1 heart and back to the start
+            pl.Teleport(World5.O + new Vector3(0, 0.3f, 39), 0);
+            yield return Wait(0.6f);
+            int hp5 = pl.Hearts;
+            pl.Teleport(World5.O + new Vector3(10, 0, 58), 0);
+            yield return Wait(2f);
+            Check("swamp: −1 heart and back to the start", pl.Hearts == hp5 - 1 && Vector3.Distance(pl.transform.position, World5.Spawn) < 3, $"hearts {hp5} → {pl.Hearts}, at {pl.transform.position}");
+
+            // crumbling slabs
+            var slab = World5.Slabs[0];
+            slab.TestStep();
+            yield return Wait(2.6f);
+            Check("a stone slab falls 2 seconds after you step on it", slab.Falling);
+            pl.Teleport(World5.O + new Vector3(0, 1.9f, 71), 0);
+            pl.yaw = 0; pl.pitch = 10;
+            yield return Wait(0.6f);
+            yield return Shot("47_pyramid");
+
+            // the Ancient Stone Golem on the pyramid top
+            pl.Teleport(World5.TopC + new Vector3(0, 0.3f, -4.5f), 0);
+            pl.yaw = 0; pl.pitch = 12;
+            yield return Wait(1f);
+            yield return Shot("48_stone_golem");
+            Check("the Golem has 3 lives", World5.Boss.Lives == 3);
+            int keysBefore = Pickups.I.KeysLeftIn("w5");
+            World5.Boss.TestHit(); World5.Boss.TestHit(); World5.Boss.TestHit();
+            Check("three stomps beat the Golem: a golden key appears", World5.Boss.Defeated && Pickups.I.KeysLeftIn("w5") == keysBefore + 1);
+            yield return Wait(1.2f);
+            Check("the victory portal appears", GameObject.Find("VictoryPortal") != null);
+            World5.Win();
+            Check("the victory portal finishes world 5", Save.P.done.Contains(5));
+            yield return Shot("49_world5_done");
+            Window.Close();
+            Worlds.Enter(1);
+            yield return Wait(1.6f);
+            Check("back in the lobby from the jungle", Worlds.Current == 1);
+
             // ---- main menu ----
             Menus.Main();
             yield return Wait(1f);

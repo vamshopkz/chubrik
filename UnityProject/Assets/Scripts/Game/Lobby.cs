@@ -318,6 +318,30 @@ namespace Chubrik
             }
             Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
 
+            // the jungle portal to World 5: palms, vines and big leaves
+            {
+                var c = new Vector3(13, 0, 44);
+                var stoneJ = M("8A8A6A", 0.2f);
+                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), stoneJ);
+                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), stoneJ);
+                for (int k = 0; k < 8; k++) Ca(root, c + new Vector3(-3.4f + k * 0.97f, 5.2f, -0.82f), new Vector3(0.1f, 1f, 0.1f), M("2E9E3E", 0.2f));
+                for (int k = 0; k < 5; k++) S(root, c + new Vector3(-3.6f + k * 1.8f, 7.1f, 0), new Vector3(1.8f, 0.8f, 1.8f), M(k % 2 == 0 ? "2E9E3E" : "4CBF4A", 0.2f));
+                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("6EDC3C", 0.55f), new Vector3(90, 0, 0));
+                surf.AddComponent<Spin>().axis = Vector3.up;
+                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.25f), new Vector3(90, 0, 0));
+                s2.AddComponent<Pulse>();
+                foreach (var sd in new[] { -1, 1 }) Pine(c + new Vector3(sd * 5, 0, 0.5f), 1.2f);
+                var t = Prim.Text(root, "МИР 5", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
+                t.transform.rotation = Quaternion.identity;
+                var t2 = Prim.Text(root, "ДЖУНГЛИ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex("7DFF9A"));
+                t2.transform.rotation = Quaternion.identity;
+                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 5: ДЖУНГЛИ", () =>
+                {
+                    if (Save.P.done.Contains(4)) Worlds.Enter(5);
+                    else { AudioFx.Play("error"); Hud.Toast("Портал зарос лианами. Пройди Мир 4 — Ледяная грань его откроет!", UIKit.Lime); }
+                });
+            }
+
             // the ice portal to World 4: snowdrifts and swirling snowflakes
             {
                 var c = new Vector3(0, 0, 44);
