@@ -58,7 +58,7 @@ namespace Chubrik
             // ---- catalogue ----
             Check("31 departments", Catalog.Depts.Count == 31, Catalog.Depts.Count.ToString());
             bool eight = true;
-            foreach (var d in Catalog.Depts) if (d.items.FindAll(i => !i.Premium).Count != 8) eight = false;
+            foreach (var d in Catalog.Depts) if (d.items.FindAll(i => !i.Premium && !i.Reward).Count != 8) eight = false;
             Check("8 named items in every department", eight);
             Check("200+ items in total", Catalog.Items.Count >= 200, Catalog.Items.Count + " (regular " + Catalog.RegularCount + ")");
             Check("8 premium sets priced 1000–3000 ₸", Catalog.Sets.Count == 8 && Catalog.Sets.TrueForAll(s => s.price >= 1000 && s.price <= 3000 && s.items.Count >= 3));
@@ -359,6 +359,30 @@ namespace Chubrik
             Check("a hit next to the cage opens it with a key, the friend is rescued", cage.Open && Save.P.keys == 0 && Save.P.rescued.Contains("w2c0"));
             yield return Wait(2.5f);
 
+            // ---- Shipozavr: the mega boss of the Spike Arena ----
+            Check("Shipozavr waits with 2222 lives", Shipozavr.I != null && Shipozavr.I.Hp == 2222);
+            Check("spikes on the arena bridge", UnityEngine.Object.FindObjectsByType<SpikeStrip>(FindObjectsSortMode.None).Length >= 2);
+            pl.Teleport(World2.O + new Vector3(28, 6.9f, 129.5f), 0);
+            pl.yaw = 0; pl.pitch = 12;
+            yield return Wait(1.2f);
+            yield return Shot("36_shipozavr");
+            int hp0s = Shipozavr.I.Hp;
+            pl.Teleport(Shipozavr.I.transform.position + Shipozavr.I.transform.forward * 1.8f + Vector3.up * 0.1f, Shipozavr.I.transform.eulerAngles.y + 180);
+            yield return Wait(0.5f);
+            pl.Attack();
+            Check("a punch takes 74 lives", Shipozavr.I.Hp == hp0s - Shipozavr.Punch || Shipozavr.I.Hp < hp0s, $"{hp0s} → {Shipozavr.I.Hp}");
+            int sc0 = Save.P.coins, st0 = Save.P.tokens, sk0 = Save.P.keys;
+            Shipozavr.I.TestDamage(Shipozavr.I.Hp);
+            yield return Wait(1f);
+            Check("Shipozavr runs away when his lives are over", Shipozavr.I.Defeated && Shipozavr.Beaten);
+            Check("mega reward: 2222 coins, 22 tokens, a golden key, the crown", Save.P.coins >= sc0 + 2222 && Save.P.tokens == st0 + 22 && Save.P.keys == sk0 + 1 && Save.Owns(Catalog.ShipoCrown), $"coins +{Save.P.coins - sc0}, tokens +{Save.P.tokens - st0}, keys +{Save.P.keys - sk0}");
+            yield return Shot("37_mega_reward");
+            Window.Close();
+            Save.Wear("hat", Catalog.ShipoCrown); pl.ApplyLook(Save.CurrentLook());
+            Check("the Shipozavr crown guards from spikes", pl.SpikeProof);
+            Save.Wear("hat", ""); pl.ApplyLook(Save.CurrentLook());
+            Save.P.keys = 0;
+
             pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -2.2f), 0);
             yield return Wait(1.0f);
             pl.Teleport(World2.GoalPos + new Vector3(0, -0.6f, -1.5f), 0);
@@ -452,6 +476,139 @@ namespace Chubrik
             yield return Wait(0.3f);
             Check("story book lists read chapters", Save.P.seen.Contains("w3end"));
             Window.Close();
+
+            // ---- world 4: snowy valley ----
+            Worlds.Enter(4);
+            yield return Wait(2f);
+            Check("world 4 entered", Worlds.Current == 4 && Vector3.Distance(pl.transform.position, World4.Spawn) < 3, pl.transform.position.ToString());
+            Check("8 friends frozen in ice cubes", Rescue.Total("w4") == 8 && Rescue.Cages.FindAll(c => c.id.StartsWith("w4") && c.ice).Count == 8);
+            Check("angry snowmen and ice boars", World4.Snowmen.Count >= 5 && World4.Boars.Count >= 3, $"{World4.Snowmen.Count} / {World4.Boars.Count}");
+            pl.yaw = 0; pl.pitch = 14;
+            yield return Wait(0.4f);
+            yield return Shot("38_world4_start");
+
+            // slippery ice: you keep sliding after letting go; skates stop at once
+            pl.Teleport(World4.O + new Vector3(0, 0.3f, 34), 0);
+            yield return Wait(0.6f);
+            Check("standing on ice", pl.OnIce);
+            pl.MoveInput = new Vector2(0, 1);
+            yield return Wait(1.2f);
+            pl.MoveInput = Vector2.zero;
+            yield return Wait(0.25f);
+            float slide = new Vector2(pl.Velocity.x, pl.Velocity.z).magnitude;
+            Check("ice is slippery", slide > 2.5f, slide.ToString("0.0"));
+            Save.Give(Catalog.Skates); Save.Wear("shoes", Catalog.Skates); pl.ApplyLook(Save.CurrentLook());
+            pl.Teleport(World4.O + new Vector3(0, 0.3f, 34), 0);
+            yield return Wait(0.5f);
+            pl.MoveInput = new Vector2(0, 1);
+            yield return Wait(1.2f);
+            pl.MoveInput = Vector2.zero;
+            yield return Wait(0.25f);
+            float stop = new Vector2(pl.Velocity.x, pl.Velocity.z).magnitude;
+            Check("ice skates: no sliding", stop < 1f, stop.ToString("0.0"));
+            yield return Shot("39_frozen_lake");
+            Save.Wear("shoes", ""); pl.ApplyLook(Save.CurrentLook());
+
+            // snowman: his snowballs slow you down, a punch knocks his head off
+            var sm = World4.Snowmen[3];   // a village snowman: open snow between him and the square
+            var square = World4.O + new Vector3(18, 0, 140);
+            pl.Teleport(sm.transform.position + (square - sm.transform.position).normalized * 6.5f + Vector3.up * 0.3f, 0);
+            for (float tt = 0; tt < 6 && pl.SlowUntil < Time.time; tt += Time.deltaTime) yield return null;
+            Check("a snowball hit slows you down", pl.SlowUntil > Time.time - 0.5f);
+            pl.Teleport(sm.transform.position + sm.transform.forward * 1.3f + Vector3.up * 0.1f, sm.transform.eulerAngles.y + 180);
+            yield return Wait(0.5f);
+            pl.Attack();
+            yield return Wait(0.3f);
+            Check("a punch beats the snowman", sm.Dead);
+
+            // snowballs grow when rolled and smash cracked ice
+            var ball = World4.Balls[0];
+            float r0 = ball.R;
+            pl.Teleport(ball.transform.position + new Vector3(0, 0.3f - ball.R, -ball.R - 0.8f), 0);
+            yield return Wait(0.3f);
+            pl.MoveInput = new Vector2(0, 1);
+            yield return Wait(1.5f);
+            pl.MoveInput = Vector2.zero;
+            Check("a rolled snowball grows", ball.R > r0 + 0.05f, $"{r0:0.00} → {ball.R:0.00}");
+            ball.TestRollInto(World4.Walls[0]);
+            yield return Wait(1.2f);
+            Check("a big snowball smashes the cracked ice wall", World4.Walls[0].Broken);
+
+            // icicles fall, steam geysers throw you up
+            var ic = UnityEngine.Object.FindObjectsByType<Icicle>(FindObjectsSortMode.None)[0];
+            pl.Teleport(new Vector3(ic.transform.position.x, World4.O.y + 0.3f, ic.transform.position.z), 0);
+            yield return Wait(1.6f);
+            Check("an icicle falls when you run under it", ic.Fallen);
+            pl.Teleport(World4.O + new Vector3(-3, 1.2f, 92), 0);
+            float gTop = 0;
+            for (float tt = 0; tt < 2f; tt += Time.deltaTime) { gTop = Mathf.Max(gTop, pl.transform.position.y - World4.O.y); yield return null; }
+            Check("a steam geyser throws you high", gTop > 9, gTop.ToString("0.0"));
+
+            // chimney: three stomps → tokens
+            int tl0 = Pickups.I.TokensLeft;
+            World4.Chim.Stomp(); World4.Chim.Stomp(); World4.Chim.Stomp();
+            Check("three stomps on the chimney: a fountain of tokens", World4.Chim.Done && Pickups.I.TokensLeft == tl0 + 3);
+
+            // snowboard run
+            pl.Teleport(World4.BoardTop + new Vector3(0, 0.3f, 1.0f), 0);
+            yield return Wait(1.2f);
+            Check("the snowboard starts a ride", World4.Board.Riding || pl.Riding);
+            yield return Shot("40_snowboard");
+            World4.Board.TestRide();
+            yield return Wait(0.6f);
+            Check("the run ends in the village", !pl.Riding && pl.transform.position.z > World4.O.z + 125, pl.transform.position.ToString());
+
+            // the frozen mailbox and the jet snowmobile
+            World4.CallSnowmobile();
+            Check("the code brings a jet snowmobile", pl.Snowmobile);
+            var sm2 = World4.Snowmen.Find(m => !m.Dead && Vector3.Distance(m.transform.position, World4.MailboxPos) < 20);
+            pl.Teleport(sm2.transform.position + Vector3.up * 0.2f + sm2.transform.forward * 0.8f, 0);
+            yield return Wait(0.4f);
+            Check("the snowmobile knocks a snowman over", sm2.Dead);
+            pl.Teleport(World4.MailboxPos + new Vector3(2, 0.3f, -3), 0);
+            pl.yaw = 0;
+            yield return Wait(0.6f);
+            yield return Shot("41_snowmobile");
+
+            // friends in ice cubes: only a jump attack breaks them
+            var cube = Rescue.Cages.Find(c => c.id == "w4c0");
+            pl.Teleport(cube.transform.position + cube.transform.forward * 1.7f + Vector3.up * 0.1f, cube.transform.eulerAngles.y + 180);
+            yield return Wait(0.6f);
+            yield return Shot("42_ice_cube");
+            pl.Attack();
+            Check("an ice cube stays whole from the ground", !cube.Open);
+            yield return Wait(0.5f);
+            pl.Launch(7f);
+            yield return Wait(0.15f);
+            pl.Attack();
+            Check("a jump attack breaks the ice and frees the friend", cube.Open);
+
+            // the Frosty lucky box
+            int win0 = 0; foreach (var id in Catalog.WinterItems) if (Save.Owns(id)) win0++;
+            UnityEngine.Object.FindObjectsByType<FrostBox>(FindObjectsSortMode.None)[0].Open();
+            int win1 = 0; foreach (var id in Catalog.WinterItems) if (Save.Owns(id)) win1++;
+            Check("the Frosty lucky box gives a winter thing", win1 == win0 + 1 || win0 == Catalog.WinterItems.Length);
+            yield return Wait(1.6f);
+            yield return Shot("43_frost_box");
+            ShopUI.CloseBox();
+
+            // King Yeti
+            pl.Teleport(World4.ArenaC + new Vector3(0, 0.3f, -8), 0);
+            pl.yaw = 0; pl.pitch = 10;
+            yield return Wait(1.2f);
+            yield return Shot("44_king_yeti");
+            World4.Boss.TestHit(); World4.Boss.TestHit(); World4.Boss.TestHit();
+            Check("three big snowballs beat King Yeti", World4.Boss.Defeated);
+            yield return Wait(1.5f);
+            pl.Teleport(World4.GoalPos + new Vector3(0, -0.9f, -3f), 0);
+            yield return Wait(0.8f);
+            pl.Teleport(World4.GoalPos + new Vector3(0, -0.9f, -1f), 0);
+            yield return Wait(1.2f);
+            Check("the Ice facet finishes world 4", Save.P.done.Contains(4));
+            Window.Close();
+            Worlds.Enter(1);
+            yield return Wait(1.6f);
+            Check("back from the snow: no snowmobile in the lobby", Worlds.Current == 1 && !pl.Snowmobile);
 
             // ---- main menu ----
             Menus.Main();

@@ -135,9 +135,9 @@ namespace Chubrik
                 UIKit.Place(raw.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(150, 132));
                 if (NoPicture.Contains(it.dept))
                 {
-                    raw.color = Color.HSVToRGB((Catalog.Index(it.id) + 1) / 9f, 0.45f, 0.95f);
+                    raw.color = Color.HSVToRGB((Catalog.Index(it.id) % 100 + 1) / 9f, 0.45f, 0.95f);
                     var word = it.dept switch { "jsnd" => "ПРЫЖОК", "lsnd" => "ПРИЗЕМЛ.", "dmg" => "УРОН", "win" => "ПОБЕДА", "walk" => "ПОХОДКА", "emote" => "ЭМОЦИЯ", "shadow" => "ТЕНЬ", _ => "СЛЕДЫ" };
-                    var big = UIKit.Txt(raw.transform, word + "\n" + (it.Premium ? "★" : (Catalog.Index(it.id) + 1).ToString()), 26, Color.white);
+                    var big = UIKit.Txt(raw.transform, word + "\n" + (it.Premium || it.Reward ? "★" : (Catalog.Index(it.id) + 1).ToString()), 26, Color.white);
                     UIKit.Fill(big.rectTransform, 4, 4, 4, 4);
                 }
                 else raws[it.id] = raw;
@@ -202,6 +202,7 @@ namespace Chubrik
                 if (worn) { st.text = "НАДЕТО"; st.color = UIKit.Green; }
                 else if (own) { st.text = "ЕСТЬ"; st.color = UIKit.Cyan; }
                 else if (it.Premium) { st.text = "★ НАБОР"; st.color = UIKit.Pink; }
+                else if (it.Reward) { st.text = "НАГРАДА"; st.color = UIKit.Gold; }
                 else if (it.promoOnly) { st.text = "ПРОМОКОД"; st.color = UIKit.Violet; }
                 else if (it.tokens) { st.text = it.price + " ЖЕТ."; st.color = UIKit.Violet; }
                 else { st.text = it.price + " МОНЕТ"; st.color = P.coins >= it.price ? UIKit.Gold : UIKit.Red; }
@@ -211,7 +212,7 @@ namespace Chubrik
             var d = Catalog.Dept(dept);
             if (sel == null) { selName.text = ""; selInfo.text = ""; action.gameObject.SetActive(false); takeOff.gameObject.SetActive(false); return; }
             selName.text = sel.name;
-            selInfo.text = sel.Premium ? $"Премиум-набор «{Catalog.Sets[sel.set].name}»" : d.name;
+            selInfo.text = sel.Premium ? $"Премиум-набор «{Catalog.Sets[sel.set].name}»" : sel.Reward ? "Награда: " + sel.reward : d.name;
             var pm = Preview.I.Model;
             if (pm && pm.look.Of(sel.dept) == sel.id && pm.PartCount.TryGetValue(sel.dept, out var pc) && pc >= 20) selInfo.text += $" · {pc} деталей";
             bool isWorn = Save.Worn(sel.dept) == sel.id, owns = Save.Owns(sel.id);
@@ -220,6 +221,7 @@ namespace Chubrik
             if (isWorn) { action.Set("НАДЕТО", new Color(0.4f, 0.5f, 0.6f)); action.Interactable = false; }
             else if (owns) action.Set("НАДЕТЬ", UIKit.Green);
             else if (sel.Premium) action.Set("ПРЕМИУМ-НАБОР", UIKit.Pink);
+            else if (sel.Reward) action.Set("НАГРАДА", new Color(0.4f, 0.4f, 0.5f));
             else if (sel.promoOnly) action.Set("ПРОМОКОД", UIKit.Violet);
             else if (sel.tokens) action.Set($"КУПИТЬ: {sel.price} ЖЕТ.", P.tokens >= sel.price ? UIKit.Violet : new Color(0.4f, 0.4f, 0.5f));
             else action.Set($"КУПИТЬ: {sel.price}", P.coins >= sel.price ? UIKit.Orange : new Color(0.4f, 0.4f, 0.5f));
@@ -236,6 +238,7 @@ namespace Chubrik
             {
                 if (sel.Premium) { AudioFx.Play("error"); Hud.Toast($"Набор «{Catalog.Sets[sel.set].name}» — в золотом премиум-киоске у фонтана", UIKit.Gold); return; }
                 if (sel.promoOnly) { AudioFx.Play("error"); Hud.Toast("Промокод вводится в золотом премиум-киоске", UIKit.Violet); return; }
+                if (sel.Reward) { AudioFx.Play("error"); Hud.Toast(sel.reward, UIKit.Gold); return; }
                 bool paid = sel.tokens ? Save.SpendTokens(sel.price) : Save.Spend(sel.price);
                 if (!paid)
                 {

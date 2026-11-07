@@ -33,7 +33,7 @@ namespace Chubrik
             {
                 if (!r.Chance(chance)) return;
                 var d = Catalog.Dept(dept);
-                var regular = d.items.FindAll(i => !i.Premium && !i.tokens);
+                var regular = d.items.FindAll(i => !i.Premium && !i.tokens && !i.Reward);
                 l[dept] = regular[r.I(regular.Count)].id;
             }
             Pick("head", 1); Pick("hair", 0.9f); Pick("ears", 0.9f); Pick("hat", 0.5f); Pick("eyes", 0.35f);
@@ -43,7 +43,7 @@ namespace Chubrik
             return l;
         }
 
-        public static void SpawnCage(string id, Vector3 pos, float yaw, Transform parent) => new GameObject("Cage " + id).AddComponent<Cage>().Build(id, pos, yaw, parent);
+        public static void SpawnCage(string id, Vector3 pos, float yaw, Transform parent, bool ice = false) => new GameObject("Cage " + id).AddComponent<Cage>().Build(id, pos, yaw, parent, ice);
 
         /// <summary>The player hit something: a closed cage within reach opens (if there's a key).</summary>
         public static bool HitNear(Vector3 pos)
@@ -83,15 +83,17 @@ namespace Chubrik
     public class Cage : MonoBehaviour
     {
         public string id;
+        /// <summary>World 4: a giant ice cube instead of a cage — a jump attack breaks it, no key needed.</summary>
+        public bool ice;
         public bool Open { get; private set; }
         ChubrikModel friend;
         ChubrikAnim anim;
         Transform bars;
         float openT = -1;
 
-        public void Build(string cageId, Vector3 pos, float yaw, Transform parent)
+        public void Build(string cageId, Vector3 pos, float yaw, Transform parent, bool iceCube = false)
         {
-            id = cageId;
+            id = cageId; ice = iceCube;
             transform.SetParent(parent, false);
             transform.SetPositionAndRotation(pos, Quaternion.Euler(0, yaw, 0));
             Open = Save.P.rescued.Contains(id);
@@ -102,20 +104,38 @@ namespace Chubrik
             var col = gameObject.AddComponent<CapsuleCollider>();
             col.center = new Vector3(0, 1.1f, 0); col.radius = 0.95f; col.height = 2.2f;
             bars = Node("Bars", transform, Vector3.zero);
+            if (ice)
+            {
+                // a giant ice cube with frosty edges and a snow cap
+                var iceM = Glass("BFEAFF", 0.45f); var frost = M("F4FBFF", 0.6f);
+                B(bars, new Vector3(0, 1.15f, 0), new Vector3(1.9f, 2.1f, 1.9f), iceM);
+                for (int k = 0; k < 4; k++)
+                {
+                    float x = k % 2 == 0 ? -0.95f : 0.95f, z = k < 2 ? -0.95f : 0.95f;
+                    B(bars, new Vector3(x, 1.15f, z), new Vector3(0.12f, 2.1f, 0.12f), frost);
+                    B(bars, new Vector3(x * (k < 2 ? 1 : 0), 2.2f, z * (k < 2 ? 0 : 1)), k < 2 ? new Vector3(0.12f, 0.12f, 1.9f) : new Vector3(1.9f, 0.12f, 0.12f), frost);
+                }
+                S(bars, new Vector3(0, 2.25f, 0), new Vector3(2f, 0.4f, 2f), M("FFFFFF", 0.15f));
+                for (int k = 0; k < 6; k++) Spike(bars, new Vector3(-0.8f + k * 0.32f, 0.12f, 0.96f), new Vector3(-0.8f + k * 0.32f, 0.6f, 0.98f), 0.12f, frost);
+            }
+            else
             for (int k = 0; k < 14; k++)
             {
                 float a = k * Mathf.PI * 2 / 14;
                 Cy(bars, new Vector3(Mathf.Cos(a) * 0.9f, 1.1f, Mathf.Sin(a) * 0.9f), new Vector3(0.06f, 1f, 0.06f), metal);
             }
-            Ring(bars, new Vector3(0, 1.1f, 0), 0.9f, 0.04f, metal);
-            Cy(bars, new Vector3(0, 2.15f, 0), new Vector3(1.95f, 0.06f, 1.95f), metal);
-            Cone(bars, new Vector3(0, 2.2f, 0), new Vector3(1.9f, 0.5f, 1.9f), M("C62828", 0.4f));
-            Ring(bars, new Vector3(0, 2.75f, 0), 0.1f, 0.03f, metal);
-            // padlock on the front
-            var lockT = Node("Lock", bars, new Vector3(0, 1.0f, 0.95f));
-            B(lockT, Vector3.zero, new Vector3(0.32f, 0.28f, 0.1f), gold);
-            Ring(lockT, new Vector3(0, 0.17f, 0), 0.1f, 0.03f, gold, new Vector3(90, 0, 0));
-            S(lockT, new Vector3(0, -0.02f, 0.05f), new Vector3(0.06f, 0.08f, 0.02f), M("1A1A1A"));
+            if (!ice)
+            {
+                Ring(bars, new Vector3(0, 1.1f, 0), 0.9f, 0.04f, metal);
+                Cy(bars, new Vector3(0, 2.15f, 0), new Vector3(1.95f, 0.06f, 1.95f), metal);
+                Cone(bars, new Vector3(0, 2.2f, 0), new Vector3(1.9f, 0.5f, 1.9f), M("C62828", 0.4f));
+                Ring(bars, new Vector3(0, 2.75f, 0), 0.1f, 0.03f, metal);
+                // padlock on the front
+                var lockT = Node("Lock", bars, new Vector3(0, 1.0f, 0.95f));
+                B(lockT, Vector3.zero, new Vector3(0.32f, 0.28f, 0.1f), gold);
+                Ring(lockT, new Vector3(0, 0.17f, 0), 0.1f, 0.03f, gold, new Vector3(90, 0, 0));
+                S(lockT, new Vector3(0, -0.02f, 0.05f), new Vector3(0.06f, 0.08f, 0.02f), M("1A1A1A"));
+            }
             var tag = Prim.Text(transform, "ПОМОГИ!", new Vector3(0, 3.2f, 0), 3, Parts.Hex("FFE14D"));
             tag.gameObject.AddComponent<Billboard>();
             tag.gameObject.name = "Help";
@@ -135,13 +155,19 @@ namespace Chubrik
         public void TryOpen()
         {
             if (Open) return;
-            if (Save.P.keys <= 0)
+            if (ice)
+            {
+                var pl = PlayerCtl.I;
+                if (pl != null && pl.Grounded) { AudioFx.Play("bonk"); Hud.Toast("Лёд крепкий! Прыгни и ударь в прыжке", UIKit.Cyan); return; }
+            }
+            else if (Save.P.keys <= 0)
             {
                 AudioFx.Play("error");
                 Hud.Toast("Нужен золотой ключ! Ищи ключи на островах", UIKit.Orange);
                 return;
             }
-            Save.P.keys--;
+            if (!ice) Save.P.keys--;
+            else { AudioFx.Play("crate"); Effects.Emit("ice", transform.position + Vector3.up * 1.2f, 60, 1f, Vector3.up * 3); }
             Save.P.rescued.Add(id);
             Save.P.coins += 50;
             Save.Write();
@@ -166,7 +192,8 @@ namespace Chubrik
                 hintT -= Time.deltaTime;
                 if (d.magnitude < Reach + 0.6f && hintT <= 0)
                 {
-                    Hud.Toast(Save.P.keys > 0 ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен золотой ключ! Ищи ключи на островах", Save.P.keys > 0 ? UIKit.Lime : UIKit.Orange);
+                    if (ice) Hud.Toast("Друг вмёрз в лёд! Прыгни и ударь в прыжке — лёд разобьётся", UIKit.Cyan);
+                    else Hud.Toast(Save.P.keys > 0 ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен золотой ключ! Ищи ключи на островах", Save.P.keys > 0 ? UIKit.Lime : UIKit.Orange);
                     hintT = 6;
                 }
                 else if (d.magnitude > Reach + 2) hintT = 0;

@@ -11,8 +11,10 @@ namespace Chubrik
         public int set = -1;       // premium set index, -1 = regular
         public bool tokens;        // price is in tokens
         public bool promoOnly;     // only the developer promo code unlocks it
+        public string reward;      // won in the game (boss, lucky box), never sold: where to get it
         public Dept D => Catalog.Dept(dept);
         public bool Premium => set >= 0;
+        public bool Reward => reward != null;
     }
 
     public class Dept
@@ -109,7 +111,27 @@ namespace Chubrik
                 ("hat", "Рог единорога"), ("tail", "Радужный хвост"), ("wings", "Крылья пегаса"), ("steps", "Радужные следы"));
             S(2990, "Король Чубриков", "Корона, королевская мантия, скипетр и королевское сияние", "FFD700",
                 ("hat", "Корона Короля Чубриков"), ("top", "Королевская мантия"), ("weapon", "Скипетр"), ("aura", "Королевское сияние"));
+
+            R("hat", "Корона Шипозавра", "Победи Шипозавра на Арене шипов в Мире 2. Защищает от шипов на мостиках");
+            R("hat", "Шапка-ушанка", "Морозный лаки-бокс в тайной пещере Мира 4");
+            R("neck", "Красный шарф", "Морозный лаки-бокс в тайной пещере Мира 4");
+            R("shoes", "Ледяные коньки", "Морозный лаки-бокс в Мире 4. На льду не скользишь и бегаешь на 20% быстрее");
+            R("skin", "Алмазный Ледяной Чубрик", "Морозный лаки-бокс в Мире 4. Переливается голубым и оставляет морозный след");
         }
+
+        /// <summary>Reward items ("dept_rK"): won, not bought. Their builders use index 200 + K.</summary>
+        static void R(string dept, string name, string where)
+        {
+            var d = Dept(dept);
+            int k = d.items.FindAll(i => i.Reward).Count;
+            var it = new Item { id = dept + "_r" + k, dept = dept, name = name, reward = where };
+            d.items.Add(it);
+            Items[it.id] = it;
+        }
+
+        public const string ShipoCrown = "hat_r0", Ushanka = "hat_r1", RedScarf = "neck_r0", Skates = "shoes_r0", IceSkin = "skin_r0";
+        /// <summary>The Frosty lucky box of World 4 drops these.</summary>
+        public static readonly string[] WinterItems = { Ushanka, RedScarf, Skates, IceSkin };
 
         static void D(string id, string name, bool optional, string view, string def, int price, params string[] names)
         {
@@ -150,7 +172,9 @@ namespace Chubrik
         {
             if (string.IsNullOrEmpty(id)) return -1;
             int u = id.LastIndexOf('_');
-            return u >= 0 && int.TryParse(id.Substring(u + 1), out var n) ? n : -1;
+            if (u < 0) return -1;
+            if (u + 1 < id.Length && id[u + 1] == 'r' && int.TryParse(id.Substring(u + 2), out var r)) return 200 + r;   // reward item
+            return int.TryParse(id.Substring(u + 1), out var n) ? n : -1;
         }
 
         /// <summary>Premium set index of "dept_pK", else -1.</summary>

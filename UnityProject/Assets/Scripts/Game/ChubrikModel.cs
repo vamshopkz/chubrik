@@ -57,6 +57,14 @@ namespace Chubrik
             int skinIdx = look.Idx("skin");
             Skin = skinIdx >= 0 ? Mats.Tex(Patterns.Skin(skinIdx, bodyCol), Color.white, skinIdx == 7 ? 0.75f : 0.35f) : Mats.Lit(bodyCol, 0.35f);
             if (skinIdx == 6) { Skin.SetFloat("_Smoothness", 0.85f); }
+            if (skinIdx == 200)
+            {
+                // Алмазный Ледяной Чубрик: icy facets that glow and shimmer
+                var tex = Patterns.Skin(200, bodyCol);
+                Skin = Mats.Emissive(tex, Color.white, Hex("6FD8FF") * 0.35f, tex, 0.9f);
+                var sh = GetComponent<IceShimmer>() ?? gameObject.AddComponent<IceShimmer>();
+                sh.skin = Skin;
+            }
 
             Body = Node("Body", transform, Vector3.zero);
             Torso = Node("Torso", Body, new Vector3(0, 0.36f, 0));

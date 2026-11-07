@@ -852,6 +852,7 @@ namespace Chubrik
 
         void Neck(int i, int set)
         {
+            if (i >= 200) { RewardNeck(i); return; }
             var n = Node("Neck", Torso, new Vector3(0, 0.47f, 0));
             // knitted scarf: loops in three rows round the wrap, ribbed edges, knot and two fringed ends
             void Scarf(Material m, Material knitA, Material knitB, Material fringe)

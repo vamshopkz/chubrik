@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Chubrik
@@ -13,6 +14,19 @@ namespace Chubrik
         public ChubrikModel Model;
         public ChubrikAnim Anim;
         public CharacterController CC;
+        /// <summary>World 4: covered in snow (a snowball hit) — slower until this time.</summary>
+        public float SlowUntil;
+        /// <summary>Something else (the snowboard) moves the chubrik; input only steers it.</summary>
+        public bool Riding;
+        /// <summary>This frame's stick / keys (the snowboard steers with it).</summary>
+        public Vector2 Steer { get; private set; }
+        /// <summary>The jet snowmobile from the frozen mailbox: fast, climbs steep slopes, knocks snowmen over.</summary>
+        public bool Snowmobile;
+        /// <summary>Standing on ice (a collider with an Ice marker): you slide unless you wear skates.</summary>
+        public bool OnIce { get; private set; }
+        public bool Skates => look != null && look.Of("shoes") == Catalog.Skates;
+        /// <summary>The Shipozavr crown keeps ordinary spikes from hurting.</summary>
+        public bool SpikeProof => look != null && look.Of("hat") == Catalog.ShipoCrown;
         Pet pet;
         Aura aura;
         BlobShadow shadow;
@@ -126,10 +140,13 @@ namespace Chubrik
                     LookDelta += new Vector2(Input.GetAxisRaw("Mouse X"), -Input.GetAxisRaw("Mouse Y")) * 2.2f * Save.P.sens;
             }
             else { mv = Vector2.zero; JumpHeld = false; }
+            Steer = mv;
             if (kbAttack) Attack();
             yaw += LookDelta.x * 0.9f;
             pitch = Mathf.Clamp(pitch + LookDelta.y * 0.6f, -10f, 65f);
             LookDelta = Vector2.zero;
+
+            if (Riding) { ground = null; vel = Vector3.zero; Grounded = true; Anim.grounded = true; Anim.speed01 = 0.3f; return; }   // the snowboard moves us
 
             // ---- ride moving platforms ----
             if (ground != null && Grounded)
@@ -147,9 +164,12 @@ namespace Chubrik
             var wish = (fwd * mv.y + right * mv.x);
             if (wish.sqrMagnitude > 1) wish.Normalize();
             float speed = RunSpeed * (look != null && look.Idx("walk") == 2 ? 0.75f : 1f) * Mathf.Lerp(1f, 1.25f, Mathf.InverseLerp(1f, 1.8f, Model.SizeScale));
+            if (Skates) speed *= 1.2f;
+            if (Snowmobile) speed *= 1.8f;
+            if (Time.time < SlowUntil) speed *= 0.55f;
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
-            float accel = Grounded ? 40f : 16f;
+            float accel = Grounded ? (OnIce && !Skates && !Snowmobile ? 3.5f : 40f) : 16f;   // ice: hard to start, harder to stop
             hv = Vector3.MoveTowards(hv, target, accel * dt);
             if (wish.sqrMagnitude > 0.01f)
             {
@@ -182,11 +202,13 @@ namespace Chubrik
             if (Grounded && vel.y < 0) vel.y = -3f;
             vel.x = hv.x; vel.z = hv.z;
 
+            CC.slopeLimit = Snowmobile ? 80f : 50f;
             bool wasGrounded = Grounded;
             float vyBefore = vel.y;
             ground = null;
             var flags = CC.Move(vel * dt);
             Grounded = (flags & CollisionFlags.Below) != 0;
+            OnIce = Grounded && ground != null && ground.GetComponentInParent<Ice>() != null;
             if ((flags & CollisionFlags.Above) != 0 && vel.y > 0) vel.y = 0;
             if (Grounded && ground != null) { groundLocal = ground.InverseTransformPoint(transform.position); groundRot = ground.rotation; }
             if (!wasGrounded && Grounded)
@@ -305,7 +327,7 @@ namespace Chubrik
             invuln = 0;
             LoseHeart();
             if (Worlds.Current == 3) Effects.Emit("fire", transform.position, 40, 0.5f, Vector3.up * 4);
-            if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast(Worlds.Current == 3 ? "Ой, лава! −1 сердечко" : "Упал с острова! −1 сердечко", UIKit.Red); }
+            if (Hearts > 0) { Teleport(SafePos); invuln = 1.5f; Hud.Toast(Worlds.Current == 3 ? "Ой, лава! −1 сердечко" : Worlds.Current == 4 ? "Брр, ледяная вода! −1 сердечко" : "Упал с острова! −1 сердечко", UIKit.Red); }
         }
 
         void LoseHeart()
@@ -332,6 +354,8 @@ namespace Chubrik
             int k = Effects.StepKind(look);
             if (k >= 0 || Random.value < 0.3f) Effects.Step(k, p);
             AudioFx.Step(look.Idx("shoes"), look.Idx("walk") == 4);
+            if (look.Of("skin") == Catalog.IceSkin) Effects.Emit("stardust", p + Vector3.up * 0.05f, 4, 0.2f);   // frosty trail
+            if (Worlds.Current == 4) World4.Footprint(p, transform.rotation);
         }
 
         // ---------------- weapons ----------------
@@ -343,6 +367,7 @@ namespace Chubrik
             Anim.Attack();
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
             World3.HitNear(transform.position);   // singing crystals of the Masters' riddle
+            World4.HitNear(transform.position, !Grounded);   // snowmen, ice cubes (a jump attack breaks them), the chimney
             var id = look.Of("weapon");
             int set = Catalog.SetOf(id), i = Catalog.Index(id);
             int kind = set >= 0 ? 100 + set : i;
@@ -370,12 +395,15 @@ namespace Chubrik
         public static bool Hit(Vector3 at, float r)
         {
             bool any = false;
+            var done = new HashSet<IHittable>();
             foreach (var c in Physics.OverlapSphere(at, r, ~0, QueryTriggerInteraction.Collide))
             {
                 var b = c.GetComponentInParent<Breakable>();
                 if (b != null) { b.Break(); any = true; }
                 var e = c.GetComponentInParent<Enemy>();
                 if (e != null && !e.Dead) { e.Die(); any = true; }
+                var h = c.GetComponentInParent<IHittable>();
+                if (h != null && done.Add(h) && h.OnHit(at)) any = true;
             }
             return any;
         }

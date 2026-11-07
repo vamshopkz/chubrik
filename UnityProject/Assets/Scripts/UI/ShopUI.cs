@@ -90,7 +90,7 @@ namespace Chubrik
         }
 
         /// <summary>Loot box opening: names flicker like a slot machine, then the prize with its picture.</summary>
-        static void ShowBox(Item it)
+        public static void ShowBox(Item it)
         {
             if (box) Object.Destroy(box);
             var dim = UIKit.Img(UIRoot.TopLayer, UIKit.White, new Color(0.05f, 0.1f, 0.25f, 0.7f), "LootBox", true);

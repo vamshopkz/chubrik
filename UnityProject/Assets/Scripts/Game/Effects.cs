@@ -25,6 +25,8 @@ namespace Chubrik
         {
             switch (k)
             {
+                case "snow": return new Spec { tex = "disc", life = 3.5f, size = 0.09f, grav = 0.12f, speed = 0.25f, col = new Color(1f, 1f, 1f, 0.9f) };
+                case "puff": return new Spec { life = 0.8f, size = 0.45f, grav = 0.3f, speed = 1.6f, col = new Color(0.95f, 0.98f, 1f, 0.9f), grow = true };
                 case "fire": return new Spec { add = true, life = 0.6f, size = 0.28f, grav = -0.4f, speed = 1.2f, col = Parts.Hex("FF7A1E") };
                 case "bubble": return new Spec { tex = "ring", life = 1.6f, size = 0.22f, grav = -0.08f, speed = 0.5f, col = new Color(0.8f, 0.95f, 1f, 0.8f) };
                 case "slime": return new Spec { tex = "disc", life = 2.2f, size = 0.18f, grav = 1.2f, speed = 1f, col = Parts.Hex("6EDC3C") };

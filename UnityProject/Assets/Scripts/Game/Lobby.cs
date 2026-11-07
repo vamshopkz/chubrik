@@ -317,6 +317,38 @@ namespace Chubrik
                 });
             }
             Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
+
+            // the ice portal to World 4: snowdrifts and swirling snowflakes
+            {
+                var c = new Vector3(0, 0, 44);
+                var iceM = Glass("A8DCFF", 0.85f);
+                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), iceM);
+                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), iceM);
+                for (int k = 0; k < 9; k++) Spike(root, c + new Vector3(-3.4f + k * 0.85f, 6, -0.7f), c + new Vector3(-3.4f + k * 0.85f, 4.8f - (k % 3) * 0.4f, -0.72f), 0.3f, M("E8F6FF", 0.8f));
+                S(root, c + new Vector3(0, 7.1f, 0), new Vector3(7.8f, 0.6f, 1.8f), M("FFFFFF", 0.1f));
+                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("8FD8FF", 0.55f), new Vector3(90, 0, 0));
+                surf.AddComponent<Spin>().axis = Vector3.up;
+                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.3f), new Vector3(90, 0, 0));
+                s2.AddComponent<Pulse>();
+                var rng = new Rng(44);
+                for (int k = 0; k < 14; k++)
+                {
+                    float a = rng.F(0, Mathf.PI * 2), d = rng.F(3.5f, 7f);
+                    S(root, c + new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d * 0.6f - 1.5f), new Vector3(rng.F(1.2f, 2.4f), rng.F(0.5f, 1f), rng.F(1.2f, 2.4f)), M("FFFFFF", 0.15f));
+                }
+                Disc(c + new Vector3(0, 0.02f, -1), 5, 0.04f, Tiled(Tex.Snow(), 4));
+                var t = Prim.Text(root, "МИР 4", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
+                t.transform.rotation = Quaternion.identity;
+                var t2 = Prim.Text(root, "СНЕЖНАЯ ДОЛИНА", c + new Vector3(0, 0.6f, -1.2f), 4, Hex("BFEFFF"));
+                t2.transform.rotation = Quaternion.identity;
+                new GameObject("PortalSnow").AddComponent<PortalSnow>().transform.position = c + Vector3.up * 3;
+                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 4: СНЕЖНАЯ ДОЛИНА", () =>
+                {
+                    // the ice portal wakes up once the Crystal facet from World 3 is back
+                    if (Save.P.done.Contains(3)) Worlds.Enter(4);
+                    else { AudioFx.Play("error"); Hud.Toast("Портал замёрз. Пройди Мир 3 — Кристальная грань растопит лёд!", UIKit.Cyan); }
+                });
+            }
             Mushroom(new Vector3(14, 0, 31), 19.5f);
             TokenSpots.Add(new Vector3(8, 7.8f, 34));
         }
@@ -632,6 +664,23 @@ namespace Chubrik
             acc += Time.deltaTime * 30;
             int n = (int)acc; acc -= n;
             if (n > 0) Effects.Emit("splash", transform.position, n, 0.15f, Vector3.up * 3.5f);
+        }
+    }
+
+    /// <summary>Snowflakes swirling round the ice portal in the lobby.</summary>
+    public class PortalSnow : MonoBehaviour
+    {
+        float acc;
+        void Update()
+        {
+            if (Worlds.Current != 1) return;
+            acc += Time.deltaTime * 14;
+            int n = (int)acc; acc -= n;
+            for (int i = 0; i < n; i++)
+            {
+                float a = Time.time * 2 + i * 1.7f;
+                Effects.Emit("snow", transform.position + new Vector3(Mathf.Cos(a) * 3.2f, Random.Range(-2.5f, 3f), Mathf.Sin(a) * 1.2f), 1, 0.2f, new Vector3(-Mathf.Sin(a), -0.4f, Mathf.Cos(a)) * 1.2f);
+            }
         }
     }
 }

@@ -368,6 +368,7 @@ namespace Chubrik
 
         void Shoes(int i, int set)
         {
+            if (i >= 200) { RewardShoes(i); return; }
             int kind = set >= 0 ? 100 + set : i;
             Transform f = null;
             float sd = 1;                                        // +1 right foot, −1 left (outer side = +sd·X)

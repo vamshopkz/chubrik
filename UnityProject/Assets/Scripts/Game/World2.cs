@@ -14,21 +14,24 @@ namespace Chubrik
             var p = PlayerCtl.I;
             if (w == 2 && World2.Root == null) World2.Build();
             if (w == 3 && World3.Root == null) World3.Build();
+            if (w == 4 && World4.Root == null) World4.Build();
+            if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
             AudioFx.Play("portal");
             p.Frozen = true;
             p.PlayVictory(() =>
             {
                 Current = w;
-                World3.Env(w == 3);
-                if (w == 2 || w == 3)
+                World3.Env(w);
+                if (w >= 2 && w <= 4)
                 {
-                    bool caves = w == 3;
-                    p.WaterY = caves ? World3.LavaY + 0.5f : World2.O.y - 18f;
-                    p.Checkpoint = caves ? World3.Spawn : World2.Spawn;
+                    p.WaterY = w == 4 ? World4.WaterY : w == 3 ? World3.LavaY + 0.5f : World2.O.y - 18f;
+                    p.Checkpoint = w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
                     p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast(caves ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 8 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 8 ключей и спаси 8 друзей из клеток!", caves ? UIKit.Cyan : UIKit.Lime);
+                    Hud.Toast(w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 8 друзей изо льда" :
+                              w == 3 ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 8 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 8 ключей и спаси 8 друзей из клеток!",
+                              w == 4 ? UIKit.Cyan : w == 3 ? UIKit.Cyan : UIKit.Lime);
                 }
                 else
                 {
@@ -163,6 +166,13 @@ namespace Chubrik
             Line(V(0, 7.4f, 129), V(0, 7.4f, 138), 7);
             GoalPos = V(0, 8.3f, 142.5f);
             Goal(GoalPos);
+
+            // the Spike Arena: a bridge with popping spikes to the island of Shipozavr (2222 lives)
+            Bridge(V(10.5f, 6.6f, 137), V(17.6f, 6.6f, 137));
+            foreach (var x in new[] { 12.6f, 15.4f }) new GameObject("SpikeStrip").AddComponent<SpikeStrip>().Build(V(x, 6.6f, 137), 90, 3f, Root, x * 0.17f);
+            Lobby.Sign(V(9.5f, 6.6f, 133.6f), -90, "АРЕНА ШИПОВ · ШИПОЗАВР", "E53935", 5f);
+            RoundIsle(V(28, 6.6f, 137), 10);
+            Shipozavr.BuildArena(V(28, 6.6f, 137), Root);
 
             // four more friends and keys: 8 per world
             Rescue.SpawnCage("w2c4", V(5.2f, 0, 1.8f), -90, Root);

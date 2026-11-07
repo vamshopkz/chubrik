@@ -153,13 +153,14 @@ namespace Chubrik
         static bool saved;
         static Material skyS; static Color ambS, ambE, ambG, fogS, sunCol, camBg; static float fogA, fogB, sunI; static CameraClearFlags camClear; static AmbientMode ambMode;
 
-        public static void Env(bool cave)
+        /// <summary>Light of a world: 3 = dark cave, 4 = bright snowy valley, anything else = the sunny lobby.</summary>
+        public static void Env(int world)
         {
             var cam = PlayerCtl.I ? PlayerCtl.I.Cam : null;
             var sun = RenderSettings.sun;
             if (!saved)
             {
-                if (!cave) return;
+                if (world != 3 && world != 4) return;
                 saved = true;
                 skyS = RenderSettings.skybox; ambMode = RenderSettings.ambientMode;
                 ambS = RenderSettings.ambientSkyColor; ambE = RenderSettings.ambientEquatorColor; ambG = RenderSettings.ambientGroundColor;
@@ -167,7 +168,13 @@ namespace Chubrik
                 if (sun) { sunCol = sun.color; sunI = sun.intensity; }
                 if (cam) { camClear = cam.clearFlags; camBg = cam.backgroundColor; }
             }
-            if (cave)
+            // start from the lobby, then change what the world needs
+            RenderSettings.skybox = skyS; RenderSettings.ambientMode = ambMode;
+            RenderSettings.ambientSkyColor = ambS; RenderSettings.ambientEquatorColor = ambE; RenderSettings.ambientGroundColor = ambG;
+            RenderSettings.fogColor = fogS; RenderSettings.fogStartDistance = fogA; RenderSettings.fogEndDistance = fogB;
+            if (sun) { sun.color = sunCol; sun.intensity = sunI; }
+            if (cam) { cam.clearFlags = camClear; cam.backgroundColor = camBg; }
+            if (world == 3)
             {
                 RenderSettings.skybox = null;
                 RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -176,13 +183,12 @@ namespace Chubrik
                 if (sun) { sun.color = Hex("FFD2B0"); sun.intensity = 0.75f; }
                 if (cam) { cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = Hex("241838"); }
             }
-            else
+            else if (world == 4)
             {
-                RenderSettings.skybox = skyS; RenderSettings.ambientMode = ambMode;
-                RenderSettings.ambientSkyColor = ambS; RenderSettings.ambientEquatorColor = ambE; RenderSettings.ambientGroundColor = ambG;
-                RenderSettings.fogColor = fogS; RenderSettings.fogStartDistance = fogA; RenderSettings.fogEndDistance = fogB;
-                if (sun) { sun.color = sunCol; sun.intensity = sunI; }
-                if (cam) { cam.clearFlags = camClear; cam.backgroundColor = camBg; }
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = Hex("CFE8FF"); RenderSettings.ambientEquatorColor = Hex("DCEBFA"); RenderSettings.ambientGroundColor = Hex("B8C8DA");
+                RenderSettings.fogColor = Hex("E4F1FF"); RenderSettings.fogStartDistance = 70; RenderSettings.fogEndDistance = 240;
+                if (sun) { sun.color = Hex("FFF6E6"); sun.intensity = 1.15f; }
             }
         }
 

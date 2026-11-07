@@ -26,6 +26,21 @@ namespace Chubrik
             var r = new Rng(kind * 17 + 3);
             switch (kind)
             {
+                case 200: // diamond ice: blue facets with white glints (the body colour is ignored)
+                {
+                    for (int y = 0; y < S; y++)
+                        for (int x = 0; x < S; x++)
+                        {
+                            float u = (x + y) / 24f, v = (x - y + S) / 24f;
+                            float fu = u - Mathf.Floor(u), fv = v - Mathf.Floor(v);
+                            float facet = Mathf.Abs(fu - 0.5f) + Mathf.Abs(fv - 0.5f);
+                            var c = Color.Lerp(Parts.Hex("BFEFFF"), Parts.Hex("4FA8E8"), facet);
+                            if (facet < 0.08f) c = Color.white;
+                            cv.px[y * S + x] = c;
+                        }
+                    for (int k = 0; k < 40; k++) cv.Circle(r.F(0, S), r.F(0, S), r.F(1, 2.5f), Color.white);
+                    break;
+                }
                 case 0: // tiger stripes
                 {
                     var b = Color.Lerp(body, Parts.Hex("FF8A1E"), 0.5f);
