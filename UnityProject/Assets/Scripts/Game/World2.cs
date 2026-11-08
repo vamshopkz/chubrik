@@ -16,6 +16,7 @@ namespace Chubrik
             if (w == 3 && World3.Root == null) World3.Build();
             if (w == 4 && World4.Root == null) World4.Build();
             if (w == 5 && World5.Root == null) World5.Build();
+            if (w == 6 && World6.Root == null) World6.Build();
             if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
             AudioFx.Play("portal");
@@ -24,13 +25,13 @@ namespace Chubrik
             {
                 Current = w;
                 World3.Env(w);
-                if (w >= 2 && w <= 5)
+                if (w >= 2 && w <= 6)
                 {
-                    p.WaterY = w == 5 ? World5.FallY + 0.5f : w == 4 ? World4.WaterY : w == 3 ? World3.LavaY + 0.5f : World2.O.y - 18f;
-                    p.Checkpoint = w == 5 ? World5.Spawn : w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
+                    p.WaterY = w == 6 ? World6.FallY : w == 5 ? World5.FallY + 0.5f : w == 4 ? World4.WaterY : w == 3 ? World3.LavaY + 0.5f : World2.O.y - 18f;
+                    p.Checkpoint = w == 6 ? World6.Spawn : w == 5 ? World5.Spawn : w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
                     p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast(w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 8 друзей изо льда" :
+                    Hud.Toast(w == 6 ? "МИР 6 — ГЛЮК-МИР. Что-то пошло не так… и это прекрасно!" : w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 8 друзей изо льда" :
                               w == 3 ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 8 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 8 ключей и спаси 8 друзей из клеток!",
                               w == 4 ? UIKit.Cyan : w == 3 ? UIKit.Cyan : UIKit.Lime);
                 }

@@ -669,6 +669,59 @@ namespace Chubrik
             yield return Wait(1.6f);
             Check("back in the lobby from the jungle", Worlds.Current == 1);
 
+            // ---- world 6: the glitch world (prank) ----
+            Worlds.Enter(6);
+            yield return Wait(2f);
+            Check("world 6 entered", Worlds.Current == 6 && Vector3.Distance(pl.transform.position, World6.Spawn) < 3, pl.transform.position.ToString());
+            Check("joke HUD: 100 hearts and 999999999", Hud.PrankShown);
+            Check("8 cages and 8 keys in the glitch world", Rescue.Total("w6") == 8 && Pickups.I.KeysLeftIn("w6") == 8, $"cages {Rescue.Total("w6")}, keys {Pickups.I.KeysLeftIn("w6")}");
+            pl.yaw = 0; pl.pitch = 14;
+            yield return Wait(0.4f);
+            yield return Shot("50_world6_start");
+            int hp6 = pl.Hearts;
+            pl.Teleport(World6.O + new Vector3(20, 0, 30), 0);
+            yield return Wait(2.6f);
+            Check("falling in the glitch world costs no heart", pl.Hearts == hp6 && pl.transform.position.y > World6.O.y - 3, $"hearts {hp6} → {pl.Hearts}");
+            // the wall you can't see stops you
+            pl.Teleport(World6.WallC + new Vector3(-0.5f, 0.3f, -3), 0);
+            yield return Wait(0.4f);
+            pl.MoveInput = new Vector2(0, 1);
+            yield return Wait(1.2f);
+            pl.MoveInput = Vector2.zero;
+            Check("the invisible wall blocks the way", pl.transform.position.z < World6.WallC.z - 0.2f, pl.transform.position.z.ToString("0.0"));
+            pl.yaw = 0; pl.pitch = 10;
+            yield return Wait(0.3f);
+            yield return Shot("51_invisible_wall");
+            // banana, «?», buttons
+            var ban = World6.Bananas[0];
+            pl.Teleport(ban.transform.position + Vector3.up * 0.3f, 0);
+            yield return Wait(0.5f);
+            Check("a banana peel makes you slip", ban.Slips > 0);
+            int c6 = Save.P.coins, t6 = Save.P.tokens;
+            World6.Marks[0].Take();
+            Check("a «?» gives something (or a joke)", World6.Marks[0].Taken);
+            World6.Pause.Press();
+            Check("the giant ПАУЗА button freezes the boss", World6.PausedUntil > Time.time);
+            World6.Exit.Press();
+            Check("the ВЫХОД button is a joke", World6.Exit.Presses == 1 && Worlds.Current == 6);
+            // the boss who is too small
+            pl.Teleport(World6.ArenaC + new Vector3(0, 0.3f, -6), 0);
+            pl.yaw = 0; pl.pitch = 10;
+            yield return Wait(1f);
+            yield return Shot("52_tiny_boss");
+            float s0 = World6.Boss.transform.localScale.x;
+            World6.Boss.Stomp();
+            Check("each stomp makes the tiny King bigger", World6.Boss.transform.localScale.x > s0);
+            World6.Boss.Stomp(); World6.Boss.Stomp();
+            Check("three stomps pop the Gorilla King", World6.Boss.Defeated);
+            yield return Wait(1.2f);
+            World6.Win();
+            Check("the Glitch facet finishes world 6", Save.P.done.Contains(6));
+            Window.Close();
+            Worlds.Enter(1);
+            yield return Wait(1.6f);
+            Check("normal HUD back in the lobby", Worlds.Current == 1 && !Hud.PrankShown);
+
             // ---- main menu ----
             Menus.Main();
             yield return Wait(1f);

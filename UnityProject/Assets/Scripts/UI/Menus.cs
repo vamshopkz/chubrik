@@ -105,6 +105,8 @@ namespace Chubrik
                     bool open4 = Save.P.done.Contains(3);
                     w.Row("Мир 4 — Снежная Долина", !open4 ? "Откроется после Мира 3" : Save.P.done.Contains(4) ? "Пройден! Можно пройти ещё раз" : "Лёд, снеговики и Король Йети", "ВПЕРЁД", UIKit.Cyan, () => Worlds.Enter(4), open4);
                     bool open5 = Save.P.done.Contains(4);
+                    bool open6 = Save.P.done.Contains(5);
+                    w.Row("Мир 6: Глюк-мир", !open6 ? "Откроется после Мира 5" : Save.P.done.Contains(6) ? "Пройден! Можно пройти ещё раз" : "Мир-розыгрыш: всё сломалось, и это весело", "ВПЕРЁД", UIKit.Pink, () => Worlds.Enter(6), open6);
                     w.Row("Мир 5: Джунгли", !open5 ? "Откроется после Мира 4" : Save.P.done.Contains(5) ? "Пройден! Можно пройти ещё раз" : "Река, болото, пирамида и Древний Голем", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(5), open5);
                     w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }

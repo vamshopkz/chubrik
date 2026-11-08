@@ -181,7 +181,9 @@ namespace Chubrik
         void Update()
         {
             var P = Save.P;
-            if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
+            Prank(Worlds.Current == 6);
+            if (prankOn) { coins.text = "999999999999"; shownCoins = -1; }
+            else if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
             if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }
             string wp = "w" + Worlds.Current;
@@ -228,6 +230,43 @@ namespace Chubrik
                     b.GetComponent<Image>().color = Color.HSVToRGB(Random.value, 0.9f, 1f) * new Color(1, 1, 1, 0.7f);
                 }
         }
+
+        // ---- the glitch world's joke HUD: 100 hearts that don't fit, coins of 9s piled on each other ----
+        bool prankOn;
+        RectTransform prankHearts;
+        readonly List<TextMeshProUGUI> prankNines = new List<TextMeshProUGUI>();
+
+        void Prank(bool on)
+        {
+            if (on == prankOn) return;
+            prankOn = on;
+            if (prankHearts == null)
+            {
+                prankHearts = UIKit.Rect("PrankHearts", root);
+                UIKit.Place(prankHearts, new Vector2(0, 1), new Vector2(0, 1), new Vector2(22 + UIRoot.Safe().x, -86 - UIRoot.Safe().w), new Vector2(3000, 50));
+                for (int i = 0; i < 100; i++)
+                {
+                    var h = UIKit.Img(prankHearts, HeartSprite, UIKit.Red, "Heart");
+                    UIKit.Place(h.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(i * 30, (i % 2) * 6), new Vector2(34, 34));
+                }
+                var x = UIKit.Txt(prankHearts, "×100", 30, Color.white, TextAlignmentOptions.MidlineLeft);
+                UIKit.Place(x.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(1300, -34), new Vector2(200, 40));
+                for (int k = 0; k < 3; k++)
+                {
+                    var n = UIKit.Txt(coins.transform, "9999999999999", 36, k == 1 ? UIKit.Pink : UIKit.Cyan, TextAlignmentOptions.MidlineLeft);
+                    UIKit.Place(n.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(8 + k * 14, (k - 1) * 9), new Vector2(400, 50));
+                    n.overflowMode = TextOverflowModes.Overflow; n.textWrappingMode = TextWrappingModes.NoWrap;
+                    n.transform.localRotation = Quaternion.Euler(0, 0, (k - 1) * 6);
+                    prankNines.Add(n);
+                }
+            }
+            prankHearts.gameObject.SetActive(on);
+            heartsRow.gameObject.SetActive(!on);
+            foreach (var n in prankNines) n.gameObject.SetActive(on);
+        }
+
+        /// <summary>Tests: is the joke HUD showing?</summary>
+        public static bool PrankShown => I != null && I.prankOn;
 
         void RebuildHearts()
         {

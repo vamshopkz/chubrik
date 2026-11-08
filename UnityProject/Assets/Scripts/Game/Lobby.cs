@@ -318,6 +318,27 @@ namespace Chubrik
             }
             Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
 
+            // the glitchy portal to World 6: missing textures and flying pixels
+            {
+                var c = new Vector3(-13, 0, 44);
+                var miss = Mats.Tex(World6.MissingTex(), Color.white, 0.2f);
+                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), miss, sd * 6);
+                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), miss, -4);
+                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("FF5FD2", 0.55f), new Vector3(90, 0, 0));
+                surf.AddComponent<Spin>().axis = Vector3.up;
+                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("35E0FF", 0.3f), new Vector3(90, 0, 0));
+                s2.AddComponent<Pulse>();
+                var t = Prim.Text(root, "МИР 6", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
+                t.transform.rotation = Quaternion.Euler(0, 0, 6);
+                var t2 = Prim.Text(root, "ГЛЮК-МИР (ОШИБКА 404)", c + new Vector3(0, 0.6f, -1.2f), 3.4f, Hex("FF5FD2"));
+                t2.transform.rotation = Quaternion.identity;
+                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 6: ГЛЮК-МИР", () =>
+                {
+                    if (Save.P.done.Contains(5)) Worlds.Enter(6);
+                    else { AudioFx.Play("error"); Hud.Glitch(); Hud.Toast("ОШИБКА: портал не загрузился. Пройди Мир 5!", UIKit.Pink); }
+                });
+            }
+
             // the jungle portal to World 5: palms, vines and big leaves
             {
                 var c = new Vector3(13, 0, 44);
