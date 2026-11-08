@@ -20,6 +20,13 @@ namespace Chubrik
         public bool Riding;
         /// <summary>This frame's stick / keys (the snowboard steers with it).</summary>
         public Vector2 Steer { get; private set; }
+        /// <summary>Dive: after the second jump a hit throws the chubrik forward on his belly; he slides on landing
+        /// and lies there until you press jump.</summary>
+        int dive;            // 0 = no, 1 = flying belly-first, 2 = lying / sliding on the ground
+        bool airJumped;      // the second jump was used (the dive needs it)
+        public bool Diving => dive == 1;
+        public bool Lying => dive == 2;
+        public int Dives { get; private set; }
         /// <summary>The jet snowmobile from the frozen mailbox: fast, climbs steep slopes, knocks snowmen over.</summary>
         public bool Snowmobile;
         /// <summary>Standing on ice (a collider with an Ice marker): you slide unless you wear skates.</summary>
@@ -106,6 +113,7 @@ namespace Chubrik
             CC.enabled = true;
             vel = Vector3.zero;
             ground = null;
+            SetDive(0);
             if (!float.IsNaN(faceYaw)) { yaw = faceYaw; transform.rotation = Quaternion.Euler(0, faceYaw, 0); }
         }
 
@@ -170,8 +178,10 @@ namespace Chubrik
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
             float accel = Grounded ? (OnIce && !Skates && !Snowmobile ? 3.5f : 40f) : 16f;   // ice: hard to start, harder to stop
-            hv = Vector3.MoveTowards(hv, target, accel * dt);
-            if (wish.sqrMagnitude > 0.01f)
+            if (dive == 1) { }                                                               // flying belly-first: no steering
+            else if (dive == 2) hv = Vector3.MoveTowards(hv, Vector3.zero, (OnIce ? 4f : 28f) * dt);   // a short belly slide (~2.5 m, longer on ice)
+            else hv = Vector3.MoveTowards(hv, target, accel * dt);
+            if (wish.sqrMagnitude > 0.01f && dive == 0)
             {
                 var face = Quaternion.LookRotation(wish);
                 if (look != null && look.Idx("walk") == 6 && Grounded) face = Quaternion.LookRotation(-wish);   // moonwalk: backwards
@@ -183,12 +193,22 @@ namespace Chubrik
             // ---- vertical ----
             bool wantJump = jumpQueued || kbJump;
             jumpQueued = false;
-            if (Grounded) { coyote = 0.12f; airJumps = Model.HasJet ? 2 : 1; }
+            if (Grounded) { coyote = 0.12f; airJumps = Model.HasJet ? 2 : 1; airJumped = false; }
             else coyote -= dt;
+            if (dive == 2 && wantJump && !Frozen && !Menus.AnyOpen)
+            {
+                // stand up with a little hop
+                SetDive(0);
+                vel.y = 6f; Grounded = false; coyote = 0;
+                AudioFx.Play("jump4");
+                Effects.Emit("dust", transform.position, 8, 0.4f);
+                wantJump = false;
+            }
+            if (dive == 1) wantJump = false;
             if (wantJump && !Frozen && !Menus.AnyOpen)
             {
                 if (coyote > 0) DoJump(11f, false);
-                else if (airJumps > 0) { airJumps--; DoJump(9.5f, true); }
+                else if (airJumps > 0) { airJumps--; airJumped = true; DoJump(9.5f, true); }
             }
             float g = -30f;
             bool gliding = false;
@@ -211,6 +231,13 @@ namespace Chubrik
             OnIce = Grounded && ground != null && ground.GetComponentInParent<Ice>() != null;
             if ((flags & CollisionFlags.Above) != 0 && vel.y > 0) vel.y = 0;
             if (Grounded && ground != null) { groundLocal = ground.InverseTransformPoint(transform.position); groundRot = ground.rotation; }
+            if (dive == 1 && Grounded)
+            {
+                SetDive(2);
+                AudioFx.Play("land4", 0.5f); AudioFx.Play("jump4");
+                Effects.Emit("dust", transform.position + transform.forward * 0.4f, 16, 0.5f);
+            }
+            else if (dive == 2 && !Grounded && vel.y < -4) SetDive(1);   // slid off an edge: fly belly-first again
             if (!wasGrounded && Grounded)
             {
                 float impact = Mathf.InverseLerp(-4, -22, vyBefore);
@@ -242,7 +269,7 @@ namespace Chubrik
             if (Grounded && Anim.speed01 < 0.05f && !Frozen)
             {
                 idle += dt;
-                if (idle > 6f && !Anim.emoting) { Anim.PlayEmote(); idle = -4f; }
+                if (idle > 6f && !Anim.emoting && dive == 0) { Anim.PlayEmote(); idle = -4f; }
             }
             attackCd -= dt;
         }
@@ -264,11 +291,18 @@ namespace Chubrik
             idle = 0;
         }
 
+        void SetDive(int d)
+        {
+            dive = d;
+            if (Anim) Anim.belly = d != 0;
+        }
+
         /// <summary>Bounce pads, springs: launch upwards.</summary>
         public void Launch(float v)
         {
             vel.y = v;
             Grounded = false; coyote = 0; airJumps = Model.HasJet ? 2 : 1;
+            SetDive(0);
             Anim.Land(0.6f);
         }
 
@@ -363,6 +397,7 @@ namespace Chubrik
 
         void Step(bool left)
         {
+            if (dive != 0) return;   // no footsteps while sliding on the belly
             var foot = (left ? Model.FootL : Model.FootR);
             var p = foot ? foot.position : transform.position;
             p.y = transform.position.y + 0.03f;
@@ -377,7 +412,19 @@ namespace Chubrik
 
         public void Attack()
         {
-            if (Frozen || attackCd > 0) return;
+            if (Frozen || attackCd > 0 || dive != 0) return;
+            if (!Grounded && airJumped && !Riding)
+            {
+                // the dive: forward and down on the belly
+                var f = transform.forward; f.y = 0; f.Normalize();
+                vel = f * 12.5f + Vector3.up * Mathf.Max(vel.y * 0.3f, 3.5f);
+                SetDive(1);
+                Dives++;
+                attackCd = 0.4f;
+                AudioFx.Play("swing"); AudioFx.Play("jump5", 0.5f);
+                Effects.Emit("stardust", transform.position + Vector3.up * 0.6f, 10, 0.3f);
+                return;
+            }
             attackCd = 0.4f;
             Anim.Attack();
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)

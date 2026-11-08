@@ -26,6 +26,9 @@ namespace Chubrik
         /// <summary>Somersault (the second jump in the air).</summary>
         public void Flip() { flipT = 0; }
         public bool Flipping => flipT >= 0;
+        /// <summary>Lying on the belly (the dive and the slide after it).</summary>
+        public bool belly;
+        float bellyK;
         float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
@@ -159,6 +162,22 @@ namespace Chubrik
             }
 
             m.Body.localPosition += Vector3.up * lift;
+            // belly-first: the whole body tips forward round the tummy, arms stretched ahead like a superhero
+            bellyK = Mathf.MoveTowards(bellyK, belly ? 1 : 0, dt * 7);
+            if (bellyK > 0.001f)
+            {
+                flipT = -1;
+                var r = Quaternion.Euler(84 * bellyK, 0, 0);
+                var pivot = new Vector3(0, 0.34f, 0);
+                var p0 = m.Body.localPosition;
+                m.Body.localRotation = r * m.Body.localRotation;
+                m.Body.localPosition = pivot + r * (p0 - pivot) + Vector3.down * 0.06f * bellyK;
+                armL = Quaternion.Slerp(armL, Quaternion.Euler(0, 0, -172), bellyK);
+                armR = Quaternion.Slerp(armR, Quaternion.Euler(0, 0, 172), bellyK);
+                legL = Quaternion.Slerp(legL, Quaternion.Euler(-8, 0, -6), bellyK);
+                legR = Quaternion.Slerp(legR, Quaternion.Euler(-8, 0, 6), bellyK);
+                if (belly && grounded && speed01 > 0.05f && Time.frameCount % 3 == 0) Effects.Emit("dust", m.transform.position + m.transform.forward * 0.5f, 1, 0.2f);
+            }
             if (flipT >= 0)
             {
                 flipT += dt;

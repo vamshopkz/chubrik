@@ -142,6 +142,42 @@ namespace Chubrik
             Check("lands again", pl.Grounded);
             Check("lands upright after the somersault", !pl.Anim.Flipping && Quaternion.Angle(Quaternion.identity, pl.Model.Body.localRotation) < 1);
 
+            // ---- dive: a hit after the second jump, belly slide, stand up with a jump ----
+            // pick a direction with nothing in the way for the dive and the slide
+            float diveYaw = 180;
+            foreach (var cand in new float[] { 180, 90, 270, 0, 135, 225, 45, 315 })
+            {
+                var dir = Quaternion.Euler(0, cand, 0) * Vector3.forward;
+                if (!Physics.SphereCast(Lobby.Spawn + Vector3.up * 0.8f, 0.5f, dir, out _, 13f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) { diveYaw = cand; break; }
+            }
+            pl.Teleport(Lobby.Spawn, diveYaw);
+            yield return Wait(0.5f);
+            pl.QueueJump();
+            yield return Wait(0.3f);
+            pl.QueueJump();
+            yield return Wait(0.15f);
+            var dz0 = pl.transform.position;
+            pl.Attack();
+            Check("a hit after the second jump is a dive", pl.Diving && new Vector2(pl.Velocity.x, pl.Velocity.z).magnitude > 10);
+            yield return Wait(0.1f);
+            yield return Shot("53_dive");
+            for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
+            Check("landing from the dive: lying on the belly", pl.Lying);
+            var lie0 = pl.transform.position;
+            yield return Wait(0.5f);
+            float slid = Vector3.Distance(lie0, pl.transform.position);
+            Check("a short belly slide", slid > 0.5f && slid < 5 && Vector3.Distance(dz0, pl.transform.position) > 3, $"slid {slid:0.0} m, dive {Vector3.Distance(dz0, pl.transform.position):0.0} m");
+            yield return Wait(1f);
+            yield return Shot("54_belly");
+            Check("still lying until you press jump", pl.Lying);
+            pl.QueueJump();
+            yield return Wait(0.6f);
+            Check("a jump stands the chubrik up", !pl.Lying && !pl.Diving);
+            pl.Teleport(Lobby.Spawn, 0);
+            yield return Wait(0.3f);
+            pl.Attack();
+            Check("on the ground a hit is still a hit", !pl.Diving && !pl.Lying);
+
             // ---- bounce mushroom ----
             pl.Teleport(new Vector3(-6, 2.6f, -18), 0);
             float bTop = 0;
