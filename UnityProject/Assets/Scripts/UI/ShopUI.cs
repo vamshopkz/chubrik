@@ -21,31 +21,22 @@ namespace Chubrik
             {
                 var P = Save.P;
                 w.Text($"Монеты: {UIKit.Num(P.coins)}    Жетоны: {P.tokens}", 30, UIKit.Gold);
-                int left = Catalog.LootPool().FindAll(i => !Save.Owns(i.id)).Count;
-                w.Row("Лутбокс", left > 0 ? $"Случайная вещь из гардероба (ещё не открыто: {left})" : "Ты собрал все обычные вещи!",
-                    $"{BoxPrice} МОНЕТ", UIKit.Orange, () => BuyBox(false), left > 0 && P.coins >= BoxPrice, UIKit.Orange);
-                w.Row("Лутбокс за жетон", "Тот же лутбокс, но за 1 жетон", "1 ЖЕТОН", UIKit.Violet, () => BuyBox(true), left > 0 && P.tokens >= 1, UIKit.Violet);
                 if (!P.navigator)
-                    w.Row("Навигатор монет", "Стрелка над головой показывает ближайшую монету", $"{NavPrice} МОНЕТ", UIKit.Green, () =>
+                    w.Row("Указатель монет", "Стрелочка поднимается над тобой и показывает ближайшую монету", $"{NavPrice} МОНЕТ", UIKit.Green, () =>
                     {
                         if (!Save.Spend(NavPrice)) return;
                         P.navigator = true; P.navigatorOn = true; Save.Write();
-                        AudioFx.Play("buy"); Hud.Toast("Навигатор монет куплен — ищи зелёную стрелку!", UIKit.Lime);
+                        AudioFx.Play("buy"); Hud.Toast("Указатель монет куплен — смотри на зелёную стрелочку над собой!", UIKit.Lime);
                         Window.Refresh();
                     }, P.coins >= NavPrice, UIKit.Lime);
                 else
-                    w.Row("Навигатор монет", P.navigatorOn ? "Включён" : "Выключен", P.navigatorOn ? "ВЫКЛЮЧИТЬ" : "ВКЛЮЧИТЬ", P.navigatorOn ? UIKit.Red : UIKit.Green,
+                    w.Row("Указатель монет", P.navigatorOn ? "Включён" : "Выключен", P.navigatorOn ? "ВЫКЛЮЧИТЬ" : "ВКЛЮЧИТЬ", P.navigatorOn ? UIKit.Red : UIKit.Green,
                         () => { P.navigatorOn = !P.navigatorOn; Save.Write(); Window.Refresh(); }, true, UIKit.Lime);
                 w.Row("Набор 100 монет", "Обменяй жетон на 100 монет", $"{PackTokens} ЖЕТОН", UIKit.Gold, () =>
                 {
                     if (!Save.SpendTokens(PackTokens)) return;
                     Save.AddCoins(100); AudioFx.Play("coin"); Hud.Toast("+100 монет!", UIKit.Gold); Window.Refresh();
                 }, P.tokens >= PackTokens, UIKit.Gold);
-                w.Row("Жетон", "Жетоны открывают лутбоксы и секретные модификаторы", $"{TokenPrice} МОНЕТ", UIKit.Violet, () =>
-                {
-                    if (!Save.Spend(TokenPrice)) return;
-                    P.tokens++; Save.Write(); AudioFx.Play("token"); Window.Refresh();
-                }, P.coins >= TokenPrice, UIKit.Violet);
                 if (P.maxHearts < 6)
                 {
                     int price = HeartPrice(P.maxHearts);
@@ -56,7 +47,7 @@ namespace Chubrik
                     }, P.coins >= price, UIKit.Red);
                 }
                 else w.Row("Жизни: 6 из 6", "Максимум сердечек!", null, UIKit.Red, null, true, UIKit.Red);
-                w.Footer.text = "Монеты появляются снова через минуту — собирай их по всему лобби";
+                w.Footer.text = "Монеты собирай в мирах; лутбоксы прячутся в золотых ящиках миров";
             }, 1100, 800);
         }
 

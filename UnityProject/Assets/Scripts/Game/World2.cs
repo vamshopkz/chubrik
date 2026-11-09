@@ -39,7 +39,7 @@ namespace Chubrik
                 {
                     p.WaterY = -0.9f;
                     p.Checkpoint = Lobby.Spawn;
-                    p.Teleport(new Vector3(0, 0.3f, 30), 180);
+                    p.Teleport(Lobby.Spawn, 0);
                     p.Hearts = Save.P.maxHearts;
                     Hud.Toast("С возвращением в лобби!", UIKit.Gold);
                 }

@@ -6,35 +6,452 @@ using static Chubrik.Parts;
 namespace Chubrik
 {
     /// <summary>
-    /// World 1 — the lobby: a sunny safe island without enemies. Plaza with a fountain, the gadget shop, the
-    /// premium kiosk, the wardrobe, closed portals to future worlds, a jump course with a tower, bounce mushrooms,
-    /// floating islands, crates, target dummies, a training cactus, a musical path and 10 hidden tokens (no coins here: coins are earned in the worlds).
+    /// World 1 — the lobby: a sunny safe island without enemies, laid out after the player's own drawn map:
+    /// hub with a river, the winking-cube wardrobe, the red shop and the blue premium shop, portals to all worlds
+    /// behind blue gates that open with rescued friends, a park, snow, jungle, glitch and crystal areas, 10 hidden tokens.
     /// </summary>
     public static class Lobby
     {
         internal static Transform root;
-        public static readonly Vector3 Spawn = new Vector3(0, 0.3f, -4);
+        // =====================================================================================================
+        // The lobby follows the player's own drawn map (09.11): a green hub with a river, a park with a pond on
+        // the left, the glitch checkerboard below it, the jungle at the bottom, the snowy valley on top with a lake
+        // and a water cave, the crystal cave on the right. Thick stone walls round everything; blue gates open
+        // once enough friends are rescued (ruins 0, snow 4, jungle 10, crystal 20, glitch 25).
+        // =====================================================================================================
+
+        public static readonly Vector3 Spawn = new Vector3(0, 0.3f, 4);
         public static readonly List<Vector3> TokenSpots = new List<Vector3>();
+        public static readonly List<LobbyGate> Gates = new List<LobbyGate>();
+        /// <summary>Spots the autotest uses.</summary>
+        public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(6, 0.07f, -12), PadTo = new Vector3(-6, 7.6f, 17.5f), CactusPos = new Vector3(-22, 0, 0);
+        /// <summary>Rescued friends needed to open the way to each world.</summary>
+        public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, _ => 0 };
+        public static bool Open(int world) => Save.P.rescued.Count >= NeedFor(world);
+
+        static Material wallM, grass, snowM, checker, waterM;
 
         public static Transform Build()
         {
             root = new GameObject("Lobby").transform;
             Parts.Layer = Layers.World;
+            TokenSpots.Clear(); Gates.Clear();
+            wallM = Tiled(Tex.Concrete(), 2, 0.2f); wallM.color = Hex("B8BEC8");
+            grass = Tiled(Tex.Grass(), 10); snowM = Tiled(Tex.Snow(), 8);
+            checker = Mats.Tex(World6.MissingTex(), Color.white, 0.2f); checker.mainTextureScale = new Vector2(6, 4);
+            waterM = Mats.Emissive(Tex.Water(), new Color(0.6f, 0.85f, 1f), Hex("1E6FB0") * 0.25f, null, 0.9f);
             Sky();
-            Ground();
-            Plaza();
-            Shop(new Vector3(22, 0, 0));
-            Premium(new Vector3(16, 0, 17));
-            Wardrobe(new Vector3(-22, 0, 0));
-            Portals();
-            Course();
-            Training();
-            Music(new Vector3(-24, 0, -18));
-            House(new Vector3(-24, 0, 24));
-            TreeHouse(new Vector3(26, 0, -26));
-            Nature();
+            Sea();
+            Regions();
+            Rivers();
+            Walls();
+            Hub();
+            Wardrobe(new Vector3(-6, 0, 17.5f));
+            Shop(new Vector3(-7.5f, 0, -8.5f));
+            Premium(new Vector3(-7.5f, 0, -17));
+            PortalArch(new Vector3(18, 0, 19.5f), 0, 2, "ПАРЯЩИЕ РУИНЫ", "B57CFF", M("9AA3AE", 0.2f), "ruins");
+            Park();
+            Glitch();
+            Jungle();
+            Snow();
+            CrystalCave();
+            Gates.Add(LobbyGate.Spawn(new Vector3(-3.25f, 0, 23.5f), 0, 4.6f, 4, "СНЕЖНАЯ ДОЛИНА", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(27, 0, 16.5f), 90, 7.2f, 4, "СНЕЖНАЯ ДОЛИНА", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(5, 0, -21.5f), 0, 22.2f, 10, "ДЖУНГЛИ", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(27.6f, 0, -3.5f), 90, 5.2f, 20, "КРИСТАЛЬНАЯ ПЕЩЕРА", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(-33, 0, -6), 0, 6.2f, 25, "ГЛЮК-МИР 404", root));
+            Clouds();
             Tokens();
             return root;
+        }
+
+        // ---------------- ground, sea, regions ----------------
+
+        static void Sea()
+        {
+            var water = Prim.Make(PrimitiveType.Plane, root, new Vector3(0, PlayerCtl.I != null ? PlayerCtl.I.WaterY : -0.9f, 0), new Vector3(30, 1, 30), null, "Water", 0);
+            var wm = Mats.Tex(Tex.Water(), new Color(0.75f, 0.9f, 1f), 0.9f);
+            wm.mainTextureScale = new Vector2(40, 40);
+            water.GetComponent<Renderer>().sharedMaterial = wm;
+            water.AddComponent<WaterScroll>();
+        }
+
+        static GameObject Slab(float x0, float x1, float z0, float z1, Material m)
+        {
+            var go = Box(new Vector3((x0 + x1) / 2, -1, (z0 + z1) / 2), new Vector3(x1 - x0, 2, z1 - z0), m);
+            B(root, new Vector3((x0 + x1) / 2, -1.6f, (z0 + z1) / 2), new Vector3(x1 - x0 + 0.6f, 1.4f, z1 - z0 + 0.6f), Tiled(Tex.Sand(), 6));   // a sandy rim at the waterline
+            return go;
+        }
+
+        static void Regions()
+        {
+            Slab(-12, 27, -21.5f, 23.5f, grass);                 // the hub
+            Slab(-49, -12, -6, 17, grass);                        // the park
+            var g = Slab(-45, -22, -22, -6, checker);             // the glitch area
+            g.GetComponent<Renderer>().sharedMaterial = checker;
+            Slab(-8, 26, -51, -21.5f, Tiled(Tex.Grass(), 8));     // the jungle
+            Slab(-6, 49, 23.5f, 50, snowM);                       // the snowy valley
+            Slab(27, 49, 7, 23.5f, snowM);
+            Slab(27, 29, -6, -1, Tiled(Tex.Concrete(), 2));       // the corridor to the crystal cave
+            Disc(new Vector3(39, 0, -8.5f), 11, 2, Tiled(Tex.Concrete(), 6));
+        }
+
+        static void Water(Vector3 a, Vector3 b, float w)
+        {
+            var d = b - a; d.y = 0;
+            var go = Prim.Make(PrimitiveType.Cube, root, (a + b) / 2 + Vector3.up * 0.03f, new Vector3(w, 0.04f, d.magnitude + w * 0.6f), waterM, "River", Layers.World);
+            go.transform.rotation = Quaternion.LookRotation(d);
+        }
+
+        /// <summary>The river from the snowy lake down through the hub into the jungle (shallow: you can wade it).</summary>
+        static void Rivers()
+        {
+            Vector3[] p = { new Vector3(36, 0, 31), new Vector3(34, 0, 24), new Vector3(29, 0, 17.5f), new Vector3(23, 0, 12), new Vector3(17, 0, 6), new Vector3(12, 0, 0),
+                            new Vector3(9, 0, -8), new Vector3(8, 0, -16), new Vector3(9, 0, -25), new Vector3(10, 0, -36), new Vector3(9, 0, -48) };
+            for (int i = 0; i < p.Length - 1; i++) Water(p[i], p[i + 1], 4.4f);
+            // the lake in the snowy valley
+            Prim.Make(PrimitiveType.Cube, root, new Vector3(39, 0.03f, 40), new Vector3(18, 0.04f, 18), waterM, "Lake", Layers.World).AddComponent<WaterScroll>();
+            // stepping stones over the river by the hub
+            for (int k = 0; k < 4; k++) Solid(PrimitiveType.Cylinder, new Vector3(9.6f + k * 1.3f, 0.1f, -2.5f + k * 0.7f), new Vector3(0.9f, 0.1f, 0.9f), M("9AA0A8", 0.3f));
+        }
+
+        // ---------------- walls ----------------
+
+        static void Wall(Vector3 a, Vector3 b, float h = 5.5f)
+        {
+            var d = b - a; d.y = 0;
+            if (d.magnitude < 0.1f) return;
+            var go = Box((a + b) / 2 + Vector3.up * h / 2, new Vector3(1, h, d.magnitude + 1), wallM, Quaternion.LookRotation(d).eulerAngles.y);
+            B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.15f, 0.06f, 1.02f), M("8A919C", 0.3f));   // a stone cap
+        }
+
+        static void WallsX(float z, float x0, float x1, params float[] gaps)
+        {
+            float a = x0;
+            for (int i = 0; i + 1 < gaps.Length; i += 2) { Wall(new Vector3(a, 0, z), new Vector3(gaps[i], 0, z)); a = gaps[i + 1]; }
+            Wall(new Vector3(a, 0, z), new Vector3(x1, 0, z));
+        }
+
+        static void WallsZ(float x, float z0, float z1, params float[] gaps)
+        {
+            float a = z0;
+            for (int i = 0; i + 1 < gaps.Length; i += 2) { Wall(new Vector3(x, 0, a), new Vector3(x, 0, gaps[i])); a = gaps[i + 1]; }
+            Wall(new Vector3(x, 0, a), new Vector3(x, 0, z1));
+        }
+
+        static void Walls()
+        {
+            // hub
+            WallsX(23.5f, -12, 27, -5.6f, -0.9f);                // wardrobe gate to the snow
+            WallsZ(27, -21.5f, 23.5f, -6.2f, -0.8f, 12.9f, 20.1f); // crystal gate, river gate
+            WallsX(-21.5f, -12, 27, -6.1f, 16.1f);               // jungle gate
+            WallsZ(-12, -21.5f, -6); WallsZ(-12, 17, 23.5f);
+            // park
+            WallsX(17, -49, -12); WallsZ(-49, -6, 17);
+            WallsX(-6, -49, -12, -36.1f, -29.9f);                // glitch gate
+            // glitch area
+            WallsZ(-45, -22, -6); WallsX(-22, -45, -22); WallsZ(-22, -22, -6);
+            // jungle
+            WallsZ(-8, -51, -21.5f); WallsX(-51, -8, 26); WallsZ(26, -51, -21.5f);
+            // snowy valley
+            WallsX(50, -6, 49); WallsZ(-6, 23.5f, 50); WallsZ(49, 7, 50); WallsX(7, 27, 49);
+            // the crystal cave: a round wall with an opening to the west
+            var c = new Vector3(39, 0, -8.5f);
+            for (int k = 0; k < 16; k++)
+            {
+                float a0 = k * Mathf.PI * 2 / 16, a1 = (k + 1) * Mathf.PI * 2 / 16;
+                float mid = (a0 + a1) / 2;
+                if (Mathf.Abs(Mathf.DeltaAngle(mid * Mathf.Rad2Deg, 180)) < 18) continue;   // the way in
+                Wall(c + new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0)) * 11, c + new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1)) * 11, 7);
+            }
+            Wall(new Vector3(27, 0, -6.2f), new Vector3(28.6f, 0, -6.2f)); Wall(new Vector3(27, 0, -0.8f), new Vector3(28.6f, 0, -0.8f));
+        }
+
+        // ---------------- the hub ----------------
+
+        static void Hub()
+        {
+            var stone = Tiled(Tex.Sandstone(), 4);
+            Disc(new Vector3(0, 0.05f, 4), 5.5f, 0.1f, stone);
+            Sign(new Vector3(-3.6f, 0, 8.8f), 0, "ЛОББИ ЧУБРИКОВ", "3D8BFF", 5f);
+            Bench(new Vector3(4.5f, 0, 8), 200); Bench(new Vector3(-5, 0, 0), 100);
+            Lamp(new Vector3(4, 0, 0)); Lamp(new Vector3(-4, 0, 8));
+            foreach (var p in new[] { new Vector3(-9, 0, 7), new Vector3(3, 0, 15), new Vector3(-9, 0, -2), new Vector3(20, 0, -10), new Vector3(22, 0, 3), new Vector3(1, 0, -16), new Vector3(15, 0, -17), new Vector3(-2, 0, 20.5f) })
+                Tree(p, 0.95f, (int)(p.x * 7 + p.z));
+            Flowers(new Vector3(6, 0, 2), 14, 70, 5);
+            // a mushroom up to the shop roof and a teleport pad up to the wardrobe roof
+            Mushroom(TestMushroom, 18.5f);
+            TokenSpots.Add(TestMushroom + Vector3.up * 6.2f);                   // high over the mushroom
+            TokenSpots.Add(new Vector3(-10.5f, 1, 22.2f));                       // hidden behind the wardrobe
+            Pad(PadFrom, PadTo, 0, "35E0FF");
+            // training corner: crates and target dummies
+            var crate = Tiled(Tex.Planks("C08040"), 1);
+            var rng = new Rng(4);
+            for (int k = 0; k < 5; k++)
+            {
+                var p = new Vector3(19 + (k % 3) * 1.8f, 0.55f + (k / 3) * 1.1f, 16 - (k % 2) * 1.2f);
+                var b = Box(p, Vector3.one * 1.1f, crate, rng.F(-10, 10));
+                B(b.transform, Vector3.zero, new Vector3(1.04f, 0.15f, 1.04f), M("6D4425"));
+                b.AddComponent<Breakable>().coins = 0;
+            }
+            Sign(new Vector3(12, 0, 10), 200, "ПАРЯЩИЕ РУИНЫ — ВВЕРХ ПО РЕКЕ", "B57CFF", 5f);
+        }
+
+        // ---------------- buildings ----------------
+
+        /// <summary>The wardrobe: a big grey cube with a smiling, winking face.</summary>
+        static void Wardrobe(Vector3 c)
+        {
+            var grey = M("A8AEB8", 0.3f); var dark = M("2A2E36", 0.5f); var pink = M("FF8FA8", 0.3f);
+            Box(c + Vector3.up * 3.5f, new Vector3(9, 7, 7), grey);
+            B(root, c + new Vector3(0, 7.05f, 0), new Vector3(9.3f, 0.12f, 7.3f), M("8A919C", 0.3f));
+            float f = c.z - 3.52f;   // the front face (towards the hub)
+            // the open eye
+            Cy(root, new Vector3(c.x - 2, 4.6f, f), new Vector3(1.6f, 0.05f, 1.9f), M("FFFFFF", 0.4f), new Vector3(90, 0, 0));
+            Cy(root, new Vector3(c.x - 2, 4.4f, f - 0.03f), new Vector3(0.8f, 0.05f, 1f), dark, new Vector3(90, 0, 0));
+            Cy(root, new Vector3(c.x - 1.8f, 4.7f, f - 0.06f), new Vector3(0.25f, 0.05f, 0.25f), M("FFFFFF"), new Vector3(90, 0, 0));
+            // the winking eye: a happy closed arc
+            for (int k = 0; k < 7; k++) { float a = (k / 6f - 0.5f) * 2.4f; B(root, new Vector3(c.x + 2 + Mathf.Sin(a) * 0.9f, 4.5f + Mathf.Cos(a) * 0.35f, f - 0.03f), new Vector3(0.3f, 0.18f, 0.05f), dark, new Vector3(0, 0, -a * 30)); }
+            // the smile and the cheeks
+            for (int k = 0; k < 11; k++) { float a = (k / 10f - 0.5f) * 2.6f; Cy(root, new Vector3(c.x + Mathf.Sin(a) * 2.2f, 2.4f - Mathf.Cos(a) * 0.9f + 0.9f, f - 0.03f), new Vector3(0.45f, 0.05f, 0.45f), dark, new Vector3(90, 0, 0)); }
+            foreach (var sd in new[] { -1, 1 }) Cy(root, new Vector3(c.x + sd * 3.3f, 3f, f - 0.02f), new Vector3(1.2f, 0.05f, 0.7f), pink, new Vector3(90, 0, 0));
+            var t = Prim.Text(root, "ГАРДЕРОБ", new Vector3(c.x, 6.4f, f - 0.05f), 6, Hex("FFFFFF"));
+            t.transform.rotation = Quaternion.identity;
+            Npc(new Vector3(c.x - 4, 0.05f, f - 1.5f), 160, "hat_4", "neck_5", "top_5", "color_3", "emote_5", "shoes_4");
+            Npc(new Vector3(c.x + 4, 0.05f, f - 1.5f), 200, "hat_6", "wings_0", "color_7", "tail_4", "emote_1", "weapon_2");
+            Zones.Add(new Vector3(c.x, 0, f - 1.6f), 3.4f, "ГАРДЕРОБ", () => WardrobeUI.Open(), () => Worlds.Current == 1);
+            TokenSpots.Add(c + new Vector3(2.5f, 8, 0.5f));                    // on the roof (the teleport pad brings you up)
+        }
+
+        /// <summary>The red shop: 100 coins, extra hearts, the coin pointer.</summary>
+        static void Shop(Vector3 c)
+        {
+            var wall = M("FFD6D6", 0.2f); var trim = M("E53935", 0.3f); var wood = Tiled(Tex.Planks("A0642F"), 2);
+            var b = Node("Shop", root, c, new Vector3(0, 90, 0));   // front faces +X (towards the hub)
+            Solid(PrimitiveType.Cube, new Vector3(0, 0.1f, 0), new Vector3(7, 0.2f, 5.6f), wood, default, b);
+            Solid(PrimitiveType.Cube, new Vector3(0, 2.1f, -2.6f), new Vector3(7, 4f, 0.4f), wall, default, b);
+            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cube, new Vector3(sd * 3.3f, 2.1f, 0), new Vector3(0.4f, 4f, 5.6f), wall, default, b);
+            Solid(PrimitiveType.Cube, new Vector3(0, 4.3f, 0), new Vector3(7.6f, 0.4f, 6.2f), trim, default, b);
+            var awn = Mats.Tex(Patterns.Stripes("E53935", "FFFFFF", 8, true), Color.white, 0.2f);
+            B(b, new Vector3(0, 3.6f, 3.2f), new Vector3(7.2f, 0.12f, 1.4f), awn, new Vector3(-18, 0, 0));
+            Solid(PrimitiveType.Cube, new Vector3(0, 0.75f, 0.8f), new Vector3(5, 1.1f, 0.8f), M("8D5524", 0.3f), default, b);
+            S(b, new Vector3(-1.6f, 1.6f, 0.8f), 0.5f, M("FFC83A", 0.9f, 0.85f));
+            for (int k = 0; k < 6; k++) Msh(Meshes.Heart(), b, new Vector3(-2.2f + k * 0.9f, 2.6f, -2.3f), Vector3.one * 0.5f, M("E53935", 0.4f));
+            var arrow = Cone(b, new Vector3(1.6f, 1.6f, 0.8f), new Vector3(0.5f, 0.8f, 0.5f), G("6EDC3C", 1.4f));
+            arrow.AddComponent<Spin>();
+            var sign = Prim.Text(b, "МАГАЗИН", new Vector3(0, 4.9f, 3.15f), 6, Hex("FFFFFF"));
+            sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
+            Npc(b.TransformPoint(new Vector3(0, 0.2f, -0.6f)), b.eulerAngles.y + 180, "hat_0", "top_4", "color_1", "emote_6", "eyes_1");
+            Zones.Add(b.TransformPoint(new Vector3(0, 0, 2.6f)), 3.2f, "МАГАЗИН", () => ShopUI.Open(), () => Worlds.Current == 1);
+            var crate = Tiled(Tex.Planks("C08040"), 1);
+            Box(c + new Vector3(3.2f, 0.6f, 3.6f), new Vector3(1.3f, 1.2f, 1.3f), crate);
+            TokenSpots.Add(c + new Vector3(0, 5.4f, 0));
+        }
+
+        /// <summary>The blue premium shop.</summary>
+        static void Premium(Vector3 c)
+        {
+            var wall = M("CFE3FF", 0.3f); var trim = M("2E6BFF", 0.4f, 0.2f); var gold = M("FFC83A", 0.9f, 0.85f);
+            var b = Node("PremiumShop", root, c, new Vector3(0, 90, 0));
+            Solid(PrimitiveType.Cube, new Vector3(0, 0.1f, 0), new Vector3(7, 0.2f, 5.6f), M("FFF8E7", 0.4f), default, b);
+            Solid(PrimitiveType.Cube, new Vector3(0, 2.1f, -2.6f), new Vector3(7, 4f, 0.4f), wall, default, b);
+            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cube, new Vector3(sd * 3.3f, 2.1f, 0), new Vector3(0.4f, 4f, 5.6f), wall, default, b);
+            Solid(PrimitiveType.Cube, new Vector3(0, 4.3f, 0), new Vector3(7.6f, 0.4f, 6.2f), trim, default, b);
+            var star = Msh(Meshes.Star(), b, new Vector3(0, 5.6f, 0), Vector3.one * 1.1f, G("FFE14D", 1.8f));
+            star.AddComponent<Spin>();
+            var stand = Node("Stand", b, new Vector3(0, 0.2f, -0.6f));
+            stand.gameObject.AddComponent<Spin>().speed = 12;
+            for (int k = 0; k < Catalog.Sets.Count; k++)
+            {
+                float a = k * Mathf.PI * 2 / 8;
+                var p = new Vector3(Mathf.Cos(a) * 1.7f, 0.45f, Mathf.Sin(a) * 1.4f);
+                B(stand, p, Vector3.one * 0.7f, Mats.Lit(Catalog.Sets[k].color, 0.5f, 0.2f));
+                B(stand, p, new Vector3(0.74f, 0.74f, 0.14f), gold);
+            }
+            var sign = Prim.Text(b, "ПРЕМИУМ", new Vector3(0, 4.9f, 3.15f), 6, Hex("FFE14D"));
+            sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
+            Zones.Add(b.TransformPoint(new Vector3(0, 0, 2.6f)), 3.2f, "ПРЕМИУМ-НАБОРЫ", () => PremiumUI.Open(), () => Worlds.Current == 1);
+        }
+
+        // ---------------- portals ----------------
+
+        /// <summary>A portal arch; front (the side you walk in from) is local −Z.</summary>
+        static void PortalArch(Vector3 c, float yaw, int world, string title, string col, Material pillar, string decor)
+        {
+            var t = Node("Portal" + world, root, c, new Vector3(0, yaw, 0));
+            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cube, new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), pillar, default, t);
+            Solid(PrimitiveType.Cube, new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), pillar, default, t);
+            var surf = Cy(t, new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add(col, 0.55f), new Vector3(90, 0, 0));
+            surf.AddComponent<Spin>().axis = Vector3.up;
+            var s2 = Cy(t, new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.25f), new Vector3(90, 0, 0));
+            s2.AddComponent<Pulse>();
+            var tx = Prim.Text(t, $"МИР {world}", new Vector3(0, 6.5f, -0.85f), 8, Color.white);
+            tx.transform.localRotation = Quaternion.identity;
+            var t2 = Prim.Text(t, title, new Vector3(0, 0.6f, -1.2f), 4, Hex(col));
+            t2.transform.localRotation = Quaternion.identity;
+            switch (decor)
+            {
+                case "snow":
+                    for (int k = 0; k < 9; k++) Spike(t, new Vector3(-3.4f + k * 0.85f, 6, -0.7f), new Vector3(-3.4f + k * 0.85f, 4.8f - (k % 3) * 0.4f, -0.72f), 0.3f, M("E8F6FF", 0.8f));
+                    S(t, new Vector3(0, 7.1f, 0), new Vector3(7.8f, 0.6f, 1.8f), M("FFFFFF", 0.1f));
+                    new GameObject("PortalSnow").AddComponent<PortalSnow>().transform.position = c + Vector3.up * 3;
+                    break;
+                case "jungle":
+                    for (int k = 0; k < 8; k++) Ca(t, new Vector3(-3.4f + k * 0.97f, 5.2f, -0.82f), new Vector3(0.1f, 1f, 0.1f), M("2E9E3E", 0.2f));
+                    for (int k = 0; k < 5; k++) S(t, new Vector3(-3.6f + k * 1.8f, 7.1f, 0), new Vector3(1.8f, 0.8f, 1.8f), M(k % 2 == 0 ? "2E9E3E" : "4CBF4A", 0.2f));
+                    break;
+                case "crystal":
+                    foreach (var sd in new[] { -1, 1 }) Spike(t, new Vector3(sd * 3, 6, 0), new Vector3(sd * 3.6f, 8.4f, 0), 0.7f, G("A66BFF", 1.6f));
+                    break;
+            }
+            Zones.Add(t.TransformPoint(new Vector3(0, 0, -1.2f)), 2.6f, $"МИР {world}: {title}", () => Worlds.Enter(world), () => Worlds.Current == 1);
+        }
+
+        // ---------------- areas ----------------
+
+        static void Park()
+        {
+            // the heart-shaped pond
+            var pc = new Vector3(-41, 0, 11);
+            foreach (var o in new[] { new Vector3(-1.6f, 0, 1.2f), new Vector3(1.6f, 0, 1.2f) }) Prim.Make(PrimitiveType.Cylinder, root, pc + o + Vector3.up * 0.03f, new Vector3(4.2f, 0.02f, 4.2f), waterM, "Pond", Layers.World);
+            var tip = Prim.Make(PrimitiveType.Cube, root, pc + new Vector3(0, 0.03f, -0.9f), new Vector3(4.2f, 0.04f, 4.2f), waterM, "Pond", Layers.World);
+            tip.transform.rotation = Quaternion.Euler(0, 45, 0);
+            Solid(PrimitiveType.Sphere, pc + new Vector3(0, 0.3f, 0.5f), new Vector3(1.6f, 0.9f, 1.6f), M("9AA0A8", 0.2f));
+            TokenSpots.Add(pc + new Vector3(0, 1.4f, 0.5f));
+            foreach (var p in new[] { new Vector3(-32, 0, 12), new Vector3(-26, 0, 4), new Vector3(-33, 0, 3), new Vector3(-22, 0, 12), new Vector3(-17, 0, 5), new Vector3(-44, 0, 1), new Vector3(-38, 0, -2) })
+                Tree(p, 1f, (int)(p.x * 3 - p.z));
+            Flowers(new Vector3(-30, 0, 6), 14, 90, 9);
+            Bench(new Vector3(-36, 0, 7), 0); Bench(new Vector3(-28, 0, 14.5f), 180);
+            TreeHouse(new Vector3(-20, 0, 14));
+            // the training cactus (bumps you back, no hearts lost here)
+            var cac = Node("Cactus", root, CactusPos);
+            var green = M("43A047", 0.3f);
+            Solid(PrimitiveType.Capsule, new Vector3(0, 1.3f, 0), new Vector3(1f, 1.3f, 1f), green, default, cac);
+            foreach (var sd in new[] { -1, 1 })
+            {
+                Ca(cac, new Vector3(sd * 0.7f, 1.4f, 0), new Vector3(0.45f, 0.3f, 0.45f), green, new Vector3(0, 0, 90));
+                Ca(cac, new Vector3(sd * 0.95f, 1.85f, 0), new Vector3(0.42f, 0.4f, 0.42f), green);
+            }
+            S(cac, new Vector3(0, 2.75f, 0), 0.4f, M("FF5FA2", 0.3f));
+            foreach (var sd in new[] { -1, 1 }) { S(cac, new Vector3(sd * 0.18f, 1.9f, 0.45f), 0.18f, M("FFFFFF")); S(cac, new Vector3(sd * 0.18f, 1.9f, 0.52f), 0.09f, M("111111", 0.9f)); }
+            cac.gameObject.AddComponent<Hurter>();
+            Sign(CactusPos + new Vector3(0, 0, 2.5f), 180, "КАКТУС-ТРЕНЕР: НЕ БОЛЬНО", "43A047", 4.6f);
+            for (int k = 0; k < 3; k++)
+            {
+                var d = Node("Dummy", root, new Vector3(-26 + k * 2.4f, 0, -3));
+                Solid(PrimitiveType.Cylinder, new Vector3(0, 0.6f, 0), new Vector3(0.2f, 0.6f, 0.2f), M("8D5524"), default, d);
+                Solid(PrimitiveType.Sphere, new Vector3(0, 1.5f, 0), new Vector3(0.9f, 1.1f, 0.9f), M("F2D7A0", 0.1f), default, d);
+                Cy(d, new Vector3(0, 1.6f, 0.45f), new Vector3(0.5f, 0.01f, 0.5f), Mats.UnlitTex(Tex.Target(), Color.white), new Vector3(90, 0, 0));
+                d.gameObject.AddComponent<Breakable>().dummy = true;
+                d.GetComponent<Breakable>().coins = 0;
+            }
+        }
+
+        static void Glitch()
+        {
+            var r = new Rng(66);
+            for (int k = 0; k < 6; k++)
+                Box(new Vector3(r.F(-42, -26), 0.8f + (k % 2) * 0.8f, r.F(-20, -10)), new Vector3(1.6f, 1.6f + (k % 2) * 1.6f, 1.6f), checker, r.F(0, 45));
+            TokenSpots.Add(new Vector3(-30, 5, -14));
+            Mushroom(new Vector3(-30, 0, -18), 17f);
+            PortalArch(new Vector3(-42, 0, -14), 90, 6, "ГЛЮК-МИР 404", "FF5FD2", checker, "glitch");
+        }
+
+        static void Jungle()
+        {
+            foreach (var p in new[] { new Vector3(-4, 0, -27), new Vector3(20, 0, -27), new Vector3(16, 0, -44), new Vector3(-5, 0, -36), new Vector3(22, 0, -38), new Vector3(3, 0, -30) })
+                Tree(p, 1.15f, (int)(p.z * 5));
+            // the striped posts from the drawing
+            foreach (var p in new[] { new Vector3(-1, 0, -33), new Vector3(18, 0, -32) })
+            {
+                var stripes = Mats.Tex(Patterns.Stripes("D9822B", "6B4A2A", 6, true), Color.white, 0.3f);
+                Solid(PrimitiveType.Cylinder, p + Vector3.up * 1.6f, new Vector3(0.8f, 1.6f, 0.8f), stripes);
+                Disc(p + Vector3.up * 3.3f, 0.7f, 0.2f, M("6B4A2A", 0.3f));
+            }
+            TokenSpots.Add(new Vector3(18, 4.2f, -32));
+            Mushroom(new Vector3(16, 0, -30.5f), 15f);
+            Flowers(new Vector3(5, 0, -38), 10, 60, 13);
+            PortalArch(new Vector3(-2, 0, -45), 180, 5, "ДЖУНГЛИ", "6EDC3C", M("8A8A6A", 0.2f), "jungle");
+        }
+
+        static void Snow()
+        {
+            foreach (var p in new[] { new Vector3(-2, 0, 30), new Vector3(10, 0, 33), new Vector3(15, 0, 46), new Vector3(22, 0, 29), new Vector3(-3, 0, 46), new Vector3(30, 0, 13), new Vector3(42, 0, 10), new Vector3(25, 0, 40) })
+            {
+                Pine(p, 1.2f);
+                S(root, p + Vector3.up * 3.2f, new Vector3(1.6f, 0.4f, 1.6f), M("FFFFFF", 0.1f));
+            }
+            var rng = new Rng(51);
+            for (int k = 0; k < 14; k++) S(root, new Vector3(rng.F(-4, 28), 0, rng.F(26, 48)), new Vector3(rng.F(1.2f, 2.6f), rng.F(0.5f, 1f), rng.F(1.2f, 2.6f)), M("F4FAFF", 0.15f));
+            // a snowman by the portal
+            S(root, new Vector3(12, 0.6f, 42), 1.2f, M("FFFFFF", 0.15f)); S(root, new Vector3(12, 1.45f, 42), 0.85f, M("FFFFFF", 0.15f)); S(root, new Vector3(12, 2.1f, 42), 0.6f, M("FFFFFF", 0.15f));
+            Cone(root, new Vector3(12, 2.1f, 41.7f), new Vector3(0.1f, 0.3f, 0.1f), M("FF8A1E"), new Vector3(-90, 0, 0));
+            PortalArch(new Vector3(5, 0, 44), 0, 4, "СНЕЖНАЯ ДОЛИНА", "8FD8FF", Glass("A8DCFF", 0.85f), "snow");
+            // the water cave by the lake: a rocky dome with water inside and a token
+            var rock = M("8A93A0", 0.2f);
+            var cc = new Vector3(41, 0, 44);
+            for (int k = 0; k < 9; k++)
+            {
+                float a = k * Mathf.PI / 8;   // the back half (north): the cave opens towards the lake
+                Solid(PrimitiveType.Cube, cc + new Vector3(Mathf.Cos(a) * 5, 2.5f, Mathf.Sin(a) * 5), new Vector3(2.4f, 5, 1.2f), rock, new Vector3(0, -a * Mathf.Rad2Deg + 90, 0));
+            }
+            Solid(PrimitiveType.Sphere, cc + new Vector3(0, 4.6f, 1.5f), new Vector3(11, 4, 8), rock);
+            for (int k = 0; k < 6; k++) Spike(root, cc + new Vector3(-3 + k * 1.2f, 2.8f, 0), cc + new Vector3(-3 + k * 1.2f, 1.8f, 0), 0.3f, M("BFE8FF", 0.8f));
+            TokenSpots.Add(cc + new Vector3(0, 1, -1));
+            Sign(new Vector3(36, 0, 31.5f), 0, "ПЕЩЕРА С ВОДОЙ", "35E0FF", 4);
+        }
+
+        static void CrystalCave()
+        {
+            var c = new Vector3(39, 0, -8.5f);
+            // a partly open rocky roof
+            var rock = M("6E6488", 0.2f);
+            for (int k = 0; k < 6; k++) { float a = k * Mathf.PI / 3; S(root, c + new Vector3(Mathf.Cos(a) * 7, 7.4f, Mathf.Sin(a) * 7), new Vector3(7, 2.2f, 7), rock); }
+            // the big red crystals from the drawing
+            var red = G("E5395A", 1.4f);
+            foreach (var p in new[] { new Vector3(45, 0, -3), new Vector3(46, 0, -14), new Vector3(36, 0, -17), new Vector3(33, 0, 0) })
+                for (int k = 0; k < 4; k++)
+                {
+                    var b = p + new Vector3((k % 2 - 0.5f) * 1.2f, 0, (k / 2 - 0.5f) * 1.2f);
+                    Spike(root, b, b + new Vector3((k % 2 - 0.5f), 2.6f + k * 0.4f, (k / 2 - 0.5f)), 1.1f, red);
+                }
+            Disc(c + Vector3.up * 0.02f, 9.5f, 0.04f, M("3B3052", 0.3f));
+            TokenSpots.Add(new Vector3(46, 4, -14));
+            Mushroom(new Vector3(43, 0, -12), 15f);
+            PortalArch(new Vector3(45, 0, -8.5f), 90 + 180, 3, "КРИСТАЛЬНАЯ ПЕЩЕРА", "35E0FF", rock, "crystal");
+        }
+
+        static void Clouds()
+        {
+            var r = new Rng(21);
+            var white = M("FFFFFF", 0.05f);
+            for (int i = 0; i < 12; i++)
+            {
+                var c = Node("Cloud", root, new Vector3(r.F(-120, 120), r.F(38, 60), r.F(-120, 120)));
+                for (int k = 0; k < 5; k++) S(c, new Vector3((k - 2) * 2.4f, r.F(-0.5f, 1f), r.F(-1, 1)), r.F(3, 5.5f), white);
+                var mv = c.gameObject.AddComponent<Mover>(); mv.a = c.position; mv.b = c.position + new Vector3(r.F(15, 30), 0, r.F(-5, 5)); mv.period = r.F(60, 120); mv.phase = r.F();
+            }
+        }
+
+        static void TreeHouse(Vector3 c)
+        {
+            Solid(PrimitiveType.Cylinder, c + Vector3.up * 4f, new Vector3(0.9f, 4f, 0.9f), Mats.Tex(Tex.Bark(), Color.white, 0.1f));
+            foreach (var o in new[] { new Vector3(0, 9.2f, 0), new Vector3(1.6f, 8.4f, 0.6f), new Vector3(-1.4f, 8.6f, -0.8f), new Vector3(0.2f, 8.3f, -1.7f) })
+                S(root, c + o, 3.6f, M("43A047", 0.15f));
+            var wood = Tiled(Tex.Planks("A0642F"), 1);
+            Disc(c + Vector3.up * 4.6f, 2.6f, 0.3f, wood);
+            for (int k = 0; k < 5; k++)
+            {
+                float a = (k * 50 + 200) * Mathf.Deg2Rad;
+                Box(c + new Vector3(Mathf.Cos(a) * 3.4f, 0.5f + k * 0.85f, Mathf.Sin(a) * 3.4f), new Vector3(1.2f, 0.25f, 1.2f), wood, -k * 50);
+            }
+            TokenSpots.Add(c + new Vector3(1.4f, 5.6f, 1.2f));
+        }
+
+        static void Tokens()
+        {
+            while (TokenSpots.Count > 10) TokenSpots.RemoveAt(TokenSpots.Count - 1);
+            for (int i = 0; i < TokenSpots.Count; i++) Pickups.I.Token("t" + i, TokenSpots[i]);
         }
 
         // ---------------- helpers ----------------
@@ -92,7 +509,7 @@ namespace Chubrik
             return m;
         }
 
-        // ---------------- sky, light, ground ----------------
+        // ---------------- sky, light ----------------
 
         static void Sky()
         {
@@ -125,58 +542,6 @@ namespace Chubrik
             RenderSettings.sun = l;
         }
 
-        static void Ground()
-        {
-            Disc(Vector3.zero, 58, 2, Tiled(Tex.Grass(), 36));
-            Disc(new Vector3(0, -0.3f, 0), 66, 2.2f, Tiled(Tex.Sand(), 40));
-            var water = Prim.Make(PrimitiveType.Plane, root, new Vector3(0, PlayerCtl.I != null ? PlayerCtl.I.WaterY : -0.9f, 0), new Vector3(60, 1, 60), null, "Water", 0);
-            var wm = Mats.Tex(Tex.Water(), new Color(0.75f, 0.9f, 1f), 0.9f);
-            wm.mainTextureScale = new Vector2(60, 60);
-            water.GetComponent<Renderer>().sharedMaterial = wm;
-            water.AddComponent<WaterScroll>();
-            // paths (light paving)
-            var path = Tiled(Tex.Sandstone(), 4);
-            void Path(Vector3 a, Vector3 b, float w)
-            {
-                var d = b - a; d.y = 0;
-                var go = Prim.Make(PrimitiveType.Cube, root, (a + b) / 2 + Vector3.up * 0.015f, new Vector3(w, 0.03f, d.magnitude), path, "Path", Layers.World);
-                go.transform.rotation = Quaternion.LookRotation(d);
-            }
-            Path(new Vector3(7, 0, 0), new Vector3(18, 0, 0), 3);
-            Path(new Vector3(-7, 0, 0), new Vector3(-18, 0, 0), 3);
-            Path(new Vector3(0, 0, 8), new Vector3(0, 0, 30), 3);
-            Path(new Vector3(0, 0, -8), new Vector3(0, 0, -16), 3);
-            Path(new Vector3(5, 0, 5), new Vector3(14, 0, 14), 2.4f);
-        }
-
-        // ---------------- plaza + fountain ----------------
-
-        static void Plaza()
-        {
-            var stone = Tiled(Tex.Sandstone(), 6);
-            Disc(new Vector3(0, 0.05f, 0), 8, 0.4f, stone);
-            var rim = M("E8DCC8", 0.3f);
-            // fountain
-            var f = new Vector3(0, 0, 6);
-            Disc(f + Vector3.up * 0.7f, 2.4f, 0.7f, rim);
-            var w = Prim.Make(PrimitiveType.Cylinder, root, f + Vector3.up * 0.66f, new Vector3(4.2f, 0.02f, 4.2f), Glass("4FC3F7", 0.75f), "FountainWater", Layers.World);
-            Solid(PrimitiveType.Cylinder, f + Vector3.up * 1.2f, new Vector3(0.6f, 0.6f, 0.6f), rim);
-            Disc(f + Vector3.up * 2f, 1.2f, 0.25f, rim);
-            var spray = new GameObject("Spray").AddComponent<FountainFx>();
-            spray.transform.position = f + Vector3.up * 2.1f;
-            Sign(new Vector3(-3.5f, 0, 9.2f), 0, "ЛОББИ ЧУБРИКОВ", "3D8BFF", 5f);
-            // benches + lamps
-            for (int k = 0; k < 4; k++)
-            {
-                float a = 45 + k * 90;
-                var d = Quaternion.Euler(0, a, 0) * Vector3.forward;
-                Bench(d * 9.5f, a + 180);
-                Lamp(Quaternion.Euler(0, a + 45, 0) * Vector3.forward * 8.6f);
-            }
-            Sign(new Vector3(4.5f, 0, -6.5f), 200, "МАГАЗИН — ВПРАВО", "FF9A2E", 4.4f);
-            Sign(new Vector3(-4.5f, 0, -6.5f), 160, "ГАРДЕРОБ — ВЛЕВО", "FF5FA2", 4.4f);
-        }
-
         static void Bench(Vector3 p, float yaw)
         {
             var wood = M("A0642F", 0.2f); var iron = M("3A3F48", 0.6f, 0.5f);
@@ -192,266 +557,6 @@ namespace Chubrik
             Solid(PrimitiveType.Cylinder, p + Vector3.up * 1.6f, new Vector3(0.14f, 1.6f, 0.14f), iron);
             S(root, p + Vector3.up * 3.35f, 0.5f, G("FFF2C0", 1.4f));
             Cone(root, p + Vector3.up * 3.55f, new Vector3(0.6f, 0.3f, 0.6f), iron);
-        }
-
-        // ---------------- buildings ----------------
-
-        static void Shop(Vector3 c)
-        {
-            var wall = M("FFE3B3", 0.2f); var trim = M("FF8A1E", 0.3f); var wood = Tiled(Tex.Planks("A0642F"), 2);
-            var b = Node("Shop", root, c, new Vector3(0, -90, 0));   // front faces -X (towards the plaza)
-            Solid(PrimitiveType.Cube, new Vector3(0, 0.1f, 0), new Vector3(9, 0.2f, 8), wood, default, b);
-            Solid(PrimitiveType.Cube, new Vector3(0, 2.3f, -3.8f), new Vector3(9, 4.4f, 0.4f), wall, default, b);
-            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cube, new Vector3(sd * 4.3f, 2.3f, 0), new Vector3(0.4f, 4.4f, 8), wall, default, b);
-            Solid(PrimitiveType.Cube, new Vector3(0, 4.7f, 0), new Vector3(9.6f, 0.4f, 8.6f), trim, default, b);
-            Msh(Meshes.Cone(4), b, new Vector3(0, 4.9f, 0), new Vector3(6f, 2.4f, 6f), M("E65100", 0.3f), new Vector3(0, 45, 0));
-            // striped awning + counter
-            var awn = Mats.Tex(Patterns.Stripes("FF8A1E", "FFFFFF", 8, true), Color.white, 0.2f);
-            B(b, new Vector3(0, 3.9f, 4.4f), new Vector3(9.2f, 0.12f, 1.6f), awn, new Vector3(-18, 0, 0));
-            Solid(PrimitiveType.Cube, new Vector3(0, 0.75f, 1.2f), new Vector3(6, 1.1f, 0.9f), M("8D5524", 0.3f), default, b);
-            B(b, new Vector3(0, 1.33f, 1.2f), new Vector3(6.2f, 0.08f, 1.1f), M("FFFFFF", 0.4f));
-            // goods on shelves
-            for (int k = 0; k < 5; k++)
-            {
-                B(b, new Vector3(-3 + k * 1.5f, 2.2f, -3.4f), new Vector3(1.2f, 0.06f, 0.5f), M("8D5524"));
-                var gift = B(b, new Vector3(-3 + k * 1.5f, 2.5f, -3.4f), new Vector3(0.5f, 0.5f, 0.5f), M(new[] { "E53935", "1E88E5", "43A047", "8E24AA", "FFC400" }[k], 0.4f));
-                gift.AddComponent<Bob>().amp = 0.05f;
-            }
-            S(b, new Vector3(-2, 1.6f, 1.2f), 0.5f, M("FFC83A", 0.9f, 0.85f));   // a big coin on the counter
-            var sign = Prim.Text(b, "МАГАЗИН ПРИМОЧЕК", new Vector3(0, 5.3f, 4.35f), 6, Hex("FFF3C4"));
-            sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
-            Npc(b.TransformPoint(new Vector3(0, 0.2f, -0.6f)), b.eulerAngles.y + 180, "hat_0", "top_4", "color_1", "emote_6", "eyes_1");
-            Zones.Add(b.TransformPoint(new Vector3(0, 0, 3.2f)), 3.4f, "МАГАЗИН ПРИМОЧЕК", () => ShopUI.Open());
-            // crates as steps up to the roof (a token waits there)
-            var crate = Tiled(Tex.Planks("C08040"), 1);
-            Box(c + new Vector3(2, 0.6f, 5.6f), new Vector3(1.4f, 1.2f, 1.4f), crate);
-            Box(c + new Vector3(3.6f, 1.2f, 5.4f), new Vector3(1.4f, 2.4f, 1.4f), crate);
-            Box(c + new Vector3(4.8f, 1.8f, 4.2f), new Vector3(1.4f, 3.6f, 1.4f), crate);
-            TokenSpots.Add(c + new Vector3(3.6f, 5.7f, 3.4f));
-        }
-
-        static void Premium(Vector3 c)
-        {
-            var gold = M("FFC83A", 0.9f, 0.85f); var white = M("FFF8E7", 0.4f);
-            Disc(c + Vector3.up * 0.4f, 4.2f, 0.4f, white);
-            Ring(root, c + Vector3.up * 0.4f, 4.2f, 0.12f, gold);
-            for (int k = 0; k < 6; k++)
-            {
-                float a = k * Mathf.PI / 3;
-                Solid(PrimitiveType.Cylinder, c + new Vector3(Mathf.Cos(a) * 3.6f, 2.4f, Mathf.Sin(a) * 3.6f), new Vector3(0.35f, 2f, 0.35f), gold);
-            }
-            Disc(c + Vector3.up * 4.7f, 4.4f, 0.3f, gold);
-            S(root, c + Vector3.up * 4.7f, new Vector3(7.6f, 4.4f, 7.6f), M("FFF1C2", 0.6f, 0.3f));
-            var star = Msh(Meshes.Star(), root, c + Vector3.up * 7.6f, Vector3.one * 1.3f, G("FFE14D", 1.8f));
-            star.AddComponent<Spin>();
-            // 8 premium gift boxes on a turning stand
-            var stand = Node("Stand", root, c + Vector3.up * 0.4f);
-            stand.gameObject.AddComponent<Spin>().speed = 12;
-            for (int k = 0; k < Catalog.Sets.Count; k++)
-            {
-                float a = k * Mathf.PI * 2 / 8;
-                var p = new Vector3(Mathf.Cos(a) * 2.2f, 0.45f, Mathf.Sin(a) * 2.2f);
-                var col = Catalog.Sets[k].color;
-                B(stand, p, Vector3.one * 0.8f, Mats.Lit(col, 0.5f, 0.2f));
-                B(stand, p, new Vector3(0.84f, 0.84f, 0.16f), gold);
-                B(stand, p, new Vector3(0.16f, 0.84f, 0.84f), gold);
-                S(stand, p + Vector3.up * 0.48f, new Vector3(0.3f, 0.2f, 0.3f), gold);
-            }
-            var t = Prim.Text(root, "ПРЕМИУМ-НАБОРЫ", c + new Vector3(0, 5.9f, 0), 6, Hex("FFE14D"));
-            t.gameObject.AddComponent<Billboard>();
-            Zones.Add(c, 4.6f, "ПРЕМИУМ-НАБОРЫ", () => PremiumUI.Open());
-        }
-
-        static void Wardrobe(Vector3 c)
-        {
-            var wall = M("FFD1E8", 0.2f); var trim = M("FF5FA2", 0.3f); var floor = Tiled(Tex.Planks("C49A6C"), 2);
-            var b = Node("Wardrobe", root, c, new Vector3(0, 90, 0));   // front faces +X
-            Solid(PrimitiveType.Cube, new Vector3(0, 0.1f, 0), new Vector3(9, 0.2f, 8), floor, default, b);
-            Solid(PrimitiveType.Cube, new Vector3(0, 2.3f, -3.8f), new Vector3(9, 4.4f, 0.4f), wall, default, b);
-            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cube, new Vector3(sd * 4.3f, 2.3f, 0), new Vector3(0.4f, 4.4f, 8), wall, default, b);
-            Solid(PrimitiveType.Cube, new Vector3(0, 4.7f, 0), new Vector3(9.6f, 0.4f, 8.6f), trim, default, b);
-            S(b, new Vector3(0, 4.9f, 0), new Vector3(9f, 3.4f, 8f), M("D81B60", 0.4f));
-            // big mirror and clothes racks
-            B(b, new Vector3(0, 2.2f, -3.55f), new Vector3(3, 3.2f, 0.1f), M("E8EEF5", 0.98f, 1f));
-            Ring(b, new Vector3(0, 2.2f, -3.5f), 1.7f, 0.12f, M("FFC83A", 0.85f, 0.8f), new Vector3(90, 0, 0), new Vector3(0.9f, 1, 1.05f));
-            foreach (var sd in new[] { -1, 1 })
-            {
-                Rod(b, new Vector3(sd * 3.4f, 2.6f, -2.5f), new Vector3(sd * 3.4f, 2.6f, 2), 0.06f, M("B0BAC6", 0.8f, 0.8f));
-                for (int k = 0; k < 6; k++)
-                    B(b, new Vector3(sd * 3.4f, 1.9f, -2.2f + k * 0.75f), new Vector3(0.12f, 1.2f, 0.6f), M(new[] { "7E57C2", "FFC400", "1E88E5", "E53935", "43A047", "18181C" }[k], 0.2f));
-            }
-            var sign = Prim.Text(b, "ГАРДЕРОБ", new Vector3(0, 5.2f, 4.35f), 7, Hex("FFFFFF"));
-            sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
-            Npc(b.TransformPoint(new Vector3(-1.6f, 0.2f, -1.6f)), b.eulerAngles.y + 160, "hair_3", "eyes_6", "top_0", "color_6", "pet_2", "emote_7", "neck_4");
-            // mannequins in the window
-            var m1 = Npc(b.TransformPoint(new Vector3(2.4f, 0.2f, 2.6f)), b.eulerAngles.y + 200, "hat_4", "neck_5", "top_5", "color_3", "emote_5", "shoes_4");
-            var m2 = Npc(b.TransformPoint(new Vector3(-2.4f, 0.2f, 2.6f)), b.eulerAngles.y + 160, "hat_6", "wings_0", "color_7", "tail_4", "emote_1", "weapon_2");
-            Zones.Add(b.TransformPoint(new Vector3(0, 0, 3.2f)), 3.4f, "ГАРДЕРОБ", () => WardrobeUI.Open());
-            TokenSpots.Add(c + new Vector3(-6.5f, 0.9f, 2.5f));
-            Bush(c + new Vector3(-6.5f, 0, 2.5f), 1.6f);
-            Bush(c + new Vector3(-6.2f, 0, -1.5f), 1.3f);
-        }
-
-        static void Portals()
-        {
-            foreach (var (x, n, col) in new[] { (-8f, 2, "B57CFF"), (8f, 3, "35E0FF") })
-            {
-                var c = new Vector3(x, 0, 34);
-                var stone = M("9AA3AE", 0.2f);
-                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), stone);
-                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), stone);
-                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add(col, 0.55f), new Vector3(90, 0, 0));
-                surf.AddComponent<Spin>().axis = Vector3.up;
-                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.25f), new Vector3(90, 0, 0));
-                s2.AddComponent<Pulse>();
-                var t = Prim.Text(root, $"МИР {n}", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
-                t.transform.rotation = Quaternion.identity;
-                var t2 = Prim.Text(root, n == 2 ? "ПАРЯЩИЕ РУИНЫ" : "КРИСТАЛЬНЫЕ ПЕЩЕРЫ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex(n == 2 ? "7DFF9A" : "8FD0FF"));
-                t2.transform.rotation = Quaternion.identity;
-                if (n == 2) Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 2: ПАРЯЩИЕ РУИНЫ", () => Worlds.Enter(2));
-                else Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 3: КРИСТАЛЬНЫЕ ПЕЩЕРЫ", () =>
-                {
-                    // the portal wakes up once the Sky facet from World 2 is back
-                    if (Save.P.done.Contains(2)) Worlds.Enter(3);
-                    else { AudioFx.Play("error"); Hud.Toast("Портал спит. Пройди Мир 2 — Небесная грань разбудит его!", UIKit.Violet); }
-                });
-            }
-            Sign(new Vector3(0, 0, 27), 0, "ПОРТАЛЫ В МИРЫ", "9B6BFF", 4.4f);
-
-            // the glitchy portal to World 6: missing textures and flying pixels
-            {
-                var c = new Vector3(-13, 0, 44);
-                var miss = Mats.Tex(World6.MissingTex(), Color.white, 0.2f);
-                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), miss, sd * 6);
-                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), miss, -4);
-                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("FF5FD2", 0.55f), new Vector3(90, 0, 0));
-                surf.AddComponent<Spin>().axis = Vector3.up;
-                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("35E0FF", 0.3f), new Vector3(90, 0, 0));
-                s2.AddComponent<Pulse>();
-                var t = Prim.Text(root, "МИР 6", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
-                t.transform.rotation = Quaternion.Euler(0, 0, 6);
-                var t2 = Prim.Text(root, "ГЛЮК-МИР (ОШИБКА 404)", c + new Vector3(0, 0.6f, -1.2f), 3.4f, Hex("FF5FD2"));
-                t2.transform.rotation = Quaternion.identity;
-                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 6: ГЛЮК-МИР", () =>
-                {
-                    if (Save.P.done.Contains(5)) Worlds.Enter(6);
-                    else { AudioFx.Play("error"); Hud.Glitch(); Hud.Toast("ОШИБКА: портал не загрузился. Пройди Мир 5!", UIKit.Pink); }
-                });
-            }
-
-            // the jungle portal to World 5: palms, vines and big leaves
-            {
-                var c = new Vector3(13, 0, 44);
-                var stoneJ = M("8A8A6A", 0.2f);
-                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), stoneJ);
-                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), stoneJ);
-                for (int k = 0; k < 8; k++) Ca(root, c + new Vector3(-3.4f + k * 0.97f, 5.2f, -0.82f), new Vector3(0.1f, 1f, 0.1f), M("2E9E3E", 0.2f));
-                for (int k = 0; k < 5; k++) S(root, c + new Vector3(-3.6f + k * 1.8f, 7.1f, 0), new Vector3(1.8f, 0.8f, 1.8f), M(k % 2 == 0 ? "2E9E3E" : "4CBF4A", 0.2f));
-                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("6EDC3C", 0.55f), new Vector3(90, 0, 0));
-                surf.AddComponent<Spin>().axis = Vector3.up;
-                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.25f), new Vector3(90, 0, 0));
-                s2.AddComponent<Pulse>();
-                foreach (var sd in new[] { -1, 1 }) Pine(c + new Vector3(sd * 5, 0, 0.5f), 1.2f);
-                var t = Prim.Text(root, "МИР 5", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
-                t.transform.rotation = Quaternion.identity;
-                var t2 = Prim.Text(root, "ДЖУНГЛИ", c + new Vector3(0, 0.6f, -1.2f), 4, Hex("7DFF9A"));
-                t2.transform.rotation = Quaternion.identity;
-                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 5: ДЖУНГЛИ", () =>
-                {
-                    if (Save.P.done.Contains(4)) Worlds.Enter(5);
-                    else { AudioFx.Play("error"); Hud.Toast("Портал зарос лианами. Пройди Мир 4 — Ледяная грань его откроет!", UIKit.Lime); }
-                });
-            }
-
-            // the ice portal to World 4: snowdrifts and swirling snowflakes
-            {
-                var c = new Vector3(0, 0, 44);
-                var iceM = Glass("A8DCFF", 0.85f);
-                foreach (var sd in new[] { -1, 1 }) Box(c + new Vector3(sd * 3, 3, 0), new Vector3(1.2f, 6, 1.4f), iceM);
-                Box(c + new Vector3(0, 6.5f, 0), new Vector3(7.6f, 1, 1.6f), iceM);
-                for (int k = 0; k < 9; k++) Spike(root, c + new Vector3(-3.4f + k * 0.85f, 6, -0.7f), c + new Vector3(-3.4f + k * 0.85f, 4.8f - (k % 3) * 0.4f, -0.72f), 0.3f, M("E8F6FF", 0.8f));
-                S(root, c + new Vector3(0, 7.1f, 0), new Vector3(7.8f, 0.6f, 1.8f), M("FFFFFF", 0.1f));
-                var surf = Cy(root, c + new Vector3(0, 3, 0), new Vector3(4.8f, 0.02f, 5.8f), Add("8FD8FF", 0.55f), new Vector3(90, 0, 0));
-                surf.AddComponent<Spin>().axis = Vector3.up;
-                var s2 = Cy(root, c + new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.3f), new Vector3(90, 0, 0));
-                s2.AddComponent<Pulse>();
-                var rng = new Rng(44);
-                for (int k = 0; k < 14; k++)
-                {
-                    float a = rng.F(0, Mathf.PI * 2), d = rng.F(3.5f, 7f);
-                    S(root, c + new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d * 0.6f - 1.5f), new Vector3(rng.F(1.2f, 2.4f), rng.F(0.5f, 1f), rng.F(1.2f, 2.4f)), M("FFFFFF", 0.15f));
-                }
-                Disc(c + new Vector3(0, 0.02f, -1), 5, 0.04f, Tiled(Tex.Snow(), 4));
-                var t = Prim.Text(root, "МИР 4", c + new Vector3(0, 6.5f, -0.85f), 8, Color.white);
-                t.transform.rotation = Quaternion.identity;
-                var t2 = Prim.Text(root, "СНЕЖНАЯ ДОЛИНА", c + new Vector3(0, 0.6f, -1.2f), 4, Hex("BFEFFF"));
-                t2.transform.rotation = Quaternion.identity;
-                new GameObject("PortalSnow").AddComponent<PortalSnow>().transform.position = c + Vector3.up * 3;
-                Zones.Add(c + new Vector3(0, 0, -1.2f), 2.6f, "МИР 4: СНЕЖНАЯ ДОЛИНА", () =>
-                {
-                    // the ice portal wakes up once the Crystal facet from World 3 is back
-                    if (Save.P.done.Contains(3)) Worlds.Enter(4);
-                    else { AudioFx.Play("error"); Hud.Toast("Портал замёрз. Пройди Мир 3 — Кристальная грань растопит лёд!", UIKit.Cyan); }
-                });
-            }
-            Mushroom(new Vector3(14, 0, 31), 19.5f);
-            TokenSpots.Add(new Vector3(8, 7.8f, 34));
-        }
-
-        // ---------------- jump course ----------------
-
-        static readonly string[] candy = { "FF5252", "FF9A2E", "FFD23A", "6EDC3C", "3D8BFF", "9B6BFF", "FF5FA2" };
-
-        static GameObject Plat(Vector3 top, Vector3 size, int col)
-        {
-            var go = Box(top - Vector3.up * size.y / 2, size, M(candy[col % candy.Length], 0.35f));
-            B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(0.8f, 0.1f, 0.8f), M("FFFFFF", 0.4f));
-            return go;
-        }
-
-        static void Course()
-        {
-            Sign(new Vector3(2.5f, 0, -12), 180, "ПОЛОСА ПРЫЖКОВ", "6EDC3C", 4.4f);
-            Plat(new Vector3(0, 1.2f, -18), new Vector3(2.6f, 0.6f, 2.6f), 0);
-            Plat(new Vector3(3, 2.4f, -21), new Vector3(2.4f, 0.6f, 2.4f), 1);
-            Plat(new Vector3(6, 3.6f, -24), new Vector3(2.4f, 0.6f, 2.4f), 2);
-            Plat(new Vector3(4, 4.8f, -27.5f), new Vector3(2.4f, 0.6f, 2.4f), 3);
-            Plat(new Vector3(0, 6f, -30.5f), new Vector3(4.5f, 0.8f, 4.5f), 4);
-            foreach (var p in new[] { new Vector3(0, 0, -18), new Vector3(3, 0, -21), new Vector3(6, 0, -24), new Vector3(4, 0, -27.5f), new Vector3(0, 0, -30.5f) })
-                Solid(PrimitiveType.Cylinder, p + Vector3.up * (p.z < -30 ? 2.8f : 0.5f), new Vector3(0.3f, p.z < -30 ? 2.8f : 0.5f, 0.3f), M("B0BAC6", 0.5f, 0.4f));
-            // moving platform to the tower
-            var mv = Plat(new Vector3(0, 6, -34.5f), new Vector3(2.6f, 0.5f, 2.6f), 5);
-            var m = mv.AddComponent<Mover>(); m.a = mv.transform.position; m.b = mv.transform.position + new Vector3(0, 0, -6.5f); m.period = 6;
-            // tower: base, column, spiral, top
-            var tc = new Vector3(0, 0, -45);
-            Disc(tc + Vector3.up * 6, 3, 0.8f, M("FF9A2E", 0.35f));
-            Solid(PrimitiveType.Cylinder, tc + Vector3.up * 2.8f, new Vector3(1.6f, 2.8f, 1.6f), M("E8DCC8", 0.3f));
-            Solid(PrimitiveType.Cylinder, tc + Vector3.up * 10.5f, new Vector3(1.2f, 4.5f, 1.2f), M("E8DCC8", 0.3f));
-            for (int k = 0; k < 7; k++)
-            {
-                float a = k * 60 * Mathf.Deg2Rad;
-                Plat(tc + new Vector3(Mathf.Cos(a) * 2.6f, 7.3f + k * 1.15f, Mathf.Sin(a) * 2.3f), new Vector3(1.8f, 0.4f, 1.8f), k);
-            }
-            Disc(tc + Vector3.up * 15.4f, 1.5f, 0.5f, M("FFC83A", 0.6f, 0.4f));
-            var flag = Node("Flag", root, tc + Vector3.up * 15.4f);
-            Rod(flag, new Vector3(1.2f, 0, 0), new Vector3(1.2f, 3, 0), 0.08f, M("FFFFFF"));
-            B(flag, new Vector3(1.9f, 2.6f, 0), new Vector3(1.3f, 0.8f, 0.04f), M("FF5252", 0.3f)).AddComponent<Pulse>().amount = 0.03f;
-            TokenSpots.Add(tc + Vector3.up * 16.6f);
-            Pad(tc + new Vector3(-1.8f, 6.05f, 1.6f), Spawn + new Vector3(3, 0, 0), 0, "6EDC3C");
-            Pad(new Vector3(-5, 0.07f, -7), new Vector3(0, 6.3f, -30), 180, "35E0FF");
-
-            // spinning disc
-            var spin = Disc(new Vector3(9, 4.2f, -32), 2.6f, 0.5f, M("9B6BFF", 0.4f));
-            spin.AddComponent<Mover>().spin = 35;
-            Solid(PrimitiveType.Cylinder, new Vector3(9, 2, -32), new Vector3(0.4f, 2f, 0.4f), M("B0BAC6", 0.5f, 0.4f));
-            Mushroom(new Vector3(9, 0, -27.5f), 15f);
-
-            // bounce mushrooms to floating islands
-            Mushroom(new Vector3(-6, 0, -18), 18.5f);
-            Island(new Vector3(-10, 7, -23), 3.2f);
-            TokenSpots.Add(new Vector3(-10, 8.1f, -23));
-            Mushroom(new Vector3(-14, 0, -28), 20.5f);
-            Island(new Vector3(-17, 9.5f, -34), 3.6f);
         }
 
         internal static void Pad(Vector3 pos, Vector3 to, float yaw, string col)
@@ -488,104 +593,6 @@ namespace Chubrik
             Cone(root, top + Vector3.down * 0.6f, new Vector3(r * 2, r * 1.4f, r * 2), M("8D6E63", 0.2f), new Vector3(180, 0, 0));
             Flowers(top, r * 0.8f, 12, 77 + (int)top.x);
             Tree(top + new Vector3(r * 0.5f, 0, -r * 0.3f), 0.7f, 3);
-        }
-
-        // ---------------- training, music, houses ----------------
-
-        static void Training()
-        {
-            var crate = Tiled(Tex.Planks("C08040"), 1);
-            var rng = new Rng(4);
-            for (int k = 0; k < 7; k++)
-            {
-                var p = new Vector3(11 + (k % 4) * 1.8f, 0.55f + (k / 4) * 1.1f, -12 - (k % 2) * 1.8f);
-                var b = Box(p, Vector3.one * 1.1f, crate, rng.F(-10, 10));
-                B(b.transform, Vector3.zero, new Vector3(1.04f, 0.15f, 1.04f), M("6D4425"));
-                b.AddComponent<Breakable>().coins = 0;   // training only: no coins in the lobby
-            }
-            for (int k = 0; k < 3; k++)
-            {
-                var d = Node("Dummy", root, new Vector3(17 + k * 2.4f, 0, -16));
-                Solid(PrimitiveType.Cylinder, new Vector3(0, 0.6f, 0), new Vector3(0.2f, 0.6f, 0.2f), M("8D5524"), default, d);
-                var body = Solid(PrimitiveType.Sphere, new Vector3(0, 1.5f, 0), new Vector3(0.9f, 1.1f, 0.9f), M("F2D7A0", 0.1f), default, d);
-                S(d, new Vector3(0, 2.25f, 0), 0.6f, M("F2D7A0", 0.1f));
-                Cy(d, new Vector3(0, 1.6f, 0.45f), new Vector3(0.5f, 0.01f, 0.5f), Mats.UnlitTex(Tex.Target(), Color.white), new Vector3(90, 0, 0));
-                d.gameObject.AddComponent<Breakable>().dummy = true;
-                d.GetComponent<Breakable>().coins = 0;
-            }
-            Sign(new Vector3(14, 0, -8.5f), 180, "ЯЩИКИ И МИШЕНИ: БЕЙ (F / УДАР)", "FF5252", 5.4f);
-
-            // training cactus (bumps you back and shows the damage effect, no hearts lost here)
-            var cac = Node("Cactus", root, new Vector3(-11, 0, -10));
-            var green = M("43A047", 0.3f);
-            Solid(PrimitiveType.Capsule, new Vector3(0, 1.3f, 0), new Vector3(1f, 1.3f, 1f), green, default, cac);
-            foreach (var sd in new[] { -1, 1 })
-            {
-                Ca(cac, new Vector3(sd * 0.7f, 1.4f, 0), new Vector3(0.45f, 0.3f, 0.45f), green, new Vector3(0, 0, 90));
-                Ca(cac, new Vector3(sd * 0.95f, 1.85f, 0), new Vector3(0.42f, 0.4f, 0.42f), green);
-            }
-            for (int k = 0; k < 16; k++) { float a = k * 1.3f; Spike(cac, new Vector3(Mathf.Cos(a) * 0.48f, 0.5f + k * 0.13f, Mathf.Sin(a) * 0.48f), new Vector3(Mathf.Cos(a) * 0.68f, 0.5f + k * 0.13f, Mathf.Sin(a) * 0.68f), 0.06f, M("FFF8E1")); }
-            S(cac, new Vector3(0, 2.75f, 0), 0.4f, M("FF5FA2", 0.3f));
-            foreach (var sd in new[] { -1, 1 }) { S(cac, new Vector3(sd * 0.18f, 1.9f, 0.45f), 0.18f, M("FFFFFF")); S(cac, new Vector3(sd * 0.18f, 1.9f, 0.52f), 0.09f, M("111111", 0.9f)); }
-            cac.gameObject.AddComponent<Hurter>();
-            Sign(new Vector3(-11, 0, -6.5f), 180, "КАКТУС-ТРЕНЕР: НЕ БОЛЬНО", "43A047", 4.6f);
-        }
-
-        static void Music(Vector3 c)
-        {
-            Sign(c + new Vector3(0, 0, 3), 180, "МУЗЫКАЛЬНАЯ ДОРОЖКА", "9B6BFF", 4.8f);
-            string[] cols = { "FF5252", "FF9A2E", "FFD23A", "6EDC3C", "35E0FF", "3D8BFF", "9B6BFF", "FF5FA2" };
-            for (int k = 0; k < 8; k++)
-            {
-                var p = c + new Vector3(-5.25f + k * 1.5f, 0, 0);
-                var holder = Node("Tile", root, p);
-                var col = Hex(cols[k]);
-                var m = Mats.Emissive(null, col, Color.black);
-                var tile = Prim.Make(PrimitiveType.Cube, holder, new Vector3(0, 0.1f, 0), new Vector3(1.35f, 0.2f, 3f), m, "Tile", Layers.World);
-                tile.AddComponent<BoxCollider>();
-                var nt = tile.AddComponent<NoteTile>();
-                nt.note = k; nt.rend = tile.GetComponent<Renderer>(); nt.baseColor = col;
-            }
-            // rock steps to a hidden token behind the path
-            var rock = M("8F949B", 0.2f);
-            Solid(PrimitiveType.Sphere, c + new Vector3(-8.5f, 0.6f, -2.5f), new Vector3(2.2f, 1.6f, 2.2f), rock);
-            Solid(PrimitiveType.Sphere, c + new Vector3(-10f, 1.6f, -4.2f), new Vector3(2f, 3.4f, 2f), rock);
-            TokenSpots.Add(c + new Vector3(-10f, 4.2f, -4.2f));
-        }
-
-        static void House(Vector3 c)
-        {
-            var wall = M("FFF3D6", 0.25f);
-            Solid(PrimitiveType.Cylinder, c + Vector3.up * 2.2f, new Vector3(6, 2.2f, 6), wall);
-            Cone(root, c + Vector3.up * 4.4f, new Vector3(7.4f, 3.6f, 7.4f), M("3D8BFF", 0.4f));
-            B(root, c + new Vector3(0, 1.1f, -2.98f), new Vector3(1.2f, 2.2f, 0.1f), M("8D5524"));
-            S(root, c + new Vector3(0.4f, 1.1f, -3.05f), 0.12f, M("FFC83A", 0.9f, 0.9f));
-            foreach (var sd in new[] { -1, 1 })
-            {
-                var w = c + new Vector3(sd * 2f, 2.6f, -2.2f);
-                Cy(root, w, new Vector3(0.9f, 0.05f, 0.9f), M("BFE6FF", 0.9f), new Vector3(90, sd * 40, 0));
-            }
-            Box(c + new Vector3(1.6f, 6.2f, -0.8f), new Vector3(0.8f, 2.4f, 0.8f), M("C0504D", 0.2f));
-            TokenSpots.Add(c + new Vector3(1.6f, 8.2f, -0.8f));
-            Mushroom(c + new Vector3(5.5f, 0, 1.5f), 20f);
-            Fence(c + new Vector3(-5, 0, 5), c + new Vector3(5, 0, 5));
-            var t = Prim.Text(root, "ДОМИК ЧУБРИКА", c + new Vector3(0, 3.6f, -3.25f), 3.4f, Hex("3D8BFF"));
-            t.transform.rotation = Quaternion.identity;
-        }
-
-        static void TreeHouse(Vector3 c)
-        {
-            Solid(PrimitiveType.Cylinder, c + Vector3.up * 4f, new Vector3(0.9f, 4f, 0.9f), Mats.Tex(Tex.Bark(), Color.white, 0.1f));
-            foreach (var o in new[] { new Vector3(0, 9.2f, 0), new Vector3(1.6f, 8.4f, 0.6f), new Vector3(-1.4f, 8.6f, -0.8f), new Vector3(0.2f, 8.3f, -1.7f) })
-                S(root, c + o, 3.6f, M("43A047", 0.15f));
-            var wood = Tiled(Tex.Planks("A0642F"), 1);
-            Disc(c + Vector3.up * 4.6f, 2.6f, 0.3f, wood);
-            for (int k = 0; k < 5; k++)
-            {
-                float a = (k * 50 + 200) * Mathf.Deg2Rad;
-                Box(c + new Vector3(Mathf.Cos(a) * 3.4f, 0.5f + k * 0.85f, Mathf.Sin(a) * 3.4f), new Vector3(1.2f, 0.25f, 1.2f), wood, -k * 50);
-            }
-            TokenSpots.Add(c + new Vector3(1.4f, 5.6f, 1.2f));
         }
 
         static void Fence(Vector3 a, Vector3 b)
@@ -645,58 +652,73 @@ namespace Chubrik
             g.Build("Flowers", root, false, Layers.World);
         }
 
-        static void Nature()
+    }
+
+    /// <summary>
+    /// A blue gate in the lobby wall: closed until enough friends are rescued (counted over all worlds).
+    /// </summary>
+    public class LobbyGate : MonoBehaviour
+    {
+        public int need;
+        public bool IsOpen { get; private set; }
+        Collider col; Transform panel; TMPro.TextMeshPro front, back; string title; int shown = -1; float openT = -1, hintT;
+
+        public static LobbyGate Spawn(Vector3 p, float yaw, float width, int need, string title, Transform parent)
         {
-            var keep = new[] { new Vector3(0, 0, 0), new Vector3(22, 0, 0), new Vector3(16, 0, 17), new Vector3(-22, 0, 0), new Vector3(0, 0, 34), new Vector3(0, 0, -30), new Vector3(-24, 0, 24), new Vector3(26, 0, -26), new Vector3(-24, 0, -18), new Vector3(14, 0, -14), new Vector3(-12, 0, -26) };
-            float[] keepR = { 12, 9, 7, 9, 12, 18, 8, 6, 9, 8, 12 };
-            bool Free(Vector3 p)
-            {
-                for (int i = 0; i < keep.Length; i++) if (Vector3.Distance(p, keep[i]) < keepR[i]) return false;
-                return true;
-            }
-            var r = new Rng(21);
-            int trees = 0;
-            for (int i = 0; i < 400 && trees < 46; i++)
-            {
-                float a = r.F(0, Mathf.PI * 2), d = r.F(20, 54);
-                var p = new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d);
-                if (!Free(p)) continue;
-                if (r.Chance(0.3f)) Pine(p, r.F(0.8f, 1.3f)); else Tree(p, r.F(0.8f, 1.3f), i);
-                trees++;
-            }
-            for (int i = 0; i < 18; i++)
-            {
-                float a = r.F(0, Mathf.PI * 2), d = r.F(14, 56);
-                var p = new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d);
-                if (!Free(p)) continue;
-                Solid(PrimitiveType.Sphere, p + Vector3.up * 0.2f, new Vector3(r.F(1, 2.4f), r.F(0.8f, 1.6f), r.F(1, 2.2f)), M("9AA0A8", 0.2f));
-            }
-            for (int i = 0; i < 20; i++)
-            {
-                float a = r.F(0, Mathf.PI * 2), d = r.F(10, 54);
-                var p = new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d);
-                if (Free(p)) Bush(p, r.F(0.7f, 1.2f));
-            }
-            Flowers(Vector3.zero, 55, 260, 5);
-            // beach rocks, a token behind one
-            Solid(PrimitiveType.Sphere, new Vector3(0, 0.3f, -60), new Vector3(3.2f, 2.6f, 2.4f), M("9AA0A8", 0.2f));
-            TokenSpots.Add(new Vector3(0, 0.5f, -62.2f));
-            // clouds drifting in the sky
-            var white = M("FFFFFF", 0.05f);
-            for (int i = 0; i < 12; i++)
-            {
-                var c = Node("Cloud", root, new Vector3(r.F(-120, 120), r.F(38, 60), r.F(-120, 120)));
-                for (int k = 0; k < 5; k++) S(c, new Vector3((k - 2) * 2.4f, r.F(-0.5f, 1f), r.F(-1, 1)), r.F(3, 5.5f), white);
-                var mv = c.gameObject.AddComponent<Mover>(); mv.a = c.position; mv.b = c.position + new Vector3(r.F(15, 30), 0, r.F(-5, 5)); mv.period = r.F(60, 120); mv.phase = r.F();
-            }
+            var g = new GameObject("Gate " + title).AddComponent<LobbyGate>();
+            g.transform.SetParent(parent, false);
+            g.transform.SetPositionAndRotation(p, Quaternion.Euler(0, yaw, 0));
+            g.need = need; g.title = title;
+            Parts.Layer = Layers.World;
+            var bc = g.gameObject.AddComponent<BoxCollider>();
+            bc.center = new Vector3(0, 2.75f, 0); bc.size = new Vector3(width, 5.5f, 0.6f);
+            g.col = bc;
+            g.panel = Parts.Node("Panel", g.transform, Vector3.zero);
+            Parts.B(g.panel, new Vector3(0, 2.75f, 0), new Vector3(width, 5.5f, 0.3f), Parts.Glass("2E6BFF", 0.55f));
+            Parts.B(g.panel, new Vector3(0, 5.45f, 0), new Vector3(width + 0.2f, 0.2f, 0.4f), Parts.G("7DB8FF", 1.4f));
+            for (int k = 0; k < (int)(width / 1.2f); k++) Parts.B(g.panel, new Vector3(-width / 2 + 0.6f + k * 1.2f, 2.75f, 0), new Vector3(0.08f, 5.4f, 0.34f), Parts.G("9FD0FF", 0.9f));
+            g.front = Prim.Text(g.panel, "", new Vector3(0, 3.2f, -0.2f), 3.4f, Color.white);
+            g.front.transform.localRotation = Quaternion.identity;
+            g.back = Prim.Text(g.panel, "", new Vector3(0, 3.2f, 0.2f), 3.4f, Color.white);
+            g.back.transform.localRotation = Quaternion.Euler(0, 180, 0);
+            g.Refresh(true);
+            return g;
         }
 
-        // ---------------- hidden tokens ----------------
-
-        static void Tokens()
+        void Refresh(bool instant)
         {
-            TokenSpots.Add(new Vector3(0, 3.6f, 6));   // above the fountain bowl
-            for (int i = 0; i < TokenSpots.Count; i++) Pickups.I.Token("t" + i, TokenSpots[i]);
+            int n = Save.P.rescued.Count;
+            if (n == shown) return;
+            shown = n;
+            string txt = $"{title}\nСПАСИ {need} ДРУЗЕЙ\n{Mathf.Min(n, need)} / {need}";
+            front.text = back.text = txt;
+            if (n >= need && !IsOpen)
+            {
+                IsOpen = true; col.enabled = false;
+                if (instant) panel.gameObject.SetActive(false);
+                else { openT = 0; AudioFx.Play("portal"); Effects.Emit("magic", transform.position + Vector3.up * 3, 60, 1.2f, Vector3.up * 2); Hud.Toast($"Открылся путь: {title}!", UIKit.Lime); }
+            }
+            else if (n < need && IsOpen) { IsOpen = false; col.enabled = true; panel.gameObject.SetActive(true); panel.localPosition = Vector3.zero; }
+        }
+
+        void Update()
+        {
+            Refresh(false);
+            if (openT >= 0)
+            {
+                openT += Time.deltaTime;
+                panel.localPosition = Vector3.down * openT * 4;
+                if (openT > 1.5f) { panel.gameObject.SetActive(false); openT = -1; }
+            }
+            var p = PlayerCtl.I;
+            if (IsOpen || p == null || Worlds.Current != 1) return;
+            hintT -= Time.deltaTime;
+            var l = transform.InverseTransformPoint(p.transform.position);
+            if (Mathf.Abs(l.z) < 2.2f && Mathf.Abs(l.x) < 4 && hintT <= 0)
+            {
+                hintT = 5;
+                Hud.Toast($"Закрыто! Спаси ещё {need - Save.P.rescued.Count} друзей — и проход в «{title}» откроется", UIKit.Blue);
+            }
         }
     }
 

@@ -265,8 +265,8 @@ namespace Chubrik
                 if (wait <= 0)
                 {
                     float a = rng.F(0, Mathf.PI * 2), d = rng.F(4, 11);
-                    target = new Vector3(Mathf.Cos(a) * d, transform.position.y, Mathf.Sin(a) * d);
-                    if (Vector3.Distance(target, new Vector3(0, 0, 6)) < 3.2f) target += new Vector3(4, 0, 0);   // not into the fountain
+                    // wander round the middle of the hub (between the wardrobe, the shops and the river)
+                    target = new Vector3(2 + Mathf.Cos(a) * d * 0.8f, transform.position.y, 3 + Mathf.Sin(a) * d * 0.9f);
                     wait = rng.F(3, 8);
                     if (rng.Chance(0.5f)) anim.PlayEmote();
                 }

@@ -179,7 +179,7 @@ namespace Chubrik
             Check("on the ground a hit is still a hit", !pl.Diving && !pl.Lying);
 
             // ---- bounce mushroom ----
-            pl.Teleport(new Vector3(-6, 2.6f, -18), 0);
+            pl.Teleport(Lobby.TestMushroom + Vector3.up * 2.6f, 0);
             float bTop = 0;
             for (float t = 0; t < 1.6f; t += Time.deltaTime) { bTop = Mathf.Max(bTop, pl.transform.position.y); yield return null; }
             Check("bounce mushroom launches", bTop > 5f, bTop.ToString("0.0") + " m");
@@ -193,10 +193,47 @@ namespace Chubrik
             Hud.I.ForceTouch = false;
             Check("10 hidden tokens", Lobby.TokenSpots.Count == 10, Lobby.TokenSpots.Count.ToString());
 
+            // ---- the lobby after the drawn map: blue gates open with rescued friends ----
+            Check("5 blue gates (snow ×2, jungle, crystal, glitch)", Lobby.Gates.Count == 5);
+            Check("with no friends rescued only the ruins are open", Lobby.Open(2) && !Lobby.Open(4) && Lobby.Gates.TrueForAll(g => !g.IsOpen));
+            var keepRescued = new List<string>(Save.P.rescued);
+            for (int i = 0; i < 10; i++) Save.P.rescued.Add("test" + i);
+            yield return null;
+            Check("10 friends: snow and jungle gates open, crystal and glitch shut", Lobby.Gates.FindAll(g => g.IsOpen).Count == 3 && Lobby.Open(5) && !Lobby.Open(3));
+            for (int i = 10; i < 25; i++) Save.P.rescued.Add("test" + i);
+            yield return null;
+            Check("25 friends: every gate is open", Lobby.Gates.TrueForAll(g => g.IsOpen));
+            yield return Wait(1.8f);
+            pl.Teleport(new Vector3(20, 0.3f, 8), 90);
+            pl.yaw = 90; pl.pitch = 18;
+            yield return Wait(0.4f);
+            yield return Shot("55_lobby_map");
+            // the whole lobby from above, to compare with the drawn map
+            {
+                var cg = new GameObject("TopCam");
+                var cam = cg.AddComponent<Camera>();
+                cam.orthographic = true; cam.orthographicSize = 54; cam.aspect = 1;
+                cam.transform.SetPositionAndRotation(new Vector3(0, 120, 0), Quaternion.Euler(90, 0, 0));
+                cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.5f, 0.75f, 0.95f);
+                cam.farClipPlane = 300; cam.enabled = false;
+                var rt = new RenderTexture(1024, 1024, 24) { antiAliasing = 4 };
+                cam.targetTexture = rt; cam.Render();
+                RenderTexture.active = rt;
+                var tex = new Texture2D(1024, 1024, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, 1024, 1024), 0, 0); tex.Apply();
+                RenderTexture.active = null;
+                File.WriteAllBytes(Path.Combine(dir, "56_lobby_top.png"), tex.EncodeToPNG());
+                cam.targetTexture = null; rt.Release(); Destroy(cg); Destroy(tex);
+            }
+            Save.P.rescued.Clear(); Save.P.rescued.AddRange(keepRescued);
+            yield return null;
+            Check("gates close again when friends are fewer (test only)", Lobby.Gates.TrueForAll(g => !g.IsOpen));
+            pl.Teleport(Lobby.Spawn, 0);
+
             // ---- teleport pad ----
-            pl.Teleport(new Vector3(-5, 0.2f, -7), 0);
+            pl.Teleport(Lobby.PadFrom + Vector3.up * 0.15f, 0);
             yield return Wait(2.2f);
-            Check("teleport pad", Vector3.Distance(pl.transform.position, new Vector3(0, 6.3f, -30)) < 3, pl.transform.position.ToString());
+            Check("teleport pad", Vector3.Distance(pl.transform.position, Lobby.PadTo) < 3, pl.transform.position.ToString());
             yield return Shot("05_course_platform");
             pl.Frozen = false;
 
@@ -309,16 +346,15 @@ namespace Chubrik
             // ---- cactus ----
             Save.Wear("secret", "");
             pl.ApplyLook(Save.CurrentLook());
-            pl.Teleport(new Vector3(-11, 0.2f, -8.4f), 180);
+            pl.Teleport(Lobby.CactusPos + new Vector3(0, 0.2f, 1.6f), 180);
             pl.MoveInput = new Vector2(0, 1);
             yield return Wait(0.7f);
             pl.MoveInput = Vector2.zero;
-            Check("cactus bumps back", Vector3.Distance(pl.transform.position, new Vector3(-11, 0, -10)) > 1.2f);
+            Check("cactus bumps back", Vector3.Distance(pl.transform.position, Lobby.CactusPos) > 1.2f);
 
             // ---- world 2: floating ruins ----
             Check("promo gives 6 hearts", Save.P.maxHearts == 6);
-            Worlds.Enter(2);
-            yield return Wait(2f);
+            yield return Enter(2);
             Check("world 2 entered", Worlds.Current == 2 && Vector3.Distance(pl.transform.position, World2.Spawn) < 3, pl.transform.position.ToString());
             Check("world 2 has easy mobs", World2.Enemies.Count >= 8, World2.Enemies.Count.ToString());
             Check("hearts full in world 2", pl.Hearts == 6);
@@ -430,8 +466,7 @@ namespace Chubrik
             pl.yaw = 0;
             yield return Wait(0.8f);
             yield return Shot("23_temple");
-            Worlds.Enter(1);
-            yield return Wait(1.6f);
+            yield return Enter(1);
             Check("back to the lobby", Worlds.Current == 1 && pl.transform.position.magnitude < 80);
             Check("rescued friend walks in the lobby", GameObject.Find("Friend w2c0") != null);
             pl.Teleport(new Vector3(0, 0.3f, -2), 0);
@@ -444,8 +479,7 @@ namespace Chubrik
             Check("falling into water returns you to the shore", pl.transform.position.y > -0.5f && new Vector2(pl.transform.position.x, pl.transform.position.z).magnitude < 66, pl.transform.position.ToString());
 
             // ---- world 3: crystal caves ----
-            Worlds.Enter(3);
-            yield return Wait(2f);
+            yield return Enter(3);
             Check("world 3 entered", Worlds.Current == 3 && Vector3.Distance(pl.transform.position, World3.Spawn) < 3, pl.transform.position.ToString());
             Check("cave light (no sky)", RenderSettings.skybox == null);
             Check("world 3 has cave mobs", World3.Enemies.Count >= 6, World3.Enemies.Count.ToString());
@@ -499,8 +533,7 @@ namespace Chubrik
             Check("the Crystal facet finishes world 3", Save.P.done.Contains(3));
             yield return Shot("34_world3_done");
             Window.Close();
-            Worlds.Enter(1);
-            yield return Wait(1.6f);
+            yield return Enter(1);
             Check("back in the sunny lobby", Worlds.Current == 1 && RenderSettings.skybox != null);
 
             // ---- story ----
@@ -514,8 +547,7 @@ namespace Chubrik
             Window.Close();
 
             // ---- world 4: snowy valley ----
-            Worlds.Enter(4);
-            yield return Wait(2f);
+            yield return Enter(4);
             Check("world 4 entered", Worlds.Current == 4 && Vector3.Distance(pl.transform.position, World4.Spawn) < 3, pl.transform.position.ToString());
             Check("8 friends frozen in ice cubes", Rescue.Total("w4") == 8 && Rescue.Cages.FindAll(c => c.id.StartsWith("w4") && c.ice).Count == 8);
             Check("angry snowmen and ice boars", World4.Snowmen.Count >= 5 && World4.Boars.Count >= 3, $"{World4.Snowmen.Count} / {World4.Boars.Count}");
@@ -642,13 +674,11 @@ namespace Chubrik
             yield return Wait(1.2f);
             Check("the Ice facet finishes world 4", Save.P.done.Contains(4));
             Window.Close();
-            Worlds.Enter(1);
-            yield return Wait(1.6f);
+            yield return Enter(1);
             Check("back from the snow: no snowmobile in the lobby", Worlds.Current == 1 && !pl.Snowmobile);
 
             // ---- world 5: jungle ----
-            Worlds.Enter(5);
-            yield return Wait(2f);
+            yield return Enter(5);
             Check("world 5 entered", Worlds.Current == 5 && Vector3.Distance(pl.transform.position, World5.Spawn) < 3, pl.transform.position.ToString());
             Check("8 cages and 8 keys in the jungle", Rescue.Total("w5") == 8 && Pickups.I.KeysLeftIn("w5") == 8, $"cages {Rescue.Total("w5")}, keys {Pickups.I.KeysLeftIn("w5")}");
             pl.yaw = 0; pl.pitch = 14;
@@ -701,13 +731,11 @@ namespace Chubrik
             Check("the victory portal finishes world 5", Save.P.done.Contains(5));
             yield return Shot("49_world5_done");
             Window.Close();
-            Worlds.Enter(1);
-            yield return Wait(1.6f);
+            yield return Enter(1);
             Check("back in the lobby from the jungle", Worlds.Current == 1);
 
             // ---- world 6: the glitch world (prank) ----
-            Worlds.Enter(6);
-            yield return Wait(2f);
+            yield return Enter(6);
             Check("world 6 entered", Worlds.Current == 6 && Vector3.Distance(pl.transform.position, World6.Spawn) < 3, pl.transform.position.ToString());
             Check("joke HUD: 100 hearts and 999999999", Hud.PrankShown);
             Check("8 cages and 8 keys in the glitch world", Rescue.Total("w6") == 8 && Pickups.I.KeysLeftIn("w6") == 8, $"cages {Rescue.Total("w6")}, keys {Pickups.I.KeysLeftIn("w6")}");
@@ -754,8 +782,7 @@ namespace Chubrik
             World6.Win();
             Check("the Glitch facet finishes world 6", Save.P.done.Contains(6));
             Window.Close();
-            Worlds.Enter(1);
-            yield return Wait(1.6f);
+            yield return Enter(1);
             Check("normal HUD back in the lobby", Worlds.Current == 1 && !Hud.PrankShown);
 
             // ---- main menu ----
@@ -797,6 +824,15 @@ namespace Chubrik
                 File.WriteAllBytes(Path.Combine(outDir, d.id + ".png"), sheet.EncodeToPNG());
                 Destroy(sheet);
             }
+        }
+
+        /// <summary>Goes to a world and waits until the portal animation has really finished.</summary>
+        IEnumerator Enter(int w)
+        {
+            Worlds.Enter(w);
+            yield return Wait(0.5f);
+            for (float t = 0; t < 6 && Worlds.Current != w; t += Time.deltaTime) yield return null;
+            yield return Wait(1.3f);
         }
 
         IEnumerator Shot(string name)

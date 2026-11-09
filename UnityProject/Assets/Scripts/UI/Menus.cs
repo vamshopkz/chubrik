@@ -99,16 +99,18 @@ namespace Chubrik
                 }
                 else
                 {
-                    w.Row("Мир 2 — Парящие руины", Save.P.done.Contains(2) ? "Пройден! Можно пройти ещё раз" : "Лёгкий мир с мобами и ящиками", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(2));
-                    bool open3 = Save.P.done.Contains(2);
-                    w.Row("Мир 3 — Кристальные пещеры", !open3 ? "Откроется после Мира 2" : Save.P.done.Contains(3) ? "Пройден! Можно пройти ещё раз" : "Лава, кристаллы и Страж", "ВПЕРЁД", UIKit.Violet, () => Worlds.Enter(3), open3);
-                    bool open4 = Save.P.done.Contains(3);
-                    w.Row("Мир 4 — Снежная Долина", !open4 ? "Откроется после Мира 3" : Save.P.done.Contains(4) ? "Пройден! Можно пройти ещё раз" : "Лёд, снеговики и Король Йети", "ВПЕРЁД", UIKit.Cyan, () => Worlds.Enter(4), open4);
-                    bool open5 = Save.P.done.Contains(4);
-                    bool open6 = Save.P.done.Contains(5);
-                    w.Row("Мир 6: Глюк-мир", !open6 ? "Откроется после Мира 5" : Save.P.done.Contains(6) ? "Пройден! Можно пройти ещё раз" : "Мир-розыгрыш: всё сломалось, и это весело", "ВПЕРЁД", UIKit.Pink, () => Worlds.Enter(6), open6);
-                    w.Row("Мир 5: Джунгли", !open5 ? "Откроется после Мира 4" : Save.P.done.Contains(5) ? "Пройден! Можно пройти ещё раз" : "Река, болото, пирамида и Древний Голем", "ВПЕРЁД", UIKit.Green, () => Worlds.Enter(5), open5);
-                    w.Row("Вернуться к фонтану", "Телепорт в центр лобби", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
+                    void WorldRow(int world, string title, string about, Color col)
+                    {
+                        bool open = Lobby.Open(world);
+                        int need = Lobby.NeedFor(world);
+                        w.Row(title, !open ? $"Спаси {need} друзей (спасено {Save.P.rescued.Count})" : Save.P.done.Contains(world) ? "Пройден! Можно пройти ещё раз" : about, "ВПЕРЁД", col, () => Worlds.Enter(world), open);
+                    }
+                    WorldRow(2, "Мир 2 — Парящие руины", "Лёгкий мир с мобами и ящиками", UIKit.Green);
+                    WorldRow(4, "Мир 4 — Снежная Долина", "Лёд, снеговики и Король Йети", UIKit.Cyan);
+                    WorldRow(5, "Мир 5: Джунгли", "Река, болото, пирамида и Древний Голем", UIKit.Green);
+                    WorldRow(3, "Мир 3 — Кристальные пещеры", "Лава, кристаллы и Страж", UIKit.Violet);
+                    WorldRow(6, "Мир 6: Глюк-мир", "Мир-розыгрыш: всё сломалось, и это весело", UIKit.Pink);
+                    w.Row("Вернуться в центр лобби", "Телепорт к табличке «Лобби Чубриков»", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }
                 w.Row("История Чубрика", "Сюжет: прочитанные главы", "ЧИТАТЬ", UIKit.Pink, Story.Book);
                 w.Row("Главное меню", null, "ВЫЙТИ", UIKit.Red, Main);
