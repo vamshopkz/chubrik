@@ -7,7 +7,7 @@ namespace Chubrik
 {
     /// <summary>
     /// World 1 — the lobby: a sunny safe island without enemies, laid out after the player's own drawn map:
-    /// hub with a river, the winking-cube wardrobe, the red shop and the blue premium shop, portals to all worlds
+    /// hub with a river, the winking-face wardrobe on the floor, the red shop and the blue premium shop, portals to all worlds
     /// behind blue gates that open with rescued friends, a park, snow, jungle, glitch and crystal areas, 10 hidden tokens.
     /// </summary>
     public static class Lobby
@@ -24,7 +24,7 @@ namespace Chubrik
         public static readonly List<Vector3> TokenSpots = new List<Vector3>();
         public static readonly List<LobbyGate> Gates = new List<LobbyGate>();
         /// <summary>Spots the autotest uses.</summary>
-        public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(6, 0.07f, -12), PadTo = new Vector3(-6, 7.6f, 17.5f), CactusPos = new Vector3(-22, 0, 0);
+        public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(19, 0.07f, -5), PadTo = new Vector3(-20, 4.9f, 12), CactusPos = new Vector3(-22, 0, 0);
         /// <summary>Rescued friends needed to open the way to each world.</summary>
         public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, _ => 0 };
         public static bool Open(int world) => Save.P.rescued.Count >= NeedFor(world);
@@ -46,26 +46,49 @@ namespace Chubrik
             Rivers();
             Walls();
             Hub();
-            Wardrobe(new Vector3(-6, 0, 17.5f));
-            Shop(new Vector3(-7.5f, 0, -8.5f));
-            Premium(new Vector3(-7.5f, 0, -17));
+            Wardrobe(new Vector3(-5, 0, 18.2f));
+            Shop(new Vector3(-6.5f, 0, -9.4f));
+            Premium(new Vector3(-6.5f, 0, -17.2f));
             PortalArch(new Vector3(18, 0, 19.5f), 0, 2, "ПАРЯЩИЕ РУИНЫ", "B57CFF", M("9AA3AE", 0.2f), "ruins");
             Park();
             Glitch();
             Jungle();
             Snow();
             CrystalCave();
-            Gates.Add(LobbyGate.Spawn(new Vector3(-3.25f, 0, 23.5f), 0, 4.6f, 4, "СНЕЖНАЯ ДОЛИНА", root));
-            Gates.Add(LobbyGate.Spawn(new Vector3(27, 0, 16.5f), 90, 7.2f, 4, "СНЕЖНАЯ ДОЛИНА", root));
-            Gates.Add(LobbyGate.Spawn(new Vector3(5, 0, -21.5f), 0, 22.2f, 10, "ДЖУНГЛИ", root));
-            Gates.Add(LobbyGate.Spawn(new Vector3(27.6f, 0, -3.5f), 90, 5.2f, 20, "КРИСТАЛЬНАЯ ПЕЩЕРА", root));
-            Gates.Add(LobbyGate.Spawn(new Vector3(-33, 0, -6), 0, 6.2f, 25, "ГЛЮК-МИР 404", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(6.15f, 0, 16.3f), 0, 7.7f, 4, "СНЕЖНАЯ ДОЛИНА", root));     // between the wardrobe and ruins corners
+            Gates.Add(LobbyGate.Spawn(new Vector3(26.6f, 0, 10.4f), 90, 4.4f, 4, "СНЕЖНАЯ ДОЛИНА", root));    // where the river comes in
+            Gates.Add(LobbyGate.Spawn(new Vector3(19.15f, 0, -21.5f), 0, 11.1f, 10, "ДЖУНГЛИ", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(26.6f, 0, 1.5f), 90, 7f, 20, "КРИСТАЛЬНАЯ ПЕЩЕРА", root));
+            Gates.Add(LobbyGate.Spawn(new Vector3(-39.05f, 0, -6.9f), 0, 8.5f, 25, "ГЛЮК-МИР 404", root));
             Clouds();
             Tokens();
             return root;
         }
 
         // ---------------- ground, sea, regions ----------------
+        // Map coordinates follow the drawing: x to the right, z up the sheet. A point is P(x, z, cornerRadius).
+
+        static Vector3 P(float x, float z, float r = 0) => new Vector3(x, r, z);
+
+        /// <summary>Turns corner points into a path with rounded corners (quadratic arcs).</summary>
+        static List<Vector3> Round(Vector3[] p, bool closed)
+        {
+            var o = new List<Vector3>();
+            int n = p.Length;
+            for (int i = 0; i < n; i++)
+            {
+                var b = new Vector3(p[i].x, 0, p[i].z);
+                float r = p[i].y;
+                if ((!closed && (i == 0 || i == n - 1)) || r <= 0.01f) { o.Add(b); continue; }
+                var a = new Vector3(p[(i + n - 1) % n].x, 0, p[(i + n - 1) % n].z);
+                var c = new Vector3(p[(i + 1) % n].x, 0, p[(i + 1) % n].z);
+                float d = Mathf.Min(r, (a - b).magnitude / 2, (c - b).magnitude / 2);
+                var s = b + (a - b).normalized * d; var e = b + (c - b).normalized * d;
+                int seg = Mathf.Clamp((int)(d * 1.3f), 3, 9);
+                for (int k = 0; k <= seg; k++) { float t = k / (float)seg; o.Add((1 - t) * (1 - t) * s + 2 * t * (1 - t) * b + t * t * e); }
+            }
+            return o;
+        }
 
         static void Sea()
         {
@@ -76,24 +99,97 @@ namespace Chubrik
             water.AddComponent<WaterScroll>();
         }
 
-        static GameObject Slab(float x0, float x1, float z0, float z1, Material m)
+        /// <summary>A flat piece of ground in the shape of a (rounded) outline: top at y 0, 2 m thick, with a collider.</summary>
+        static GameObject Ground(string name, Material m, float tile, params Vector3[] pts)
         {
-            var go = Box(new Vector3((x0 + x1) / 2, -1, (z0 + z1) / 2), new Vector3(x1 - x0, 2, z1 - z0), m);
-            B(root, new Vector3((x0 + x1) / 2, -1.6f, (z0 + z1) / 2), new Vector3(x1 - x0 + 0.6f, 1.4f, z1 - z0 + 0.6f), Tiled(Tex.Sand(), 6));   // a sandy rim at the waterline
+            var q = Round(pts, true);
+            float area = 0;
+            for (int i = 0; i < q.Count; i++) { var a = q[i]; var b = q[(i + 1) % q.Count]; area += a.x * b.z - b.x * a.z; }
+            if (area < 0) q.Reverse();   // counter-clockwise seen from above
+            int n = q.Count;
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            foreach (var p in q) { v.Add(p); uv.Add(new Vector2(p.x, p.z) / tile); }
+            // ear clipping
+            var idx = new List<int>(); for (int i = 0; i < n; i++) idx.Add(i);
+            int guard = 0;
+            while (idx.Count > 3 && guard++ < 10000)
+            {
+                bool cut = false;
+                for (int i = 0; i < idx.Count; i++)
+                {
+                    int ia = idx[(i + idx.Count - 1) % idx.Count], ib = idx[i], ic = idx[(i + 1) % idx.Count];
+                    Vector2 A = new Vector2(q[ia].x, q[ia].z), Bp = new Vector2(q[ib].x, q[ib].z), C = new Vector2(q[ic].x, q[ic].z);
+                    if (Cross(Bp - A, C - Bp) <= 1e-5f) continue;   // reflex corner
+                    bool inside = false;
+                    foreach (int j in idx)
+                    {
+                        if (j == ia || j == ib || j == ic) continue;
+                        var P2 = new Vector2(q[j].x, q[j].z);
+                        if (Cross(Bp - A, P2 - A) > 1e-4f && Cross(C - Bp, P2 - Bp) > 1e-4f && Cross(A - C, P2 - C) > 1e-4f) { inside = true; break; }
+                    }
+                    if (inside) continue;
+                    tr.Add(ia); tr.Add(ic); tr.Add(ib);   // clockwise from above = facing up
+                    idx.RemoveAt(i); cut = true; break;
+                }
+                if (!cut) break;
+            }
+            if (idx.Count == 3) { tr.Add(idx[0]); tr.Add(idx[2]); tr.Add(idx[1]); }
+            // the sides, 2 m down
+            for (int i = 0; i < n; i++)
+            {
+                var a = q[i]; var b = q[(i + 1) % n];
+                int s = v.Count;
+                float len = (b - a).magnitude;
+                v.Add(a); v.Add(b); v.Add(a + Vector3.down * 2); v.Add(b + Vector3.down * 2);
+                uv.Add(new Vector2(0, 0)); uv.Add(new Vector2(len / tile, 0)); uv.Add(new Vector2(0, -2 / tile)); uv.Add(new Vector2(len / tile, -2 / tile));
+                // outward normal of a counter-clockwise outline is to the right of the edge
+                var outN = new Vector3(b.z - a.z, 0, -(b.x - a.x));
+                var nrm = Vector3.Cross(v[s + 1] - v[s], v[s + 2] - v[s]);
+                if (Vector3.Dot(nrm, outN) >= 0) { tr.Add(s); tr.Add(s + 1); tr.Add(s + 2); tr.Add(s + 1); tr.Add(s + 3); tr.Add(s + 2); }
+                else { tr.Add(s); tr.Add(s + 2); tr.Add(s + 1); tr.Add(s + 1); tr.Add(s + 2); tr.Add(s + 3); }
+            }
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            var go = new GameObject(name);
+            go.layer = Layers.World;
+            go.transform.SetParent(root, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = m;
+            go.AddComponent<MeshCollider>().sharedMesh = mesh;
             return go;
         }
 
+        /// <summary>The magenta/black «missing texture» checker, repeating (for the glitch floor).</summary>
+        static Texture2D CheckerTex()
+        {
+            var t = new Texture2D(64, 64, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat };
+            var px = new Color32[64 * 64];
+            for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) px[y * 64 + x] = ((x / 16) + (y / 16)) % 2 == 0 ? new Color32(255, 0, 220, 255) : new Color32(20, 20, 24, 255);
+            t.SetPixels32(px); t.Apply(false, true);
+            return t;
+        }
+
+        static float Cross(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
+
+        static Material GroundMat(Texture2D t, float smooth = 0.15f) => Mats.Tex(t, Color.white, smooth);
+
+        /// <summary>The areas of the drawing, each in its own shape.</summary>
         static void Regions()
         {
-            Slab(-12, 27, -21.5f, 23.5f, grass);                 // the hub
-            Slab(-49, -12, -6, 17, grass);                        // the park
-            var g = Slab(-45, -22, -22, -6, checker);             // the glitch area
-            g.GetComponent<Renderer>().sharedMaterial = checker;
-            Slab(-8, 26, -51, -21.5f, Tiled(Tex.Grass(), 8));     // the jungle
-            Slab(-6, 49, 23.5f, 50, snowM);                       // the snowy valley
-            Slab(27, 49, 7, 23.5f, snowM);
-            Slab(27, 29, -6, -1, Tiled(Tex.Concrete(), 2));       // the corridor to the crystal cave
-            Disc(new Vector3(39, 0, -8.5f), 11, 2, Tiled(Tex.Concrete(), 6));
+            var g = GroundMat(Tex.Grass());
+            // the hub with the wardrobe corner (top left), the ruins corner (top right) and the shop corner (bottom left)
+            Ground("Hub", g, 4, P(-11, 23, 3), P(2.3f, 23), P(2.3f, 16.3f), P(10, 16.3f), P(10, 23.7f), P(26.6f, 23.7f), P(26.6f, -21.5f), P(-11, -21.5f, 3));
+            // the park with the pond corner and the notch on its left side
+            Ground("Park", g, 4, P(-50.7f, 17.5f, 3), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f), P(-50.7f, 0.6f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-50.7f, 10.4f, 1.5f));
+            // the glitch checkerboard with the portal nook on its left
+            Ground("Glitch", GroundMat(CheckerTex(), 0.2f), 7, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f, 2));
+            Ground("Jungle", g, 3.5f, P(-8.5f, -21.5f), P(26.6f, -21.5f), P(26.6f, -53, 3), P(-8.5f, -53, 3));
+            // the snowy valley round the top of the hub, down the right side to the crystal cave
+            Ground("Snow", GroundMat(Tex.Snow()), 7, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 6.8f), P(26.6f, 6.8f), P(26.6f, 23.7f), P(10, 23.7f), P(10, 16.3f), P(2.3f, 16.3f), P(2.3f, 23));
+            // the crystal cave: a round grey cave right of the hub
+            var cave = GroundMat(Tex.Concrete(), 0.3f); cave.color = Hex("6A6480");
+            Ground("CrystalCave", cave, 4, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
         }
 
         static void Water(Vector3 a, Vector3 b, float w)
@@ -103,14 +199,17 @@ namespace Chubrik
             go.transform.rotation = Quaternion.LookRotation(d);
         }
 
-        /// <summary>The river from the snowy lake down through the hub into the jungle (shallow: you can wade it).</summary>
+        /// <summary>The river from the snowy lake down the right side, through the hub and into the jungle pool (shallow: you can wade it).</summary>
         static void Rivers()
         {
-            Vector3[] p = { new Vector3(36, 0, 31), new Vector3(34, 0, 24), new Vector3(29, 0, 17.5f), new Vector3(23, 0, 12), new Vector3(17, 0, 6), new Vector3(12, 0, 0),
-                            new Vector3(9, 0, -8), new Vector3(8, 0, -16), new Vector3(9, 0, -25), new Vector3(10, 0, -36), new Vector3(9, 0, -48) };
+            Vector3[] p = { new Vector3(39.6f, 0, 42), new Vector3(39.6f, 0, 32), new Vector3(39, 0, 25), new Vector3(35, 0, 17), new Vector3(29, 0, 10.5f), new Vector3(22, 0, 9),
+                            new Vector3(16, 0, 5), new Vector3(12, 0, -2.5f), new Vector3(10, 0, -12), new Vector3(9, 0, -21), new Vector3(10, 0, -28) };
             for (int i = 0; i < p.Length - 1; i++) Water(p[i], p[i + 1], 4.4f);
-            // the lake in the snowy valley
-            Prim.Make(PrimitiveType.Cube, root, new Vector3(39, 0.03f, 40), new Vector3(18, 0.04f, 18), waterM, "Lake", Layers.World).AddComponent<WaterScroll>();
+            // the lake in the snowy valley: along the top and down the right
+            Prim.Make(PrimitiveType.Cube, root, new Vector3(31.8f, 0.03f, 46.6f), new Vector3(31, 0.04f, 6.4f), waterM, "Lake", Layers.World).AddComponent<WaterScroll>();
+            Prim.Make(PrimitiveType.Cube, root, new Vector3(42.6f, 0.03f, 42.8f), new Vector3(9.8f, 0.04f, 10.4f), waterM, "Lake", Layers.World);
+            // the jungle pool where the river ends
+            Prim.Make(PrimitiveType.Cylinder, root, new Vector3(13, 0.035f, -29.5f), new Vector3(16, 0.02f, 13.5f), waterM, "Pool", Layers.World);
             // stepping stones over the river by the hub
             for (int k = 0; k < 4; k++) Solid(PrimitiveType.Cylinder, new Vector3(9.6f + k * 1.3f, 0.1f, -2.5f + k * 0.7f), new Vector3(0.9f, 0.1f, 0.9f), M("9AA0A8", 0.3f));
         }
@@ -125,46 +224,36 @@ namespace Chubrik
             B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.15f, 0.06f, 1.02f), M("8A919C", 0.3f));   // a stone cap
         }
 
-        static void WallsX(float z, float x0, float x1, params float[] gaps)
+        /// <summary>A wall along the drawn line, with rounded corners.</summary>
+        static void WallPath(float h, params Vector3[] p)
         {
-            float a = x0;
-            for (int i = 0; i + 1 < gaps.Length; i += 2) { Wall(new Vector3(a, 0, z), new Vector3(gaps[i], 0, z)); a = gaps[i + 1]; }
-            Wall(new Vector3(a, 0, z), new Vector3(x1, 0, z));
+            var q = Round(p, false);
+            for (int i = 0; i < q.Count - 1; i++) Wall(q[i], q[i + 1], h);
         }
 
-        static void WallsZ(float x, float z0, float z1, params float[] gaps)
-        {
-            float a = z0;
-            for (int i = 0; i + 1 < gaps.Length; i += 2) { Wall(new Vector3(x, 0, a), new Vector3(x, 0, gaps[i])); a = gaps[i + 1]; }
-            Wall(new Vector3(x, 0, a), new Vector3(x, 0, z1));
-        }
-
+        /// <summary>Every grey line of the drawing; the breaks are the blue gates and the ways through.</summary>
         static void Walls()
         {
-            // hub
-            WallsX(23.5f, -12, 27, -5.6f, -0.9f);                // wardrobe gate to the snow
-            WallsZ(27, -21.5f, 23.5f, -6.2f, -0.8f, 12.9f, 20.1f); // crystal gate, river gate
-            WallsX(-21.5f, -12, 27, -6.1f, 16.1f);               // jungle gate
-            WallsZ(-12, -21.5f, -6); WallsZ(-12, 17, 23.5f);
-            // park
-            WallsX(17, -49, -12); WallsZ(-49, -6, 17);
-            WallsX(-6, -49, -12, -36.1f, -29.9f);                // glitch gate
-            // glitch area
-            WallsZ(-45, -22, -6); WallsX(-22, -45, -22); WallsZ(-22, -22, -6);
-            // jungle
-            WallsZ(-8, -51, -21.5f); WallsX(-51, -8, 26); WallsZ(26, -51, -21.5f);
-            // snowy valley
-            WallsX(50, -6, 49); WallsZ(-6, 23.5f, 50); WallsZ(49, 7, 50); WallsX(7, 27, 49);
-            // the crystal cave: a round wall with an opening to the west
-            var c = new Vector3(39, 0, -8.5f);
-            for (int k = 0; k < 16; k++)
-            {
-                float a0 = k * Mathf.PI * 2 / 16, a1 = (k + 1) * Mathf.PI * 2 / 16;
-                float mid = (a0 + a1) / 2;
-                if (Mathf.Abs(Mathf.DeltaAngle(mid * Mathf.Rad2Deg, 180)) < 18) continue;   // the way in
-                Wall(c + new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0)) * 11, c + new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1)) * 11, 7);
-            }
-            Wall(new Vector3(27, 0, -6.2f), new Vector3(28.6f, 0, -6.2f)); Wall(new Vector3(27, 0, -0.8f), new Vector3(28.6f, 0, -0.8f));
+            // the hub: left side with the shop corner, the wardrobe corner, the dip with the snow gate, the ruins corner
+            WallPath(5.5f, P(13.6f, -21.5f), P(-11, -21.5f, 3), P(-11, -4.6f));                       // jungle line left of the gate, shop corner
+            WallPath(5.5f, P(-11, -0.8f), P(-11, 23, 3), P(2.3f, 23, 2), P(2.3f, 16.3f));              // (a way into the park at the bottom), wardrobe corner
+            WallPath(5.5f, P(10, 16.3f), P(10, 23.7f, 2), P(26.6f, 23.7f, 3), P(26.6f, 12.6f));        // snow gate between the corners, ruins corner
+            WallPath(5.5f, P(26.6f, 8.2f), P(26.6f, 5));                                                // river gate above, crystal gate below
+            WallPath(5.5f, P(26.6f, -2), P(26.6f, -53, 3), P(-8.5f, -53, 3), P(-8.5f, -21.5f));        // hub right side, the jungle
+            WallPath(5.5f, P(26.6f, -21.5f), P(24.7f, -21.5f));                                         // right of the jungle gate
+            WallPath(5.5f, P(-11, -5.3f), P(4, -5.3f));                                                 // the line above the shops (in by the river)
+            WallPath(5.5f, P(-8.5f, -40.3f), P(2.6f, -40.3f));                                          // the jungle portal nook
+            // the park, the glitch checkerboard below it
+            WallPath(5.5f, P(-11, 17.5f), P(-50.7f, 17.5f, 3), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-50.7f, 0.6f, 1.5f),
+                     P(-50.7f, -16.3f, 2), P(-44, -16.3f, 1), P(-44, -24, 2), P(-22.6f, -24, 2), P(-22.6f, -6.9f));
+            WallPath(5.5f, P(-50.7f, -6.9f), P(-43.3f, -6.9f));                                         // glitch gate in this line
+            WallPath(5.5f, P(-34.8f, -6.9f), P(-11, -6.9f));
+            // the snowy valley: the big outline, the line round the portal hollow, the lake corner
+            WallPath(5.5f, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 5.5f));
+            WallPath(5.5f, P(-5.9f, 28.5f), P(-4, 35.5f, 3), P(3, 37, 3), P(35.5f, 37));               // the hollow is reached through the water cave
+            WallPath(5.5f, P(16.5f, 49.8f), P(15.8f, 43.5f));
+            // the crystal cave
+            WallPath(7, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
         }
 
         // ---------------- the hub ----------------
@@ -176,20 +265,20 @@ namespace Chubrik
             Sign(new Vector3(-3.6f, 0, 8.8f), 0, "ЛОББИ ЧУБРИКОВ", "3D8BFF", 5f);
             Bench(new Vector3(4.5f, 0, 8), 200); Bench(new Vector3(-5, 0, 0), 100);
             Lamp(new Vector3(4, 0, 0)); Lamp(new Vector3(-4, 0, 8));
-            foreach (var p in new[] { new Vector3(-9, 0, 7), new Vector3(3, 0, 15), new Vector3(-9, 0, -2), new Vector3(20, 0, -10), new Vector3(22, 0, 3), new Vector3(1, 0, -16), new Vector3(15, 0, -17), new Vector3(-2, 0, 20.5f) })
+            foreach (var p in new[] { new Vector3(-9, 0, 7), new Vector3(3, 0, 13.5f), new Vector3(-8, 0, 11), new Vector3(21, 0, -10), new Vector3(22, 0, 3), new Vector3(1, 0, -16), new Vector3(15, 0, -17), new Vector3(-9.5f, 0, 14) })
                 Tree(p, 0.95f, (int)(p.x * 7 + p.z));
             Flowers(new Vector3(6, 0, 2), 14, 70, 5);
-            // a mushroom up to the shop roof and a teleport pad up to the wardrobe roof
+            // a mushroom up to the shop roof and a teleport pad up to the tree house in the park
             Mushroom(TestMushroom, 18.5f);
             TokenSpots.Add(TestMushroom + Vector3.up * 6.2f);                   // high over the mushroom
-            TokenSpots.Add(new Vector3(-10.5f, 1, 22.2f));                       // hidden behind the wardrobe
+            TokenSpots.Add(new Vector3(-9.8f, 1, 22));                           // hidden in the wardrobe corner
             Pad(PadFrom, PadTo, 0, "35E0FF");
             // training corner: crates and target dummies
             var crate = Tiled(Tex.Planks("C08040"), 1);
             var rng = new Rng(4);
             for (int k = 0; k < 5; k++)
             {
-                var p = new Vector3(19 + (k % 3) * 1.8f, 0.55f + (k / 3) * 1.1f, 16 - (k % 2) * 1.2f);
+                var p = new Vector3(19.5f + (k % 3) * 1.8f, 0.55f + (k / 3) * 1.1f, -14 - (k % 2) * 1.2f);
                 var b = Box(p, Vector3.one * 1.1f, crate, rng.F(-10, 10));
                 B(b.transform, Vector3.zero, new Vector3(1.04f, 0.15f, 1.04f), M("6D4425"));
                 b.AddComponent<Breakable>().coins = 0;
@@ -199,28 +288,33 @@ namespace Chubrik
 
         // ---------------- buildings ----------------
 
-        /// <summary>The wardrobe: a big grey cube with a smiling, winking face.</summary>
+        /// <summary>The wardrobe from the drawing: a flat grey square right on the floor with a face on it —
+        /// a smile, one open eye and one winking eye. Step on it to open the wardrobe.</summary>
         static void Wardrobe(Vector3 c)
         {
-            var grey = M("A8AEB8", 0.3f); var dark = M("2A2E36", 0.5f); var pink = M("FF8FA8", 0.3f);
-            Box(c + Vector3.up * 3.5f, new Vector3(9, 7, 7), grey);
-            B(root, c + new Vector3(0, 7.05f, 0), new Vector3(9.3f, 0.12f, 7.3f), M("8A919C", 0.3f));
-            float f = c.z - 3.52f;   // the front face (towards the hub)
-            // the open eye
-            Cy(root, new Vector3(c.x - 2, 4.6f, f), new Vector3(1.6f, 0.05f, 1.9f), M("FFFFFF", 0.4f), new Vector3(90, 0, 0));
-            Cy(root, new Vector3(c.x - 2, 4.4f, f - 0.03f), new Vector3(0.8f, 0.05f, 1f), dark, new Vector3(90, 0, 0));
-            Cy(root, new Vector3(c.x - 1.8f, 4.7f, f - 0.06f), new Vector3(0.25f, 0.05f, 0.25f), M("FFFFFF"), new Vector3(90, 0, 0));
+            var grey = M("A8AEB8", 0.3f); var frame = M("7E8590", 0.3f); var dark = M("2A2E36", 0.5f); var pink = M("FF8FA8", 0.3f);
+            const float W = 7.5f, D = 6f, top = 0.12f;
+            Box(c + Vector3.up * top / 2, new Vector3(W, top, D), grey);
+            foreach (var sd in new[] { -1, 1 })
+            {
+                B(root, c + new Vector3(sd * (W / 2 - 0.2f), top + 0.01f, 0), new Vector3(0.4f, 0.02f, D), frame);
+                B(root, c + new Vector3(0, top + 0.01f, sd * (D / 2 - 0.2f)), new Vector3(W, 0.02f, 0.4f), frame);
+            }
+            float y = top + 0.012f;
+            // the open eye (top left, as on the drawing)
+            var eye = c + new Vector3(-1.7f, y, 1.2f);
+            Cy(root, eye, new Vector3(1.8f, 0.01f, 1.8f), M("FFFFFF", 0.4f));
+            Cy(root, eye + new Vector3(0.1f, 0.006f, -0.1f), new Vector3(0.9f, 0.01f, 0.9f), dark);
+            Cy(root, eye + new Vector3(0.3f, 0.012f, 0.12f), new Vector3(0.28f, 0.01f, 0.28f), M("FFFFFF"));
             // the winking eye: a happy closed arc
-            for (int k = 0; k < 7; k++) { float a = (k / 6f - 0.5f) * 2.4f; B(root, new Vector3(c.x + 2 + Mathf.Sin(a) * 0.9f, 4.5f + Mathf.Cos(a) * 0.35f, f - 0.03f), new Vector3(0.3f, 0.18f, 0.05f), dark, new Vector3(0, 0, -a * 30)); }
-            // the smile and the cheeks
-            for (int k = 0; k < 11; k++) { float a = (k / 10f - 0.5f) * 2.6f; Cy(root, new Vector3(c.x + Mathf.Sin(a) * 2.2f, 2.4f - Mathf.Cos(a) * 0.9f + 0.9f, f - 0.03f), new Vector3(0.45f, 0.05f, 0.45f), dark, new Vector3(90, 0, 0)); }
-            foreach (var sd in new[] { -1, 1 }) Cy(root, new Vector3(c.x + sd * 3.3f, 3f, f - 0.02f), new Vector3(1.2f, 0.05f, 0.7f), pink, new Vector3(90, 0, 0));
-            var t = Prim.Text(root, "ГАРДЕРОБ", new Vector3(c.x, 6.4f, f - 0.05f), 6, Hex("FFFFFF"));
-            t.transform.rotation = Quaternion.identity;
-            Npc(new Vector3(c.x - 4, 0.05f, f - 1.5f), 160, "hat_4", "neck_5", "top_5", "color_3", "emote_5", "shoes_4");
-            Npc(new Vector3(c.x + 4, 0.05f, f - 1.5f), 200, "hat_6", "wings_0", "color_7", "tail_4", "emote_1", "weapon_2");
-            Zones.Add(new Vector3(c.x, 0, f - 1.6f), 3.4f, "ГАРДЕРОБ", () => WardrobeUI.Open(), () => Worlds.Current == 1);
-            TokenSpots.Add(c + new Vector3(2.5f, 8, 0.5f));                    // on the roof (the teleport pad brings you up)
+            for (int k = 0; k < 9; k++) { float a = (k / 8f - 0.5f) * 2.4f; Cy(root, c + new Vector3(1.7f + Mathf.Sin(a) * 0.9f, y, 1.0f + Mathf.Cos(a) * 0.45f), new Vector3(0.36f, 0.01f, 0.36f), dark); }
+            // the smile
+            for (int k = 0; k < 15; k++) { float a = (k / 14f - 0.5f) * 2.6f; Cy(root, c + new Vector3(Mathf.Sin(a) * 2.1f, y, -0.9f - Mathf.Cos(a) * 0.75f), new Vector3(0.42f, 0.01f, 0.42f), dark); }
+            foreach (var sd in new[] { -1, 1 }) Cy(root, c + new Vector3(sd * 2.85f, y, -0.3f), new Vector3(1.1f, 0.01f, 0.65f), pink);
+            Sign(c + new Vector3(0, 0, D / 2 + 0.8f), 0, "ГАРДЕРОБ", "FF5FA2", 5f);
+            Npc(new Vector3(c.x - W / 2 - 1.1f, 0.05f, c.z - 1.2f), 160, "hat_4", "neck_5", "top_5", "color_3", "emote_5", "shoes_4");
+            Npc(new Vector3(c.x + W / 2 + 1.1f, 0.05f, c.z - 1.2f), 200, "hat_6", "wings_0", "color_7", "tail_4", "emote_1", "weapon_2");
+            Zones.Add(c, 4.2f, "ГАРДЕРОБ", () => WardrobeUI.Open(), () => Worlds.Current == 1);
         }
 
         /// <summary>The red shop: 100 coins, extra hearts, the coin pointer.</summary>
@@ -244,7 +338,7 @@ namespace Chubrik
             Npc(b.TransformPoint(new Vector3(0, 0.2f, -0.6f)), b.eulerAngles.y + 180, "hat_0", "top_4", "color_1", "emote_6", "eyes_1");
             Zones.Add(b.TransformPoint(new Vector3(0, 0, 2.6f)), 3.2f, "МАГАЗИН", () => ShopUI.Open(), () => Worlds.Current == 1);
             var crate = Tiled(Tex.Planks("C08040"), 1);
-            Box(c + new Vector3(3.2f, 0.6f, 3.6f), new Vector3(1.3f, 1.2f, 1.3f), crate);
+            Box(c + new Vector3(3.4f, 0.6f, -3.0f), new Vector3(1.3f, 1.2f, 1.3f), crate);
             TokenSpots.Add(c + new Vector3(0, 5.4f, 0));
         }
 
@@ -311,18 +405,18 @@ namespace Chubrik
 
         static void Park()
         {
-            // the heart-shaped pond
-            var pc = new Vector3(-41, 0, 11);
-            foreach (var o in new[] { new Vector3(-1.6f, 0, 1.2f), new Vector3(1.6f, 0, 1.2f) }) Prim.Make(PrimitiveType.Cylinder, root, pc + o + Vector3.up * 0.03f, new Vector3(4.2f, 0.02f, 4.2f), waterM, "Pond", Layers.World);
-            var tip = Prim.Make(PrimitiveType.Cube, root, pc + new Vector3(0, 0.03f, -0.9f), new Vector3(4.2f, 0.04f, 4.2f), waterM, "Pond", Layers.World);
+            // the pond in the top left corner
+            var pc = new Vector3(-46.2f, 0, 14.4f);
+            foreach (var o in new[] { new Vector3(-1.3f, 0, 0.9f), new Vector3(1.3f, 0, 0.9f) }) Prim.Make(PrimitiveType.Cylinder, root, pc + o + Vector3.up * 0.03f, new Vector3(3.4f, 0.02f, 3.4f), waterM, "Pond", Layers.World);
+            var tip = Prim.Make(PrimitiveType.Cube, root, pc + new Vector3(0, 0.03f, -0.7f), new Vector3(3.4f, 0.04f, 3.4f), waterM, "Pond", Layers.World);
             tip.transform.rotation = Quaternion.Euler(0, 45, 0);
-            Solid(PrimitiveType.Sphere, pc + new Vector3(0, 0.3f, 0.5f), new Vector3(1.6f, 0.9f, 1.6f), M("9AA0A8", 0.2f));
-            TokenSpots.Add(pc + new Vector3(0, 1.4f, 0.5f));
-            foreach (var p in new[] { new Vector3(-32, 0, 12), new Vector3(-26, 0, 4), new Vector3(-33, 0, 3), new Vector3(-22, 0, 12), new Vector3(-17, 0, 5), new Vector3(-44, 0, 1), new Vector3(-38, 0, -2) })
+            Solid(PrimitiveType.Sphere, pc + new Vector3(0, 0.3f, 0.4f), new Vector3(1.4f, 0.8f, 1.4f), M("9AA0A8", 0.2f));
+            TokenSpots.Add(pc + new Vector3(0, 1.3f, 0.4f));
+            foreach (var p in new[] { new Vector3(-30, 0, 13), new Vector3(-37, 0, 7.8f), new Vector3(-30, 0, 3.3f), new Vector3(-40, 0, -2), new Vector3(-16, 0, 6.5f), new Vector3(-36, 0, 14) })
                 Tree(p, 1f, (int)(p.x * 3 - p.z));
-            Flowers(new Vector3(-30, 0, 6), 14, 90, 9);
-            Bench(new Vector3(-36, 0, 7), 0); Bench(new Vector3(-28, 0, 14.5f), 180);
-            TreeHouse(new Vector3(-20, 0, 14));
+            Flowers(new Vector3(-30, 0, 6), 13, 90, 9);
+            Bench(new Vector3(-36, 0, 3), 0); Bench(new Vector3(-26, 0, 15.5f), 180);
+            TreeHouse(new Vector3(-20, 0, 12));
             // the training cactus (bumps you back, no hearts lost here)
             var cac = Node("Cactus", root, CactusPos);
             var green = M("43A047", 0.3f);
@@ -338,7 +432,7 @@ namespace Chubrik
             Sign(CactusPos + new Vector3(0, 0, 2.5f), 180, "КАКТУС-ТРЕНЕР: НЕ БОЛЬНО", "43A047", 4.6f);
             for (int k = 0; k < 3; k++)
             {
-                var d = Node("Dummy", root, new Vector3(-26 + k * 2.4f, 0, -3));
+                var d = Node("Dummy", root, new Vector3(-29 + k * 2.4f, 0, -3.5f));
                 Solid(PrimitiveType.Cylinder, new Vector3(0, 0.6f, 0), new Vector3(0.2f, 0.6f, 0.2f), M("8D5524"), default, d);
                 Solid(PrimitiveType.Sphere, new Vector3(0, 1.5f, 0), new Vector3(0.9f, 1.1f, 0.9f), M("F2D7A0", 0.1f), default, d);
                 Cy(d, new Vector3(0, 1.6f, 0.45f), new Vector3(0.5f, 0.01f, 0.5f), Mats.UnlitTex(Tex.Target(), Color.white), new Vector3(90, 0, 0));
@@ -351,74 +445,83 @@ namespace Chubrik
         {
             var r = new Rng(66);
             for (int k = 0; k < 6; k++)
-                Box(new Vector3(r.F(-42, -26), 0.8f + (k % 2) * 0.8f, r.F(-20, -10)), new Vector3(1.6f, 1.6f + (k % 2) * 1.6f, 1.6f), checker, r.F(0, 45));
+                Box(new Vector3(r.F(-40, -26), 0.8f + (k % 2) * 0.8f, r.F(-21, -11)), new Vector3(1.6f, 1.6f + (k % 2) * 1.6f, 1.6f), checker, r.F(0, 45));
             TokenSpots.Add(new Vector3(-30, 5, -14));
-            Mushroom(new Vector3(-30, 0, -18), 17f);
-            PortalArch(new Vector3(-42, 0, -14), 90, 6, "ГЛЮК-МИР 404", "FF5FD2", checker, "glitch");
+            Mushroom(new Vector3(-30, 0, -19), 17f);
+            // the portal in the little nook on the left, facing the checkerboard
+            PortalArch(new Vector3(-47.6f, 0, -11.6f), 270, 6, "ГЛЮК-МИР 404", "FF5FD2", checker, "glitch");
         }
 
         static void Jungle()
         {
-            foreach (var p in new[] { new Vector3(-4, 0, -27), new Vector3(20, 0, -27), new Vector3(16, 0, -44), new Vector3(-5, 0, -36), new Vector3(22, 0, -38), new Vector3(3, 0, -30) })
+            foreach (var p in new[] { new Vector3(-4.5f, 0, -26), new Vector3(24, 0, -27.5f), new Vector3(14, 0, -43), new Vector3(-4.5f, 0, -34), new Vector3(23, 0, -48), new Vector3(1, 0, -29) })
                 Tree(p, 1.15f, (int)(p.z * 5));
             // the striped posts from the drawing
-            foreach (var p in new[] { new Vector3(-1, 0, -33), new Vector3(18, 0, -32) })
+            foreach (var p in new[] { new Vector3(0.5f, 0, -36), new Vector3(21, 0, -35) })
             {
                 var stripes = Mats.Tex(Patterns.Stripes("D9822B", "6B4A2A", 6, true), Color.white, 0.3f);
                 Solid(PrimitiveType.Cylinder, p + Vector3.up * 1.6f, new Vector3(0.8f, 1.6f, 0.8f), stripes);
                 Disc(p + Vector3.up * 3.3f, 0.7f, 0.2f, M("6B4A2A", 0.3f));
             }
-            TokenSpots.Add(new Vector3(18, 4.2f, -32));
-            Mushroom(new Vector3(16, 0, -30.5f), 15f);
-            Flowers(new Vector3(5, 0, -38), 10, 60, 13);
-            PortalArch(new Vector3(-2, 0, -45), 180, 5, "ДЖУНГЛИ", "6EDC3C", M("8A8A6A", 0.2f), "jungle");
+            TokenSpots.Add(new Vector3(21, 4.2f, -35));
+            Mushroom(new Vector3(18, 0, -40), 15f);
+            Flowers(new Vector3(10, 0, -47), 7, 60, 13);
+            // the portal in its nook at the bottom left, facing the jungle
+            PortalArch(new Vector3(-4.2f, 0, -46.6f), 270, 5, "ДЖУНГЛИ", "6EDC3C", M("8A8A6A", 0.2f), "jungle");
         }
 
         static void Snow()
         {
-            foreach (var p in new[] { new Vector3(-2, 0, 30), new Vector3(10, 0, 33), new Vector3(15, 0, 46), new Vector3(22, 0, 29), new Vector3(-3, 0, 46), new Vector3(30, 0, 13), new Vector3(42, 0, 10), new Vector3(25, 0, 40) })
+            foreach (var p in new[] { new Vector3(1.3f, 0, 28), new Vector3(10.4f, 0, 27.3f), new Vector3(20.8f, 0, 28.6f), new Vector3(30, 0, 33), new Vector3(40.5f, 0, 10),
+                                      new Vector3(-1.5f, 0, 41), new Vector3(12.5f, 0, 40) })
             {
                 Pine(p, 1.2f);
                 S(root, p + Vector3.up * 3.2f, new Vector3(1.6f, 0.4f, 1.6f), M("FFFFFF", 0.1f));
             }
             var rng = new Rng(51);
-            for (int k = 0; k < 14; k++) S(root, new Vector3(rng.F(-4, 28), 0, rng.F(26, 48)), new Vector3(rng.F(1.2f, 2.6f), rng.F(0.5f, 1f), rng.F(1.2f, 2.6f)), M("F4FAFF", 0.15f));
+            for (int k = 0; k < 10; k++) S(root, new Vector3(rng.F(-3, 32), 0, rng.F(25, 34)), new Vector3(rng.F(1.2f, 2.6f), rng.F(0.5f, 1f), rng.F(1.2f, 2.6f)), M("F4FAFF", 0.15f));
             // a snowman by the portal
-            S(root, new Vector3(12, 0.6f, 42), 1.2f, M("FFFFFF", 0.15f)); S(root, new Vector3(12, 1.45f, 42), 0.85f, M("FFFFFF", 0.15f)); S(root, new Vector3(12, 2.1f, 42), 0.6f, M("FFFFFF", 0.15f));
-            Cone(root, new Vector3(12, 2.1f, 41.7f), new Vector3(0.1f, 0.3f, 0.1f), M("FF8A1E"), new Vector3(-90, 0, 0));
-            PortalArch(new Vector3(5, 0, 44), 0, 4, "СНЕЖНАЯ ДОЛИНА", "8FD8FF", Glass("A8DCFF", 0.85f), "snow");
-            // the water cave by the lake: a rocky dome with water inside and a token
+            var sm = new Vector3(11, 0, 44.5f);
+            S(root, sm + Vector3.up * 0.6f, 1.2f, M("FFFFFF", 0.15f)); S(root, sm + Vector3.up * 1.45f, 0.85f, M("FFFFFF", 0.15f)); S(root, sm + Vector3.up * 2.1f, 0.6f, M("FFFFFF", 0.15f));
+            Cone(root, sm + new Vector3(0, 2.1f, -0.3f), new Vector3(0.1f, 0.3f, 0.1f), M("FF8A1E"), new Vector3(-90, 0, 0));
+            // the portal in the hollow at the top: you get there through the water cave
+            PortalArch(new Vector3(5.2f, 0, 44.2f), 0, 4, "СНЕЖНАЯ ДОЛИНА", "8FD8FF", Glass("A8DCFF", 0.85f), "snow");
+            TokenSpots.Add(new Vector3(-3, 1, 47.5f));
+            // the water cave: a rocky tunnel along the south shore of the lake, from the river to the hollow
             var rock = M("8A93A0", 0.2f);
-            var cc = new Vector3(41, 0, 44);
-            for (int k = 0; k < 9; k++)
+            for (float x = 17; x <= 36; x += 3.8f)
             {
-                float a = k * Mathf.PI / 8;   // the back half (north): the cave opens towards the lake
-                Solid(PrimitiveType.Cube, cc + new Vector3(Mathf.Cos(a) * 5, 2.5f, Mathf.Sin(a) * 5), new Vector3(2.4f, 5, 1.2f), rock, new Vector3(0, -a * Mathf.Rad2Deg + 90, 0));
+                B(root, new Vector3(x, 5.9f, 40.2f), new Vector3(2.4f, 1.2f, 7.6f), rock);
+                S(root, new Vector3(x + 1.9f, 6.3f, 38.6f), new Vector3(4.2f, 2f, 3.6f), rock);
+                Spike(root, new Vector3(x + 1.2f, 5.4f, 41.5f), new Vector3(x + 1.2f, 4.2f, 41.5f), 0.3f, M("BFE8FF", 0.8f));
+                S(root, new Vector3(x, 0.4f, 43.3f), new Vector3(1.6f, 0.9f, 1.3f), rock);
             }
-            Solid(PrimitiveType.Sphere, cc + new Vector3(0, 4.6f, 1.5f), new Vector3(11, 4, 8), rock);
-            for (int k = 0; k < 6; k++) Spike(root, cc + new Vector3(-3 + k * 1.2f, 2.8f, 0), cc + new Vector3(-3 + k * 1.2f, 1.8f, 0), 0.3f, M("BFE8FF", 0.8f));
-            TokenSpots.Add(cc + new Vector3(0, 1, -1));
-            Sign(new Vector3(36, 0, 31.5f), 0, "ПЕЩЕРА С ВОДОЙ", "35E0FF", 4);
+            for (int k = 0; k < 4; k++) S(root, new Vector3(19 + k * 5.5f, 3.6f, 37.9f), 0.5f, G("7FE3FF", 1.6f));
+            // the rock on the far side of the river
+            Box(new Vector3(44.6f, 2.5f, 32.4f), new Vector3(5.8f, 5, 10.6f), rock);
+            for (int k = 0; k < 3; k++) S(root, new Vector3(44.6f, 5f, 28.6f + k * 3.6f), new Vector3(6.4f, 2.4f, 4f), rock);
+            TokenSpots.Add(new Vector3(26, 1, 40.5f));
+            Sign(new Vector3(33.4f, 0, 35.6f), 0, "ПЕЩЕРА С ВОДОЙ", "35E0FF", 4);
         }
 
         static void CrystalCave()
         {
-            var c = new Vector3(39, 0, -8.5f);
+            var c = new Vector3(38.6f, 0, -8.6f);
             // a partly open rocky roof
             var rock = M("6E6488", 0.2f);
-            for (int k = 0; k < 6; k++) { float a = k * Mathf.PI / 3; S(root, c + new Vector3(Mathf.Cos(a) * 7, 7.4f, Mathf.Sin(a) * 7), new Vector3(7, 2.2f, 7), rock); }
+            for (int k = 0; k < 6; k++) { float a = k * Mathf.PI / 3; S(root, c + new Vector3(Mathf.Cos(a) * 7.5f, 7.4f, Mathf.Sin(a) * 9), new Vector3(7, 2.2f, 7), rock); }
             // the big red crystals from the drawing
             var red = G("E5395A", 1.4f);
-            foreach (var p in new[] { new Vector3(45, 0, -3), new Vector3(46, 0, -14), new Vector3(36, 0, -17), new Vector3(33, 0, 0) })
+            foreach (var p in new[] { new Vector3(47, 0, -3), new Vector3(46.5f, 0, -15), new Vector3(36, 0, -20.5f), new Vector3(30.5f, 0, -17) })
                 for (int k = 0; k < 4; k++)
                 {
                     var b = p + new Vector3((k % 2 - 0.5f) * 1.2f, 0, (k / 2 - 0.5f) * 1.2f);
                     Spike(root, b, b + new Vector3((k % 2 - 0.5f), 2.6f + k * 0.4f, (k / 2 - 0.5f)), 1.1f, red);
                 }
-            Disc(c + Vector3.up * 0.02f, 9.5f, 0.04f, M("3B3052", 0.3f));
-            TokenSpots.Add(new Vector3(46, 4, -14));
-            Mushroom(new Vector3(43, 0, -12), 15f);
-            PortalArch(new Vector3(45, 0, -8.5f), 90 + 180, 3, "КРИСТАЛЬНАЯ ПЕЩЕРА", "35E0FF", rock, "crystal");
+            TokenSpots.Add(new Vector3(42, 4.5f, -17));
+            Mushroom(new Vector3(43, 0, -11), 15f);
+            // the portal faces the hub (west), just inside the gate
+            PortalArch(new Vector3(36, 0, -7), 90, 3, "КРИСТАЛЬНАЯ ПЕЩЕРА", "35E0FF", rock, "crystal");
         }
 
         static void Clouds()
