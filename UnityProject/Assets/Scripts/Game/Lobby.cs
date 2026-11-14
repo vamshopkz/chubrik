@@ -216,12 +216,89 @@ namespace Chubrik
 
         // ---------------- walls ----------------
 
+        // The four lobby walls from the player's drawing: dirt with grass on top (hub, park, ruins, jungle),
+        // dirt with snow on top (snowy valley), the purple/teal checker (glitch world), dark stone with pink crystals (crystal cave).
+        enum WallStyle { Grass, Snow, Glitch, Crystal }
+        static WallStyle style;
+        static readonly Dictionary<(WallStyle, int), Material> wallMats = new Dictionary<(WallStyle, int), Material>();
+        static readonly Dictionary<WallStyle, Texture2D> wallTex = new Dictionary<WallStyle, Texture2D>();
+        static float crystalRun;
+
+        static Texture2D WallTex(WallStyle st)
+        {
+            if (wallTex.TryGetValue(st, out var have)) return have;
+            const int N = 128;
+            var px = new Color32[N * N];
+            var rng = new System.Random(7 + (int)st);
+            Color32 outline = new Color32(47, 84, 92, 255);
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float v = y / (float)N;   // 0 = bottom, 1 = top
+                    Color c;
+                    switch (st)
+                    {
+                        case WallStyle.Glitch:
+                            c = ((x * 2 / N) + (y * 2 / N)) % 2 == 0 ? new Color(0.42f, 0.25f, 0.78f) : new Color(0.24f, 0.37f, 0.42f);
+                            break;
+                        case WallStyle.Crystal:
+                            c = new Color(0.30f, 0.42f, 0.46f);
+                            break;
+                        default:
+                        {
+                            // orange dirt with marker strokes, a wavy band of grass or snow along the top
+                            c = new Color(0.93f, 0.62f, 0.38f);
+                            float wave = 0.80f - 0.035f * Mathf.Sin(x / (float)N * Mathf.PI * 2 * 5);
+                            if (v > wave + 0.012f) c = st == WallStyle.Grass ? new Color(0.13f, 0.62f, 0.25f) : new Color(0.97f, 0.98f, 1f);
+                            else if (v > wave - 0.012f) c = outline;
+                            break;
+                        }
+                    }
+                    // marker strokes: slight vertical streaks
+                    float streak = ((x * 37) % 11) / 11f * 0.06f - 0.03f + (float)rng.NextDouble() * 0.04f;
+                    c = new Color(Mathf.Clamp01(c.r + streak), Mathf.Clamp01(c.g + streak), Mathf.Clamp01(c.b + streak));
+                    // the dark outline round each block
+                    if (x < 3 || x >= N - 3 || y < 3 || y >= N - 3) c = outline;
+                    if (st == WallStyle.Glitch && (Mathf.Abs(x - N / 2) < 2 || Mathf.Abs(y - N / 2) < 2)) c = outline;
+                    px[y * N + x] = c;
+                }
+            var t = new Texture2D(N, N, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 4 };
+            t.SetPixels32(px); t.Apply(true, true);
+            return wallTex[st] = t;
+        }
+
+        /// <summary>The wall material, its texture repeated once per ~4.5 m of wall so the blocks stay square.</summary>
+        static Material WallMat(WallStyle st, float len, float h)
+        {
+            int rep = Mathf.Max(1, Mathf.RoundToInt(len / h * 1.25f));
+            if (wallMats.TryGetValue((st, rep), out var m)) return m;
+            m = Mats.Tex(WallTex(st), Color.white, st == WallStyle.Crystal ? 0.35f : 0.12f);
+            m.mainTextureScale = new Vector2(rep, 1);
+            return wallMats[(st, rep)] = m;
+        }
+
         static void Wall(Vector3 a, Vector3 b, float h = 5.5f)
         {
             var d = b - a; d.y = 0;
             if (d.magnitude < 0.1f) return;
-            var go = Box((a + b) / 2 + Vector3.up * h / 2, new Vector3(1, h, d.magnitude + 1), wallM, Quaternion.LookRotation(d).eulerAngles.y);
-            B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.15f, 0.06f, 1.02f), M("8A919C", 0.3f));   // a stone cap
+            float len = d.magnitude + 1;
+            var go = Box((a + b) / 2 + Vector3.up * h / 2, new Vector3(1, h, len), WallMat(style, len, h), Quaternion.LookRotation(d).eulerAngles.y);
+            string cap = style switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
+            B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.15f, 0.06f, 1.02f), M(cap, 0.3f));   // the top
+            if (style == WallStyle.Crystal)
+            {
+                // pink crystal clusters sticking out of the top, like on the drawing
+                crystalRun += d.magnitude;
+                if (crystalRun > 5.5f)
+                {
+                    crystalRun = 0;
+                    var p = (a + b) / 2 + Vector3.up * h;
+                    var pink = G("FF8FC8", 1.1f);
+                    Spike(root, p, p + new Vector3(0, 1.8f, 0), 0.55f, pink);
+                    Spike(root, p + new Vector3(0.15f, 0, 0.3f), p + new Vector3(0.5f, 1.3f, 0.9f), 0.4f, pink);
+                    Spike(root, p + new Vector3(-0.15f, 0, -0.3f), p + new Vector3(-0.5f, 1.3f, -0.9f), 0.4f, pink);
+                }
+            }
         }
 
         /// <summary>A wall along the drawn line, with rounded corners.</summary>
@@ -235,6 +312,7 @@ namespace Chubrik
         static void Walls()
         {
             // the hub: left side with the shop corner, the wardrobe corner, the dip with the snow gate, the ruins corner
+            style = WallStyle.Grass;
             WallPath(5.5f, P(13.6f, -21.5f), P(-11, -21.5f, 3), P(-11, -4.6f));                       // jungle line left of the gate, shop corner
             WallPath(5.5f, P(-11, -0.8f), P(-11, 23, 3), P(2.3f, 23, 2), P(2.3f, 16.3f));              // (a way into the park at the bottom), wardrobe corner
             WallPath(5.5f, P(10, 16.3f), P(10, 23.7f, 2), P(26.6f, 23.7f, 3), P(26.6f, 12.6f));        // snow gate between the corners, ruins corner
@@ -244,15 +322,19 @@ namespace Chubrik
             WallPath(5.5f, P(-11, -5.3f), P(4, -5.3f));                                                 // the line above the shops (in by the river)
             WallPath(5.5f, P(-8.5f, -40.3f), P(2.6f, -40.3f));                                          // the jungle portal nook
             // the park, the glitch checkerboard below it
-            WallPath(5.5f, P(-11, 17.5f), P(-50.7f, 17.5f, 3), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-50.7f, 0.6f, 1.5f),
+            WallPath(5.5f, P(-11, 17.5f), P(-50.7f, 17.5f, 3), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-50.7f, 0.6f, 1.5f), P(-50.7f, -6.9f));
+            style = WallStyle.Glitch;
+            WallPath(5.5f, P(-50.7f, -6.9f),
                      P(-50.7f, -16.3f, 2), P(-44, -16.3f, 1), P(-44, -24, 2), P(-22.6f, -24, 2), P(-22.6f, -6.9f));
             WallPath(5.5f, P(-50.7f, -6.9f), P(-43.3f, -6.9f));                                         // glitch gate in this line
             WallPath(5.5f, P(-34.8f, -6.9f), P(-11, -6.9f));
             // the snowy valley: the big outline, the line round the portal hollow, the lake corner
+            style = WallStyle.Snow;
             WallPath(5.5f, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 5.5f));
             WallPath(5.5f, P(-5.9f, 28.5f), P(-4, 35.5f, 3), P(3, 37, 3), P(35.5f, 37));               // the hollow is reached through the water cave
             WallPath(5.5f, P(16.5f, 49.8f), P(15.8f, 43.5f));
             // the crystal cave
+            style = WallStyle.Crystal; crystalRun = 3;
             WallPath(7, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
         }
 

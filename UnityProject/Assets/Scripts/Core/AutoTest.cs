@@ -235,6 +235,24 @@ namespace Chubrik
             yield return Wait(2.2f);
             Check("teleport pad", Vector3.Distance(pl.transform.position, Lobby.PadTo) < 3, pl.transform.position.ToString());
             yield return Shot("05_course_platform");
+
+            // ---- the four wall styles from the drawing ----
+            foreach (var (pos, yaw, nm) in new[] { (new Vector3(-5, 0.3f, 8), 270f, "57_wall_grass"), (new Vector3(20, 0.3f, 30), 0f, "58_wall_snow"),
+                                                   (new Vector3(-30, 0.3f, -15), 180f, "59_wall_glitch"), (new Vector3(40, 0.3f, -12), 90f, "60_wall_crystal") })
+            {
+                pl.Teleport(pos, yaw);
+                yield return Wait(1f);
+                yield return Shot(nm);
+            }
+            pl.Teleport(Lobby.Spawn, 0);
+
+            // ---- settings → game versions (list from GitHub) ----
+            VersionsUI.Open();
+            Check("the versions window opens", UIRoot.Open != null && UIRoot.Open.Title.text == "ВЕРСИИ ИГРЫ");
+            for (int k = 0; k < 40 && UIRoot.Open != null && UIRoot.Open.Content.childCount <= 2; k++) yield return Wait(0.25f);
+            yield return Shot("61_versions");
+            Check("the versions window lists the releases (or says there is no internet)", UIRoot.Open != null && UIRoot.Open.Content.childCount >= 2);
+            Window.Close();
             pl.Frozen = false;
 
             // ---- glide with wings ----

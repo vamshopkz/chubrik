@@ -155,6 +155,7 @@ namespace Chubrik
                         ("ВКЛ", UIKit.Green, P.navigatorOn, () => { P.navigatorOn = true; Save.Write(); Window.Refresh(); }),
                         ("ВЫКЛ", UIKit.Red, !P.navigatorOn, () => { P.navigatorOn = false; Save.Write(); Window.Refresh(); }),
                     });
+                w.Row("Версии игры", "Сейчас: " + Application.version + " · можно выбрать новую или старую", "ВЫБРАТЬ", UIKit.Blue, VersionsUI.Open);
                 w.Text("Управление на компьютере: WASD — бег, ПРОБЕЛ — прыжок и двойной прыжок (держи с крыльями — полёт), F или клик — удар, Q — эмоция, E — войти, мышь — камера, Esc — меню.", 24, UIKit.Muted);
             }, 1000, 760);
         }
