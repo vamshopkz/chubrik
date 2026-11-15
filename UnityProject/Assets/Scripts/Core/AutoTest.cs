@@ -803,6 +803,59 @@ namespace Chubrik
             yield return Enter(1);
             Check("normal HUD back in the lobby", Worlds.Current == 1 && !Hud.PrankShown);
 
+            // ---- online: the real public relay, a made-up player whose messages go through it ----
+            for (float t = 0; t < 20 && !Online.I.Connected; t += Time.unscaledDeltaTime) yield return null;
+            Check("connected to the online relay", Online.I.Connected);
+            if (Online.I.Connected)
+            {
+                var fl = Look.Default(); fl["hat"] = "hat_6"; fl["wings"] = "wings_0"; fl["color"] = "color_7"; fl["emote"] = "emote_1";
+                string fid = "testpeer" + UnityEngine.Random.Range(100, 999), fls = Online.LookString(fl);
+                var fpos = Lobby.Spawn + new Vector3(4, 0, 3);
+                Online.I.Send($"H|{fid}|{Application.version}|1|{fls}");
+                for (float t = 0; t < 8 && !Online.I.Peers.ContainsKey(fid); t += Time.unscaledDeltaTime) yield return null;
+                Check("a player's hello comes back through the relay", Online.I.Peers.ContainsKey(fid));
+                bool fakeMoving = true;
+                IEnumerator FakeMoves()
+                {
+                    for (int k = 0; fakeMoving; k++)
+                    {
+                        Online.I.Send(string.Format(System.Globalization.CultureInfo.InvariantCulture, "S|{0}|{1}|1|{2:0.00}|{3:0.00}|{4:0.00}|200|0|0|1", fid, k, fpos.x, fpos.y, fpos.z));
+                        yield return Wait(0.1f);
+                    }
+                }
+                StartCoroutine(FakeMoves());
+                yield return Wait(2.5f);
+                Online.I.Peers.TryGetValue(fid, out var fpeer);
+                Check("the other player's chubrik appears in our world", fpeer != null && fpeer.avatar != null);
+                PlayersUI.Open();
+                yield return Wait(1f);
+                Check("«Игроки онлайн» shows skin pictures", UIRoot.Open != null && UIRoot.Open.Content.GetComponentInChildren<UnityEngine.UI.RawImage>() != null);
+                yield return Shot("62_players_online");
+                if (fpeer != null)
+                {
+                    pl.Teleport(Lobby.Spawn + new Vector3(-6, 0, -2), 0);
+                    yield return Wait(0.5f);
+                    Online.I.Join(fpeer);
+                    yield return Wait(2.5f);
+                    Check("tapping a player takes you next to them", Vector3.Distance(pl.transform.position, fpos) < 3.5f, pl.transform.position.ToString());
+                    yield return Shot("63_joined_player");
+                    Check("the other player is still shown next to us", fpeer.avatar != null && Vector3.Distance(fpeer.avatar.transform.position, fpos) < 1);
+                    fakeMoving = false;
+                    yield return Wait(0.3f);
+                    // a player in another world: we go into that world, next to them
+                    Online.I.Inject($"H|{fid}|{Application.version}|5|{fls}");
+                    Online.I.Inject(string.Format(System.Globalization.CultureInfo.InvariantCulture, "S|{0}|900|5|{1:0.00}|{2:0.00}|{3:0.00}|90|0|0|1", fid, World5.Spawn.x, World5.Spawn.y + 0.3f, World5.Spawn.z));
+                    Online.I.Join(fpeer);
+                    for (float t = 0; t < 10 && Worlds.Current != 5; t += Time.unscaledDeltaTime) yield return null;
+                    yield return Wait(2.5f);
+                    Check("joining a player in another world takes you there", Worlds.Current == 5 && Vector3.Distance(pl.transform.position, World5.Spawn) < 4, $"world {Worlds.Current}, {pl.transform.position}");
+                    yield return Enter(1);
+                }
+                Online.I.Send($"B|{fid}");
+                for (float t = 0; t < 6 && Online.I.Peers.ContainsKey(fid); t += Time.unscaledDeltaTime) yield return null;
+                Check("a player who leaves disappears from the list", !Online.I.Peers.ContainsKey(fid));
+            }
+
             // ---- main menu ----
             Menus.Main();
             yield return Wait(1f);

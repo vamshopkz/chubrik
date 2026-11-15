@@ -198,6 +198,29 @@ namespace Chubrik
             return t;
         }
 
+        readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
+
+        /// <summary>A whole-body picture of someone else's chubrik (online players list), cached by their look.</summary>
+        public Texture2D Portrait(Look l, string key)
+        {
+            if (portraits.TryGetValue(key, out var have) && have) return have;
+            bool wasActive = gameObject.activeSelf;
+            Show(true);
+            var keep = Model.look.Copy();
+            pet.gameObject.SetActive(false);
+            cam.targetTexture = thumbRT;
+            Model.Build(l);
+            Model.transform.localRotation = Quaternion.Euler(0, 20, 0);
+            Frame(cam, "body", Model.SizeScale, true);
+            var t = Grab();
+            portraits[key] = t;
+            cam.targetTexture = RT;
+            pet.gameObject.SetActive(true);
+            SetLook(keep);
+            if (!wasActive) Show(false);
+            return t;
+        }
+
         bool readable;   // gallery pictures are read back, wardrobe thumbnails are not
 
         Texture2D Grab()

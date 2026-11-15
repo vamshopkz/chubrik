@@ -47,6 +47,7 @@ namespace Chubrik
             UIRoot.Create();
             AudioFx.Create();
             Updater.Create();
+            Online.Create();
             Effects.Create();
             PlayerCtl.Create();
             PostFx(mobile);

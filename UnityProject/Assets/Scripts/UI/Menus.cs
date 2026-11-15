@@ -42,7 +42,7 @@ namespace Chubrik
             UIKit.Place(sub.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -220), new Vector2(1200, 50));
 
             var col = UIKit.Rect("Buttons", dim.transform);
-            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -90), new Vector2(560, 470));
+            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -120), new Vector2(560, 560));
             var vl = col.gameObject.AddComponent<VerticalLayoutGroup>();
             vl.spacing = 16; vl.childControlHeight = false; vl.childControlWidth = true; vl.childForceExpandHeight = false;
             void Btn(string label, Color c, System.Action a, float h = 92, float font = 40)
@@ -51,6 +51,7 @@ namespace Chubrik
                 b.Bg.rectTransform.sizeDelta = new Vector2(560, h);
             }
             Btn("ИГРАТЬ", UIKit.Green, Play, 112, 52);
+            Btn("ИГРОКИ ОНЛАЙН", UIKit.Violet, () => { CloseMain(); PlayersUI.Open(); });
             Btn("НАСТРОЙКИ", UIKit.Blue, () => { CloseMain(); Settings(); });
             var tip = UIKit.Txt(col, "Гардероб, магазин и премиум-наборы — в лобби: подойди к ним", 24, Color.white);
             tip.rectTransform.sizeDelta = new Vector2(560, 70);
@@ -91,6 +92,7 @@ namespace Chubrik
             {
                 if (Updater.HasUpdate) w.Row("Вышла новая версия " + Updater.I.LatestVersion + "!", "Скачай обновление — в нём новые штуки", Updater.I.ButtonText, UIKit.Orange, () => Updater.I.Press());
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
+                w.Row("Игроки онлайн", Online.I != null && Online.I.Peers.Count > 0 ? $"Сейчас играют: {Online.I.Peers.Count} — нажми и окажешься рядом" : "Кто сейчас играет — можно прийти к ним", "СМОТРЕТЬ", UIKit.Violet, PlayersUI.Open);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
                 if (Worlds.Level)
                 {
