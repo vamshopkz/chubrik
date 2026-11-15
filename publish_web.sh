@@ -18,7 +18,7 @@ git -c credential.helper= -c credential.helper="!$GH auth git-credential" clone 
 OV=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" $OLD/version.json 2>/dev/null || true)
 if [ -n "$OV" ] && [ "$OV" != "$VER" ] && [ ! -d $DIR/v/$OV ]; then
   mkdir -p $DIR/v/$OV
-  for f in index.html version.json icon.png apple-touch-icon.png Build TemplateData StreamingAssets; do [ -e $OLD/$f ] && cp -R $OLD/$f $DIR/v/$OV/; done
+  for f in index.html version.json manifest.json icon.png icon-192.png icon-512.png apple-touch-icon.png Build TemplateData StreamingAssets; do [ -e $OLD/$f ] && cp -R $OLD/$f $DIR/v/$OV/; done
 fi
 rm -rf $OLD
 cp -R $SRC/ $DIR/

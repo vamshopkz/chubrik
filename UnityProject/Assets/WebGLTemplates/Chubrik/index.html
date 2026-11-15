@@ -11,6 +11,7 @@
   <meta name="theme-color" content="#3aa0e8">
   <title>{{{ PRODUCT_NAME }}}</title>
   <link rel="icon" href="icon.png">
+  <link rel="manifest" href="manifest.json">
   <style>
     :root { --sky: #6cc7ff; --sky2: #3aa0e8; --hay: #ffc83a; --ink: #ffffff; }
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #3aa0e8; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -41,7 +42,8 @@
     #rotate .phone { width: 64px; height: 104px; border: 5px solid #fff; border-radius: 12px; animation: turn 2s ease-in-out infinite; }
     @keyframes turn { 0%, 20% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
     #rotate button { font-size: 16px; padding: 10px 22px; background: rgba(255,255,255,.18); border-bottom-color: rgba(0,0,0,.2); }
-    @media (orientation: portrait) { body.mobile:not(.portrait-ok) #rotate { display: flex; } }
+    @media (orientation: portrait) { body.mobile.started #rotate { display: flex; } }
+    #play { display: none; background: #3fb34f; }
   </style>
 </head>
 <body>
@@ -52,6 +54,7 @@
     <h1>{{{ PRODUCT_NAME }}}</h1>
     <div class="bar"><div id="bar"></div></div>
     <div id="status">Загрузка игры…</div>
+    <button id="play">ИГРАТЬ</button>
     <div class="hint">Прогресс сохраняется в этом браузере</div>
   </div>
 
@@ -67,14 +70,12 @@
   <div id="rotate" class="screen">
     <div class="phone"></div>
     <h1>Поверните телефон</h1>
-    <div class="hint">Играть удобнее горизонтально</div>
-    <button id="portrait-ok">Играть так</button>
+    <div class="hint">Игра идёт только горизонтально</div>
   </div>
 
   <script>
     var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
     if (isMobile) document.body.classList.add("mobile");
-    document.getElementById("portrait-ok").onclick = function () { document.body.classList.add("portrait-ok"); };
 
     var canvas = document.getElementById("unity-canvas");
     var bar = document.getElementById("bar");
@@ -122,8 +123,18 @@
           statusEl.textContent = progress < 0.9 ? "Загрузка игры… " + Math.round(progress * 100) + "%" : "Строим арену…";
         }).then(function (unityInstance) {
           instance = unityInstance;
-          document.getElementById("loading").style.display = "none";
-          canvas.focus();
+          if (isMobile && !isFull()) {
+            // phones: a browser opens full screen only from a tap — one big button, then the game
+            bar.parentNode.style.display = "none";
+            statusEl.textContent = "Готово!";
+            var play = document.getElementById("play");
+            play.style.display = "block";
+            play.onclick = function () { document.body.classList.add("started"); goFullscreen(); document.getElementById("loading").style.display = "none"; canvas.focus(); };
+          } else {
+            document.body.classList.add("started");
+            document.getElementById("loading").style.display = "none";
+            canvas.focus();
+          }
         }).catch(function (message) {
           fail("Не удалось запустить игру: " + message);
         });
@@ -132,21 +143,25 @@
       document.body.appendChild(script);
     }
 
-    // Phones: the first tap also switches to full screen and turns the picture landscape (Android;
-    // a browser only allows that from a tap). Only once: if the player leaves full screen, it stays so.
+    // Phones: always full screen and landscape (Android; a browser only allows that from a tap).
+    // If the player leaves full screen, the next tap brings it back.
+    function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement) || (window.matchMedia && matchMedia("(display-mode: fullscreen)").matches); }
+    function lockLandscape() { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {} }
     function goFullscreen() {
-      if (!isMobile || document.fullscreenElement || document.webkitFullscreenElement) return;
+      if (!isMobile) return;
+      if (isFull()) { lockLandscape(); return; }
       var el = document.documentElement;
       var req = el.requestFullscreen || el.webkitRequestFullscreen;
       if (!req) return;
       try {
         var p = req.call(el, { navigationUI: "hide" });
-        if (p && p.then) p.then(function () {
-          if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {});
-        }).catch(function () {});
+        if (p && p.then) p.then(lockLandscape).catch(function () {});
+        else setTimeout(lockLandscape, 300);
       } catch (e) {}
     }
-    document.addEventListener("pointerup", goFullscreen, { capture: true, once: true });
+    document.addEventListener("pointerup", goFullscreen, { capture: true });
+    // started from the Home Screen icon (manifest: full screen, landscape): turn it right away
+    if (isMobile && isFull()) lockLandscape();
 
     // iPhone: Safari doesn't let a page go full screen; a Home Screen shortcut opens the game without
     // Safari's bars. Explain that until the player closes the tip (or already runs from the Home Screen).
