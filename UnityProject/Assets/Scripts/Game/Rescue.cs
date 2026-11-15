@@ -61,6 +61,17 @@ namespace Chubrik
         public static int Total(string prefix) { int n = 0; foreach (var c in Cages) if (c.id.StartsWith(prefix)) n++; return n; }
 
         /// <summary>Rescued friends wander around the lobby plaza.</summary>
+        static readonly Vector2[] Homes =
+        {
+            new Vector2(-7, 10), new Vector2(-30, 13), new Vector2(-3, -28), new Vector2(2, 30), new Vector2(20, -12), new Vector2(-38, 6),
+            new Vector2(20, -28), new Vector2(15, 30), new Vector2(32, -12), new Vector2(-30, -12), new Vector2(6, 12), new Vector2(-26, 4),
+            new Vector2(2, -45), new Vector2(25, 28), new Vector2(22, 4), new Vector2(-44, -3), new Vector2(18, -47), new Vector2(36, 12),
+            new Vector2(45, -10), new Vector2(-36, -20), new Vector2(-8, -2), new Vector2(-18, -2), new Vector2(-4, -36), new Vector2(42, 20),
+            new Vector2(14, 19), new Vector2(-34, -4), new Vector2(22, -40), new Vector2(5, 41), new Vector2(40, -20), new Vector2(-26, -20),
+            new Vector2(-2, -14), new Vector2(-24, 10), new Vector2(10, -32), new Vector2(-2, 45), new Vector2(0, 20.5f), new Vector2(16, -6),
+            new Vector2(-46, 6), new Vector2(30, 32), new Vector2(-14, 14), new Vector2(8, -50),
+        };
+
         public static void SpawnLobbyFriends()
         {
             foreach (var id in Save.P.rescued) AddLobbyFriend(id);
@@ -69,10 +80,13 @@ namespace Chubrik
         public static void AddLobbyFriend(string id)
         {
             int i = lobbyFriends.Count;
-            float a = i * 2.4f;
-            var pos = new Vector3(Mathf.Cos(a) * 6f, 0.05f, Mathf.Sin(a) * 6f - 1);
+            // 15.11: each friend has a home spot of its own all over the lobby (no crowd in the middle)
+            var h = Homes[i % Homes.Length];
+            var pos = new Vector3(h.x + (i / Homes.Length) * 1.5f, 0.05f, h.y);
             var m = ChubrikModel.Create("Friend " + id, Lobby.root, LookOf(id), Layers.World);
             m.transform.position = pos;
+            var col = m.gameObject.AddComponent<CapsuleCollider>();   // you can't walk through friends either
+            col.center = new Vector3(0, 0.75f, 0); col.height = 1.5f; col.radius = 0.4f;
             var f = m.gameObject.AddComponent<Friend>();
             f.Init(m, id);
             lobbyFriends.Add(m.gameObject);
@@ -83,7 +97,7 @@ namespace Chubrik
     public class Cage : MonoBehaviour
     {
         public string id;
-        /// <summary>World 4: a giant ice cube instead of a cage — a jump attack breaks it, no key needed.</summary>
+        /// <summary>World 4: a giant ice cube instead of a cage — with a snowy key, a jump attack breaks it.</summary>
         public bool ice;
         public bool Open { get; private set; }
         ChubrikModel friend;
@@ -157,6 +171,8 @@ namespace Chubrik
             if (Open) return;
             if (ice)
             {
+                // 15.11: the ice needs a snowy key too — then a jump attack breaks it
+                if (Save.P.keys <= 0) { AudioFx.Play("error"); Hud.Toast("Нужен снежный ключ! Найди его в Снежной долине", UIKit.Cyan); return; }
                 var pl = PlayerCtl.I;
                 if (pl != null && pl.Grounded) { AudioFx.Play("bonk"); Hud.Toast("Лёд крепкий! Прыгни и ударь в прыжке", UIKit.Cyan); return; }
             }
@@ -166,8 +182,8 @@ namespace Chubrik
                 Hud.Toast("Нужен золотой ключ! Ищи ключи на островах", UIKit.Orange);
                 return;
             }
-            if (!ice) Save.P.keys--;
-            else { AudioFx.Play("crate"); Effects.Emit("ice", transform.position + Vector3.up * 1.2f, 60, 1f, Vector3.up * 3); }
+            Save.P.keys--;
+            if (ice) { AudioFx.Play("crate"); Effects.Emit("ice", transform.position + Vector3.up * 1.2f, 60, 1f, Vector3.up * 3); }
             Save.P.rescued.Add(id);
             Save.P.coins += 50;
             Save.Write();
@@ -192,7 +208,7 @@ namespace Chubrik
                 hintT -= Time.deltaTime;
                 if (d.magnitude < Reach + 0.6f && hintT <= 0)
                 {
-                    if (ice) Hud.Toast("Друг вмёрз в лёд! Прыгни и ударь в прыжке — лёд разобьётся", UIKit.Cyan);
+                    if (ice) Hud.Toast(Save.P.keys > 0 ? "Друг вмёрз в лёд! Прыгни и ударь в прыжке — лёд разобьётся" : "Друг вмёрз в лёд! Нужен снежный ключ", UIKit.Cyan);
                     else Hud.Toast(Save.P.keys > 0 ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен золотой ключ! Ищи ключи на островах", Save.P.keys > 0 ? UIKit.Lime : UIKit.Orange);
                     hintT = 6;
                 }
@@ -221,6 +237,19 @@ namespace Chubrik
     /// <summary>Golden key pickup (handled by Pickups like tokens: taken once forever).</summary>
     public static class KeyModel
     {
+        /// <summary>15.11: the snowy key of the Snowy Valley — icy blue with a snow cap and a snowflake.</summary>
+        public static void BuildSnow(Transform t)
+        {
+            var ice = G("8FD8FF", 1.1f); var snow = M("FFFFFF", 0.15f);
+            Ring(t, new Vector3(0, 0.22f, 0), 0.16f, 0.05f, ice, new Vector3(90, 0, 0));
+            S(t, new Vector3(0, 0.37f, 0), new Vector3(0.3f, 0.12f, 0.12f), snow);   // a snow cap on the ring
+            B(t, new Vector3(0, -0.12f, 0), new Vector3(0.08f, 0.5f, 0.08f), ice);
+            B(t, new Vector3(0.09f, -0.3f, 0), new Vector3(0.14f, 0.06f, 0.06f), ice);
+            B(t, new Vector3(0.07f, -0.18f, 0), new Vector3(0.1f, 0.06f, 0.06f), ice);
+            for (int k = 0; k < 3; k++) B(t, new Vector3(0, 0.22f, 0), new Vector3(0.22f, 0.025f, 0.025f), snow, new Vector3(0, 0, k * 60));   // snowflake
+            S(t, Vector3.zero, 1.1f, Add("BFEFFF", 0.15f));
+        }
+
         public static void Build(Transform t)
         {
             var gold = G("FFC83A", 0.6f);
@@ -252,7 +281,16 @@ namespace Chubrik
             var tag = Prim.Text(transform, Rescue.NameOf(id), new Vector3(0, 2.1f, 0), 2.4f, Color.white);
             tag.gameObject.layer = Layers.World;
             tag.gameObject.AddComponent<Billboard>();
-            target = transform.position;
+            target = home = transform.position;
+        }
+
+        Vector3 home;
+
+        /// <summary>Is the straight way clear (no walls or things)? Friends never walk through them.</summary>
+        static bool Clear(Vector3 from, Vector3 to)
+        {
+            var d = to - from; d.y = 0;
+            return !Physics.SphereCast(from + Vector3.up * 0.8f, 0.35f, d.normalized, out _, d.magnitude + 0.4f, Layers.SolidMask, QueryTriggerInteraction.Ignore);
         }
 
         void Update()
@@ -264,9 +302,13 @@ namespace Chubrik
                 wait -= Time.deltaTime;
                 if (wait <= 0)
                 {
-                    float a = rng.F(0, Mathf.PI * 2), d = rng.F(4, 11);
-                    // wander round the middle of the hub (between the wardrobe, the shops and the river)
-                    target = new Vector3(2 + Mathf.Cos(a) * d * 0.8f, transform.position.y, 3 + Mathf.Sin(a) * d * 0.9f);
+                    // a short walk round its own home spot, only where nothing is in the way
+                    for (int k = 0; k < 6; k++)
+                    {
+                        float a = rng.F(0, Mathf.PI * 2), d = rng.F(1.5f, 4f);
+                        var t = new Vector3(home.x + Mathf.Cos(a) * d, transform.position.y, home.z + Mathf.Sin(a) * d);
+                        if (Clear(transform.position, t)) { target = t; break; }
+                    }
                     wait = rng.F(3, 8);
                     if (rng.Chance(0.5f)) anim.PlayEmote();
                 }
@@ -274,7 +316,9 @@ namespace Chubrik
             }
             if (anim.emoting) { anim.speed01 = 0; return; }
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(to), Time.deltaTime * 6);
-            transform.position += to.normalized * 2.2f * Time.deltaTime;
+            var step = to.normalized * 2.2f * Time.deltaTime;
+            if (!Clear(transform.position, transform.position + step * 4)) { target = transform.position; wait = rng.F(1, 3); anim.speed01 = 0; return; }   // something in the way: stop
+            transform.position += step;
             anim.speed01 = 0.4f;
         }
     }

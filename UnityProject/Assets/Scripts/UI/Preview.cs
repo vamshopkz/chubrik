@@ -21,7 +21,11 @@ namespace Chubrik
         public bool Walk;
         Transform stage;
         static readonly Vector3 Origin = new Vector3(0, -500, 0);
-        readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
+        // 15.11: thumbnails are copied on the graphics card (Blit into their own small texture) — reading pixels back
+        // (ReadPixels) left the wardrobe without pictures on some phones. The oldest ones are freed past MaxThumbs.
+        readonly Dictionary<string, RenderTexture> thumbs = new Dictionary<string, RenderTexture>();
+        readonly List<string> thumbOrder = new List<string>();
+        const int MaxThumbs = 260, ThumbSize = 160;
         RenderTexture thumbRT;
         public string View = "body";
 
@@ -41,7 +45,7 @@ namespace Chubrik
             floor.AddComponent<MeshCollider>().sharedMesh = Prim.MeshOf(PrimitiveType.Cylinder);
             Parts.Ring(stage, new Vector3(0, 0.0f, 0), 1.6f, 0.05f, Parts.M("FFFFFF", 0.5f));
             RT = new RenderTexture(560, 700, 24) { name = "PreviewRT", antiAliasing = Application.isMobilePlatform ? 1 : 4 };
-            thumbRT = new RenderTexture(192, 192, 24) { name = "ThumbRT", antiAliasing = 2 };
+            thumbRT = new RenderTexture(ThumbSize, ThumbSize, 24) { name = "ThumbRT", antiAliasing = Application.isMobilePlatform || Application.platform == RuntimePlatform.WebGLPlayer ? 1 : 2 };
             var cg = new GameObject("PreviewCam") { layer = Layers.Preview };
             cam = cg.AddComponent<Camera>();
             cam.cullingMask = (1 << Layers.Preview) | 1;      // + default layer: particle effects
@@ -123,12 +127,12 @@ namespace Chubrik
         }
 
         /// <summary>Thumbnails of items (the current look wearing each one), cached; the mannequin is restored after.</summary>
-        public void Thumbs(IList<Item> items, System.Action<Item, Texture2D> done)
+        public void Thumbs(IList<Item> items, System.Action<Item, Texture> done)
         {
             var todo = new List<Item>();
             foreach (var it in items)
             {
-                if (thumbs.TryGetValue(it.id, out var t) && t) done(it, t);
+                if (thumbs.TryGetValue(it.id, out var t) && t && t.IsCreated()) done(it, t);
                 else todo.Add(it);
             }
             if (todo.Count == 0) return;
@@ -139,17 +143,37 @@ namespace Chubrik
             cam.targetTexture = thumbRT;
             foreach (var it in todo)
             {
-                var t = One(it, basis);
+                var t = (RenderTexture)One(it, basis);
+                if (thumbs.TryGetValue(it.id, out var old) && old) old.Release();
                 thumbs[it.id] = t;
+                thumbOrder.Remove(it.id); thumbOrder.Add(it.id);
                 done(it, t);
+            }
+            // free the oldest pictures (never the ones just shown)
+            while (thumbOrder.Count > MaxThumbs && thumbOrder.Count > items.Count)
+            {
+                var id = thumbOrder[0]; thumbOrder.RemoveAt(0);
+                if (thumbs.TryGetValue(id, out var o) && o) { o.Release(); Destroy(o); }
+                thumbs.Remove(id);
             }
             cam.targetTexture = RT;
             SetLook(keep);
             if (!wasActive) Show(false);
         }
 
-        /// <summary>One item rendered into thumbRT (the current look wearing it; pets alone).</summary>
-        Texture2D One(Item it, Look basis)
+        /// <summary>The picture just rendered into thumbRT, copied into its own texture on the graphics card.</summary>
+        RenderTexture Copy()
+        {
+            cam.Render();
+            var rt = new RenderTexture(thumbRT.width, thumbRT.height, 0) { name = "Thumb" };
+            rt.Create();
+            Graphics.Blit(thumbRT, rt);
+            return rt;
+        }
+
+        /// <summary>One item rendered (the current look wearing it; pets alone): a read-back Texture2D for the
+        /// gallery (readable), otherwise a copy on the graphics card.</summary>
+        Texture One(Item it, Look basis)
         {
             if (it.dept == "pet")
             {
@@ -162,7 +186,7 @@ namespace Chubrik
                 foreach (var tr in holder.GetComponentsInChildren<Transform>(true)) tr.gameObject.layer = Layers.Preview;
                 cam.transform.position = Origin + new Vector3(0, 1.0f, 1.25f);
                 cam.transform.rotation = Quaternion.LookRotation(new Vector3(0, -0.1f, -1.25f));
-                var tx = Grab();
+                Texture tx = readable ? Grab() : (Texture)Copy();
                 holder.gameObject.SetActive(false);
                 Destroy(holder.gameObject);
                 Model.gameObject.SetActive(true);
@@ -176,7 +200,7 @@ namespace Chubrik
             Model.transform.localRotation = Quaternion.Euler(0, view == "back" ? 205 : 20, 0);
             if (it.dept == "weapon") Model.ArmR.localRotation = Quaternion.Euler(0, 0, 55);   // arm out to the side: the whole weapon in view, not in the floor
             Frame(cam, it.dept == "weapon" ? "hand" : view == "fx" ? "body" : view, Model.SizeScale, true);
-            return Grab();
+            return readable ? Grab() : (Texture)Copy();
         }
 
         /// <summary>Autotest gallery: a big picture of one item on the default chubrik.</summary>
@@ -189,7 +213,7 @@ namespace Chubrik
             thumbRT = new RenderTexture(size, size, 24) { antiAliasing = 4 };
             cam.targetTexture = thumbRT;
             readable = true;
-            var t = One(it, Look.Default());
+            var t = (Texture2D)One(it, Look.Default());
             readable = false;
             cam.targetTexture = RT;
             thumbRT.Release(); thumbRT = small;
@@ -198,12 +222,12 @@ namespace Chubrik
             return t;
         }
 
-        readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
+        readonly Dictionary<string, RenderTexture> portraits = new Dictionary<string, RenderTexture>();
 
         /// <summary>A whole-body picture of someone else's chubrik (online players list), cached by their look.</summary>
-        public Texture2D Portrait(Look l, string key)
+        public Texture Portrait(Look l, string key)
         {
-            if (portraits.TryGetValue(key, out var have) && have) return have;
+            if (portraits.TryGetValue(key, out var have) && have && have.IsCreated()) return have;
             bool wasActive = gameObject.activeSelf;
             Show(true);
             var keep = Model.look.Copy();
@@ -212,7 +236,7 @@ namespace Chubrik
             Model.Build(l);
             Model.transform.localRotation = Quaternion.Euler(0, 20, 0);
             Frame(cam, "body", Model.SizeScale, true);
-            var t = Grab();
+            var t = Copy();
             portraits[key] = t;
             cam.targetTexture = RT;
             pet.gameObject.SetActive(true);
@@ -228,7 +252,7 @@ namespace Chubrik
             cam.Render();
             var prev = RenderTexture.active;
             RenderTexture.active = thumbRT;
-            var t = new Texture2D(thumbRT.width, thumbRT.height, TextureFormat.RGB24, false);
+            var t = new Texture2D(thumbRT.width, thumbRT.height, TextureFormat.RGBA32, false);
             t.ReadPixels(new Rect(0, 0, thumbRT.width, thumbRT.height), 0, 0);
             t.Apply(false, !readable);
             RenderTexture.active = prev;

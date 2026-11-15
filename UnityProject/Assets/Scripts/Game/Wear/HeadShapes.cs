@@ -50,6 +50,27 @@ namespace Chubrik
 
             switch (i)
             {
+                case 0:
+                {
+                    // the wolf cub: round head, a light muzzle with a big shiny nose, fluffy cheeks, blue-grey eyes
+                    S(HeadC, Vector3.zero, new Vector3(0.82f, 0.76f, 0.76f), Skin);
+                    hr = new Vector3(0.41f, 0.38f, 0.38f); face = false; mouth = "wolf"; eyeY = 0.07f; eyeX = 0.15f;
+                    iris = "5C8FD6"; irisD = "1E3A66";
+                    var cream = M("F2ECE2", 0.3f);
+                    Mb(HeadC, new Vector3(0, -0.12f, faceZ - 0.01f), new Vector3(0.32f, 0.21f, 0.32f), cream);              // muzzle (a short wolf snout)
+                    var nose = Mb(HeadC, new Vector3(0, -0.065f, faceZ + 0.135f), new Vector3(0.13f, 0.085f, 0.09f), M("1C1C22", 0.9f));
+                    T(nose.transform, new Vector3(-0.18f, 0.2f, 0.42f), new Vector3(0.3f, 0.2f, 0.2f), shine);
+                    // light fur round the eyes and cheek tufts
+                    foreach (var sd in new[] { -1, 1 })
+                    {
+                        for (int k = 0; k < 3; k++)
+                            Sp(HeadC, new Vector3(sd * 0.33f, -0.07f - k * 0.05f, 0.12f), new Vector3(sd * (0.47f - k * 0.02f), -0.14f - k * 0.06f, 0.08f), 0.09f, cream);
+                        Mb(HeadC, Sf(sd * 0.25f, -0.05f, -0.02f), new Vector3(0.16f, 0.13f, 0.1f), cream);
+                    }
+                    // a darker stripe of fur down the forehead
+                    Mb(HeadC, Sf(0, 0.22f, -0.014f), new Vector3(0.1f, 0.15f, 0.05f), M("6E7888", 0.3f));
+                    break;
+                }
                 case 1:
                 {
                     B(HeadC, Vector3.zero, new Vector3(0.74f, 0.7f, 0.7f), Skin); faceZ = 0.35f; hatY = 0.35f;
@@ -334,6 +355,19 @@ namespace Chubrik
                     for (int k = 0; k < 4; k++) B(Mouth, new Vector3(-0.075f + k * 0.05f, 0, 0.03f), new Vector3(0.025f, 0.06f, 0.01f), G("35E0FF", 1.2f));
                     foreach (var sd in new[] { -1, 1 }) T(Mouth, new Vector3(sd * 0.1f, 0, 0.03f), Vector3.one * 0.016f, metalL);
                     break;
+                case "wolf":
+                {
+                    // a little «ω» mouth on the muzzle under the nose
+                    var dk = M("2B1A1A", 0.5f);
+                    for (int k = -4; k <= 4; k++)
+                    {
+                        float x = k * 0.016f, y = -Mathf.Abs(Mathf.Sin(x / 0.064f * Mathf.PI)) * 0.022f;
+                        T(Mouth, new Vector3(x, y + 0.01f, 0.15f - Mathf.Abs(x) * 0.9f), new Vector3(0.022f, 0.02f, 0.02f), dk);
+                    }
+                    B(Mouth, new Vector3(0, 0.045f, 0.155f), new Vector3(0.012f, 0.04f, 0.012f), dk);
+                    Mb(Mouth, new Vector3(0, -0.022f, 0.135f), new Vector3(0.05f, 0.035f, 0.02f), M("FF6B8B", 0.3f));   // tongue tip
+                    break;
+                }
                 default:
                     for (int k = -3; k <= 3; k++) { float x = k * 0.0213f; Mb(Mouth, new Vector3(x, x * x * 5.86f, 0), new Vector3(0.034f, 0.028f, 0.03f), dark); }
                     foreach (var sd in new[] { -1, 1 }) T(Mouth, new Vector3(sd * 0.084f, 0.036f, -0.003f), new Vector3(0.016f, 0.024f, 0.016f), dark, new Vector3(0, 0, sd * 30));
@@ -348,7 +382,7 @@ namespace Chubrik
                     var n = Nm(cp);
                     Flat(Mb(HeadC, cp, new Vector3(0.1f, 0.055f, 0.03f), blush), n);
                     T(HeadC, cp + n * 0.014f + new Vector3(-sd * 0.018f, 0.012f, 0), new Vector3(0.018f, 0.012f, 0.008f), Add("FFFFFF", 0.55f));
-                    for (int k = 0; k < 3; k++)
+                    for (int k = 0; k < 3 && i != 0; k++)
                     {
                         var fp = Sf(sd * (eyeX - 0.03f + k * 0.026f), k == 1 ? -0.075f : -0.087f, 0.001f);
                         Flat(T(HeadC, fp, new Vector3(0.016f, 0.016f, 0.006f), freck), Nm(fp));

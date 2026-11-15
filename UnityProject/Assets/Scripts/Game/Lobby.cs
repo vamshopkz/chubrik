@@ -62,6 +62,7 @@ namespace Chubrik
             Gates.Add(LobbyGate.Spawn(new Vector3(-39.05f, 0, -6.9f), 0, 8.5f, 25, "ГЛЮК-МИР 404", root));
             Clouds();
             Tokens();
+            MakeSolid();
             return root;
         }
 
@@ -175,8 +176,25 @@ namespace Chubrik
         static Material GroundMat(Texture2D t, float smooth = 0.15f) => Mats.Tex(t, Color.white, smooth);
 
         /// <summary>The areas of the drawing, each in its own shape.</summary>
+        static readonly List<(WallStyle st, List<Vector3> poly)> areas = new List<(WallStyle, List<Vector3>)>();
+        static void Area(WallStyle st, params Vector3[] pts) => areas.Add((st, Round(pts, true)));
+
+        /// <summary>Which area a point is in (its wall style); null outside the map.</summary>
+        static WallStyle? StyleAt(Vector3 p)
+        {
+            foreach (var (st, poly) in areas)
+            {
+                bool inside = false;
+                for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
+                    if ((poly[i].z > p.z) != (poly[j].z > p.z) && p.x < (poly[j].x - poly[i].x) * (p.z - poly[i].z) / (poly[j].z - poly[i].z) + poly[i].x) inside = !inside;
+                if (inside) return st;
+            }
+            return null;
+        }
+
         static void Regions()
         {
+            areas.Clear();
             var g = GroundMat(Tex.Grass());
             // the hub with the wardrobe corner (top left), the ruins corner (top right) and the shop corner (bottom left)
             Ground("Hub", g, 4, P(-11, 23, 3), P(2.3f, 23), P(2.3f, 16.3f), P(10, 16.3f), P(10, 23.7f), P(26.6f, 23.7f), P(26.6f, -21.5f), P(-11, -21.5f, 3));
@@ -190,6 +208,13 @@ namespace Chubrik
             // the crystal cave: a round grey cave right of the hub
             var cave = GroundMat(Tex.Concrete(), 0.3f); cave.color = Hex("6A6480");
             Ground("CrystalCave", cave, 4, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
+            // each area's walls are its own: grass-and-earth in the lobby, park and jungle, snow, glitch, crystal
+            Area(WallStyle.Crystal, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
+            Area(WallStyle.Glitch, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f, 2));
+            Area(WallStyle.Snow, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 6.8f), P(26.6f, 6.8f), P(26.6f, 23.7f), P(10, 23.7f), P(10, 16.3f), P(2.3f, 16.3f), P(2.3f, 23));
+            Area(WallStyle.Grass, P(-11, 23, 3), P(2.3f, 23), P(2.3f, 16.3f), P(10, 16.3f), P(10, 23.7f), P(26.6f, 23.7f), P(26.6f, -21.5f), P(-11, -21.5f, 3));
+            Area(WallStyle.Grass, P(-50.7f, 17.5f, 3), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f));
+            Area(WallStyle.Grass, P(-8.5f, -21.5f), P(26.6f, -21.5f), P(26.6f, -53, 3), P(-8.5f, -53, 3));
         }
 
         static void Water(Vector3 a, Vector3 b, float w)
@@ -230,7 +255,6 @@ namespace Chubrik
             const int N = 128;
             var px = new Color32[N * N];
             var rng = new System.Random(7 + (int)st);
-            Color32 outline = new Color32(47, 84, 92, 255);
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
                 {
@@ -249,17 +273,13 @@ namespace Chubrik
                             // orange dirt with marker strokes, a wavy band of grass or snow along the top
                             c = new Color(0.93f, 0.62f, 0.38f);
                             float wave = 0.80f - 0.035f * Mathf.Sin(x / (float)N * Mathf.PI * 2 * 5);
-                            if (v > wave + 0.012f) c = st == WallStyle.Grass ? new Color(0.13f, 0.62f, 0.25f) : new Color(0.97f, 0.98f, 1f);
-                            else if (v > wave - 0.012f) c = outline;
+                            if (v > wave) c = st == WallStyle.Grass ? new Color(0.13f, 0.62f, 0.25f) : new Color(0.97f, 0.98f, 1f);
                             break;
                         }
                     }
                     // marker strokes: slight vertical streaks
-                    float streak = ((x * 37) % 11) / 11f * 0.06f - 0.03f + (float)rng.NextDouble() * 0.04f;
+                    float streak = (Mathf.PerlinNoise(x * 0.09f, y * 0.02f) - 0.5f) * 0.08f + (float)rng.NextDouble() * 0.02f;
                     c = new Color(Mathf.Clamp01(c.r + streak), Mathf.Clamp01(c.g + streak), Mathf.Clamp01(c.b + streak));
-                    // the dark outline round each block
-                    if (x < 3 || x >= N - 3 || y < 3 || y >= N - 3) c = outline;
-                    if (st == WallStyle.Glitch && (Mathf.Abs(x - N / 2) < 2 || Mathf.Abs(y - N / 2) < 2)) c = outline;
                     px[y * N + x] = c;
                 }
             var t = new Texture2D(N, N, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 4 };
@@ -282,22 +302,30 @@ namespace Chubrik
             var d = b - a; d.y = 0;
             if (d.magnitude < 0.1f) return;
             float len = d.magnitude + 1;
-            var go = Box((a + b) / 2 + Vector3.up * h / 2, new Vector3(1, h, len), WallMat(style, len, h), Quaternion.LookRotation(d).eulerAngles.y);
-            string cap = style switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
-            B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.15f, 0.06f, 1.02f), M(cap, 0.3f));   // the top
-            if (style == WallStyle.Crystal)
+            var right = new Vector3(d.z, 0, -d.x).normalized;
+            var mid = (a + b) / 2;
+            // each face of a wall looks like the area it faces (outside the map: like the inside)
+            var sr = StyleAt(mid + right * 1.2f); var sl = StyleAt(mid - right * 1.2f);
+            var R = sr ?? sl ?? style; var L = sl ?? sr ?? style;
+            float yaw = Quaternion.LookRotation(d).eulerAngles.y;
+            if (R == L) Half(mid, 1f, R);
+            else { Half(mid + right * 0.25f, 0.5f, R); Half(mid - right * 0.25f, 0.5f, L); }
+
+            void Half(Vector3 c, float thick, WallStyle st)
             {
+                var go = Box(c + Vector3.up * h / 2, new Vector3(thick, h, len), WallMat(st, len, h), yaw);
+                string cap = st switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
+                B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.12f, 0.06f, 1.02f), M(cap, 0.3f));   // the top
+                if (st != WallStyle.Crystal) return;
                 // pink crystal clusters sticking out of the top, like on the drawing
                 crystalRun += d.magnitude;
-                if (crystalRun > 5.5f)
-                {
-                    crystalRun = 0;
-                    var p = (a + b) / 2 + Vector3.up * h;
-                    var pink = G("FF8FC8", 1.1f);
-                    Spike(root, p, p + new Vector3(0, 1.8f, 0), 0.55f, pink);
-                    Spike(root, p + new Vector3(0.15f, 0, 0.3f), p + new Vector3(0.5f, 1.3f, 0.9f), 0.4f, pink);
-                    Spike(root, p + new Vector3(-0.15f, 0, -0.3f), p + new Vector3(-0.5f, 1.3f, -0.9f), 0.4f, pink);
-                }
+                if (crystalRun < 5.5f) return;
+                crystalRun = 0;
+                var p = c + Vector3.up * h;
+                var pink = G("FF8FC8", 1.1f);
+                Spike(root, p, p + new Vector3(0, 1.8f, 0), 0.55f, pink);
+                Spike(root, p + new Vector3(0.15f, 0, 0.3f), p + new Vector3(0.5f, 1.3f, 0.9f), 0.4f, pink);
+                Spike(root, p + new Vector3(-0.15f, 0, -0.3f), p + new Vector3(-0.5f, 1.3f, -0.9f), 0.4f, pink);
             }
         }
 
@@ -396,7 +424,7 @@ namespace Chubrik
             Sign(c + new Vector3(0, 0, D / 2 + 0.8f), 0, "ГАРДЕРОБ", "FF5FA2", 5f);
             Npc(new Vector3(c.x - W / 2 - 1.1f, 0.05f, c.z - 1.2f), 160, "hat_4", "neck_5", "top_5", "color_3", "emote_5", "shoes_4");
             Npc(new Vector3(c.x + W / 2 + 1.1f, 0.05f, c.z - 1.2f), 200, "hat_6", "wings_0", "color_7", "tail_4", "emote_1", "weapon_2");
-            Zones.Add(c, 4.2f, "ГАРДЕРОБ", () => WardrobeUI.Open(), () => Worlds.Current == 1);
+            Zones.Add(c, 2.9f, "ГАРДЕРОБ", () => WardrobeUI.Open(), () => Worlds.Current == 1, Zones.Kind.Step);   // step onto the face
         }
 
         /// <summary>The red shop: 100 coins, extra hearts, the coin pointer.</summary>
@@ -418,7 +446,7 @@ namespace Chubrik
             var sign = Prim.Text(b, "МАГАЗИН", new Vector3(0, 4.9f, 3.15f), 6, Hex("FFFFFF"));
             sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
             Npc(b.TransformPoint(new Vector3(0, 0.2f, -0.6f)), b.eulerAngles.y + 180, "hat_0", "top_4", "color_1", "emote_6", "eyes_1");
-            Zones.Add(b.TransformPoint(new Vector3(0, 0, 2.6f)), 3.2f, "МАГАЗИН", () => ShopUI.Open(), () => Worlds.Current == 1);
+            Zones.Add(b.TransformPoint(new Vector3(0, 0, 1.6f)), 4.4f, "МАГАЗИН", () => ShopUI.Open(), () => Worlds.Current == 1, Zones.Kind.Hit);   // hit it to go in
             var crate = Tiled(Tex.Planks("C08040"), 1);
             Box(c + new Vector3(3.4f, 0.6f, -3.0f), new Vector3(1.3f, 1.2f, 1.3f), crate);
             TokenSpots.Add(c + new Vector3(0, 5.4f, 0));
@@ -446,7 +474,7 @@ namespace Chubrik
             }
             var sign = Prim.Text(b, "ПРЕМИУМ", new Vector3(0, 4.9f, 3.15f), 6, Hex("FFE14D"));
             sign.transform.localRotation = Quaternion.Euler(0, 180, 0);
-            Zones.Add(b.TransformPoint(new Vector3(0, 0, 2.6f)), 3.2f, "ПРЕМИУМ-НАБОРЫ", () => PremiumUI.Open(), () => Worlds.Current == 1);
+            Zones.Add(b.TransformPoint(new Vector3(0, 0, 1.6f)), 4.4f, "ПРЕМИУМ-НАБОРЫ", () => PremiumUI.Open(), () => Worlds.Current == 1, Zones.Kind.Hit);
         }
 
         // ---------------- portals ----------------
@@ -569,16 +597,36 @@ namespace Chubrik
             // the portal in the hollow at the top: you get there through the water cave
             PortalArch(new Vector3(5.2f, 0, 44.2f), 0, 4, "СНЕЖНАЯ ДОЛИНА", "8FD8FF", Glass("A8DCFF", 0.85f), "snow");
             TokenSpots.Add(new Vector3(-3, 1, 47.5f));
-            // the water cave: a rocky tunnel along the south shore of the lake, from the river to the hollow
-            var rock = M("8A93A0", 0.2f);
-            for (float x = 17; x <= 36; x += 3.8f)
+            // the water cave (15.11): a real cave under the lake shore — rock walls, a rocky snow-capped roof,
+            // a little underground pool, glowing ice crystals and icicles; in from the river, out into the hollow
+            var rock = M("8A93A0", 0.2f); var rockD = M("6E7682", 0.2f);
+            Box(new Vector3(26.4f, 2.75f, 44.1f), new Vector3(21.4f, 5.5f, 1.4f), rock);                     // the lake side
+            Box(new Vector3(25.6f, 2.75f, 37.65f), new Vector3(19.6f, 5.5f, 0.3f), rockD);                   // lining of the valley wall
+            var rr = new Rng(77);
+            for (float x = 16.5f; x <= 37; x += 3.2f)
             {
-                B(root, new Vector3(x, 5.9f, 40.2f), new Vector3(2.4f, 1.2f, 7.6f), rock);
-                S(root, new Vector3(x + 1.9f, 6.3f, 38.6f), new Vector3(4.2f, 2f, 3.6f), rock);
-                Spike(root, new Vector3(x + 1.2f, 5.4f, 41.5f), new Vector3(x + 1.2f, 4.2f, 41.5f), 0.3f, M("BFE8FF", 0.8f));
-                S(root, new Vector3(x, 0.4f, 43.3f), new Vector3(1.6f, 0.9f, 1.3f), rock);
+                S(root, new Vector3(x, 6f + rr.F(-0.3f, 0.4f), 40.4f), new Vector3(rr.F(5.5f, 7f), rr.F(2.4f, 3.2f), 8.8f), rock);   // the roof
+                S(root, new Vector3(x + 1.2f, 7.3f, 40.2f + rr.F(-1, 1)), new Vector3(rr.F(3.5f, 5f), 1.2f, rr.F(4, 6)), M("F4FAFF", 0.15f));   // snow on top
+                S(root, new Vector3(x, 1.2f, 43.2f), new Vector3(rr.F(1.6f, 2.6f), rr.F(1.8f, 2.8f), 1.4f), rockD);   // boulders along the walls
+                float ix = x + 1.6f;
+                for (int k = 0; k < 3; k++) Spike(root, new Vector3(ix + k * 0.5f, 5.2f, 39.6f + k * 0.9f), new Vector3(ix + k * 0.5f, 4.1f - (k % 2) * 0.5f, 39.6f + k * 0.9f), 0.32f, M("BFE8FF", 0.8f));   // icicles
             }
-            for (int k = 0; k < 4; k++) S(root, new Vector3(19 + k * 5.5f, 3.6f, 37.9f), 0.5f, G("7FE3FF", 1.6f));
+            // the entrances framed by rocks
+            foreach (var (x, z) in new[] { (16.2f, 37.9f), (16.2f, 43.2f), (36.6f, 37.9f), (36.6f, 43.2f) })
+                S(root, new Vector3(x, 2.4f, z), new Vector3(2.2f, 5.2f, 1.8f), rock);
+            // the underground pool and glowing ice crystals
+            Prim.Make(PrimitiveType.Cylinder, root, new Vector3(25.5f, 0.04f, 41.4f), new Vector3(6.5f, 0.02f, 3.2f), waterM, "Pool", Layers.World);
+            foreach (var c in new[] { new Vector3(19.5f, 0, 38.4f), new Vector3(28.5f, 0, 43f), new Vector3(33.5f, 0, 38.4f), new Vector3(22.5f, 0, 43f) })
+                for (int k = 0; k < 3; k++)
+                {
+                    var b = c + new Vector3((k - 1) * 0.45f, 0, 0);
+                    Spike(root, b, b + new Vector3((k - 1) * 0.35f, 1.3f + (k % 2) * 0.6f, 0), 0.45f, G("7FE3FF", 1.6f));
+                }
+            foreach (var x in new[] { 21f, 31f })
+            {
+                var lg = new GameObject("CaveLight"); lg.transform.SetParent(root, false); lg.transform.position = new Vector3(x, 3f, 40.6f);
+                var l = lg.AddComponent<Light>(); l.type = LightType.Point; l.color = Hex("8FE6FF"); l.range = 10; l.intensity = 2.2f; l.shadows = LightShadows.None;
+            }
             // the rock on the far side of the river
             Box(new Vector3(44.6f, 2.5f, 32.4f), new Vector3(5.8f, 5, 10.6f), rock);
             for (int k = 0; k < 3; k++) S(root, new Vector3(44.6f, 5f, 28.6f + k * 3.6f), new Vector3(6.4f, 2.4f, 4f), rock);
@@ -641,6 +689,28 @@ namespace Chubrik
 
         // ---------------- helpers ----------------
 
+        /// <summary>
+        /// 15.11: you can't walk through things. Every standing decoration in the lobby (rocks, bushes, pine branches,
+        /// snowmen, crystals, bench backs…) gets a box; flat decals, water, things overhead, moving or glowing bits,
+        /// text and characters are left as they are.
+        /// </summary>
+        static void MakeSolid()
+        {
+            foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var go = r.gameObject;
+                if (go.GetComponent<Collider>() || go.GetComponent<TMPro.TMP_Text>()) continue;
+                bool skip = false;
+                for (var t = go.transform.parent; t != null && t != root; t = t.parent)
+                    if (t.GetComponent<Collider>() || t.GetComponent<ChubrikModel>() || t.GetComponent<LobbyGate>()) { skip = true; break; }
+                if (skip || go.GetComponentInParent<Spin>() || go.GetComponentInParent<Pulse>() || go.GetComponentInParent<Mover>() || go.GetComponent<WaterScroll>()) continue;
+                if (go.name is "River" or "Lake" or "Pool" or "Pond" or "Water") continue;
+                var b = r.bounds;
+                if (b.size.x > 9 || b.size.z > 9 || b.min.y > 2.2f || b.size.y < 0.15f || Mathf.Min(b.size.x, b.size.z) < 0.06f) continue;
+                go.AddComponent<BoxCollider>();
+            }
+        }
+
         internal static GameObject Solid(PrimitiveType t, Vector3 pos, Vector3 scale, Material m, Vector3 euler = default, Transform parent = null)
         {
             Parts.Layer = Layers.World;
@@ -666,18 +736,8 @@ namespace Chubrik
             return m;
         }
 
-        internal static void Sign(Vector3 pos, float yaw, string text, string col = "FFC83A", float w = 4f)
-        {
-            var s = Node("Sign", root, pos, new Vector3(0, yaw, 0));
-            var wood = M("8D5524", 0.2f);
-            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cylinder, new Vector3(sd * (w / 2 - 0.2f), 0.9f, 0), new Vector3(0.18f, 0.9f, 0.18f), wood, default, s);
-            B(s, new Vector3(0, 1.9f, 0), new Vector3(w, 0.9f, 0.14f), wood);
-            B(s, new Vector3(0, 1.9f, -0.075f), new Vector3(w - 0.2f, 0.72f, 0.02f), M(col, 0.3f));
-            var t = Prim.Text(s, text, new Vector3(0, 1.9f, -0.1f), 4.2f, Color.white);
-            t.rectTransform.sizeDelta = new Vector2(w - 0.3f, 0.8f);
-            t.enableAutoSizing = true; t.fontSizeMin = 1; t.fontSizeMax = 4.2f;
-            t.transform.localRotation = Quaternion.identity;
-        }
+        /// <summary>Signs are gone (15.11, the player asked): the call sites stay, nothing is built.</summary>
+        internal static void Sign(Vector3 pos, float yaw, string text, string col = "FFC83A", float w = 4f) { }
 
         internal static ChubrikModel Npc(Vector3 pos, float yaw, params string[] items)
         {

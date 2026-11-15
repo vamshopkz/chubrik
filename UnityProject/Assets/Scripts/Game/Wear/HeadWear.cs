@@ -406,12 +406,19 @@ namespace Chubrik
                 var e = Node("Ear", HeadC, Vector3.zero);
                 switch (i)
                 {
-                    case 0: // Котёнка: rounded rim, inner fur, lynx tuft, tabby stripes
+                    case 0: // Волчьи (15.11, were «Котёнка»): tall pointed ears, light fur inside, a dark tip
                     {
-                        var f = Node("EarF", e, new Vector3(sd * 0.24f, 0.26f, -0.02f), new Vector3(0, 0, -sd * 24));
+                        var f = Node("EarF", e, new Vector3(sd * 0.23f, 0.27f, -0.03f), new Vector3(0, 0, -sd * 18));
+                        f.localScale = new Vector3(1.05f, 1.25f, 1.1f);
                         Cone(f, Vector3.zero, new Vector3(0.22f, 0.26f, 0.1f), Skin);
-                        Cone(f, new Vector3(0, 0.012f, 0.035f), new Vector3(0.12f, 0.17f, 0.04f), pink);
-                        Cone(f, new Vector3(0, 0.02f, 0.046f), new Vector3(0.07f, 0.11f, 0.03f), pinkD);
+                        Cone(f, new Vector3(0, 0.012f, 0.035f), new Vector3(0.12f, 0.17f, 0.04f), cream);
+                        Cone(f, new Vector3(0, 0.02f, 0.046f), new Vector3(0.07f, 0.11f, 0.03f), M("D8CFC2", 0.3f));
+                        Cone(f, new Vector3(0, 0.2f, 0), new Vector3(0.07f, 0.08f, 0.05f), M("4A5260", 0.3f));
+                        for (int k = 0; k < 6; k++)   // fur tufts on the back of the ear
+                        {
+                            float y = 0.04f + k * 0.03f, x = (k % 2 == 0 ? -1 : 1) * 0.03f;
+                            HwSpike(f, new Vector3(x, y, -0.04f * (1 - y / 0.26f)), new Vector3(x * 2.2f, y + 0.07f, -0.06f * (1 - y / 0.26f) - 0.01f), 0.02f, Skin);
+                        }
                         foreach (var s in new[] { -1f, 1f })   // rim along both edges
                             for (int k = 0; k < 8; k++)
                             {
@@ -426,12 +433,6 @@ namespace Chubrik
                         for (int k = 0; k < 3; k++) HwSpike(f, new Vector3((k - 1) * 0.006f, 0.235f, 0), new Vector3((k - 1) * 0.022f, 0.31f + (k == 1 ? 0.02f : 0), 0), 0.02f, Skin);
                         for (int k = 0; k < 8; k++)   // fluff where the ear meets the head
                             HwDot(f, new Vector3(-0.1f + k * 0.0285f, 0.0f, (k % 2 == 0 ? 0.02f : -0.025f)), 0.05f, Skin);
-                        var stripe = Glass("3A2410", 0.25f);
-                        for (int k = 0; k < 4; k++)   // tabby stripes on the back
-                        {
-                            float y = 0.05f + k * 0.04f, w = 0.11f * (1 - y / 0.26f) * 1.5f;
-                            B(f, new Vector3(0, y, -0.05f * (1 - y / 0.26f) - 0.003f), new Vector3(w, 0.014f, 0.004f), stripe, new Vector3(-11, 0, 0));
-                        }
                         break;
                     }
                     case 1: // Медвежьи: fluffy rim, stitched inner patch like a teddy bear

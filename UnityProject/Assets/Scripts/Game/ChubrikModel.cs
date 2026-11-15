@@ -84,6 +84,7 @@ namespace Chubrik
             FootL = Node("FootL", LegL, new Vector3(0, -0.3f, 0.04f));
             FootR = Node("FootR", LegR, new Vector3(0, -0.3f, 0.04f));
 
+            WolfBody();
             int made = Parts.Made;
             HeadShape(look.Idx("head"));
             PartCount["head"] = Parts.Made - made;
@@ -114,6 +115,24 @@ namespace Chubrik
             foreach (var r in GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
+        /// <summary>15.11 the hero is a wolf: a light belly and a bushy tail (unless a tail or a shirt is worn).</summary>
+        void WolfBody()
+        {
+            if (look.Idx("head") != 0) return;
+            var cream = M("F2ECE2", 0.3f);
+            if (string.IsNullOrEmpty(look.Of("top"))) S(Torso, new Vector3(0, 0.18f, 0.19f), new Vector3(0.42f, 0.42f, 0.2f), cream);
+            if (!string.IsNullOrEmpty(look.Of("tail"))) return;
+            var t = Node("WolfTail", Torso, new Vector3(0, 0.08f, -0.27f), new Vector3(-35, 0, 0));
+            float z = 0;
+            for (int k = 0; k < 5; k++)
+            {
+                float w = 0.13f + Mathf.Sin((k + 0.5f) / 5f * Mathf.PI) * 0.09f;
+                S(t, new Vector3(0, 0, -z), new Vector3(w, w, w * 1.35f), k == 4 ? cream : Skin);
+                z += w * 0.62f;
+            }
+            Cone(t, new Vector3(0, 0, -z - 0.02f), new Vector3(0.12f, 0.12f, 0.12f), cream, new Vector3(-90, 0, 0));
+        }
+
         delegate void Builder(int idx, int set);
 
         /// <summary>Calls the builder of a department; "always" builders also run with nothing worn (bare hands / feet).</summary>
@@ -128,7 +147,7 @@ namespace Chubrik
 
         public static Color BodyColor(int i)
         {
-            string[] c = { "FFC93C", "5BB8FF", "F2403C", "2A2A33", "8BE03A", "A050FF", "FF8FC4", "F4F7FA" };
+            string[] c = { "8E99A8", "5BB8FF", "F2403C", "2A2A33", "8BE03A", "A050FF", "FF8FC4", "F4F7FA" };
             return Hex(c[Mathf.Clamp(i, 0, 7)]);
         }
 

@@ -25,6 +25,7 @@ namespace Chubrik
         public float volume = 0.8f, sens = 1f;
         public bool music = true;
         public int quality = -1;
+        public bool wolf;                                    // 15.11: the hero became a wolf (one-time look change done)
     }
 
     /// <summary>Local profile: coins, tokens, owned items, current look, settings (JSON in persistentDataPath).</summary>
@@ -40,6 +41,12 @@ namespace Chubrik
             try { if (File.Exists(Path)) P = JsonUtility.FromJson<Profile>(File.ReadAllText(Path)) ?? new Profile(); }
             catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); P = new Profile(); }
             if (string.IsNullOrEmpty(P.id)) P.id = Guid.NewGuid().ToString("N").Substring(0, 8);
+            if (!P.wolf)
+            {
+                // 15.11: the hero is a wolf now — wolf head, wolf ears, no spiky hair; hats, clothes and colours stay
+                P.wolf = true;
+                P.look.RemoveAll(e => e.StartsWith("head=") || e == "ears=ears_1" || e == "hair=hair_0");
+            }
             Fix();
         }
 

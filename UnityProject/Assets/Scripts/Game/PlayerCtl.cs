@@ -126,6 +126,7 @@ namespace Chubrik
 
         void Update()
         {
+            Zones.Tick();
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             if (MenuOrbit) { vel = Vector3.zero; Anim.speed01 = 0; Anim.grounded = true; return; }
 
@@ -427,6 +428,7 @@ namespace Chubrik
             }
             attackCd = 0.4f;
             Anim.Attack();
+            if (Grounded && Zones.HitEnter()) { AudioFx.Play("punch"); return; }   // a hit next to a shop goes in
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
             World3.HitNear(transform.position);   // singing crystals of the Masters' riddle
             World4.HitNear(transform.position, !Grounded);   // snowmen, ice cubes (a jump attack breaks them), the chimney

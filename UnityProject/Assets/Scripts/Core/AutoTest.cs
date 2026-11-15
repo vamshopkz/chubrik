@@ -658,6 +658,8 @@ namespace Chubrik
 
             // friends in ice cubes: only a jump attack breaks them
             var cube = Rescue.Cages.Find(c => c.id == "w4c0");
+            Check("8 snowy keys in the Snowy Valley", Pickups.I.KeysLeftIn("w4k") == 8, Pickups.I.KeysLeftIn("w4k").ToString());
+            Save.P.keys++;   // as if a snowy key was found
             pl.Teleport(cube.transform.position + cube.transform.forward * 1.7f + Vector3.up * 0.1f, cube.transform.eulerAngles.y + 180);
             yield return Wait(0.6f);
             yield return Shot("42_ice_cube");

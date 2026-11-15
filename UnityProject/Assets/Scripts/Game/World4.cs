@@ -47,7 +47,7 @@ namespace Chubrik
             Field(V(0, 0, 0), 13);
             Portal(V(-6, 0, -6));
             Lobby.Sign(V(-4.5f, 0, 5.5f), 0, "МИР 4 · СНЕЖНАЯ ДОЛИНА", "35E0FF", 5.4f);
-            Lobby.Sign(V(4.5f, 0, 5.5f), 0, "СПАСИ 8 ДРУЗЕЙ ИЗО ЛЬДА!", "4CE35A", 5.4f);
+            Lobby.Sign(V(4.5f, 0, 5.5f), 0, "НАЙДИ СНЕЖНЫЕ КЛЮЧИ!", "4CE35A", 5.4f);
             Station(V(5, 0, -4));
             Pines(V(0, 0, 0), 11, 8, 3);
             for (int k = 0; k < 5; k++) Pickups.I.Coin(V(-3 + k * 1.5f, 0.8f, 8));
@@ -126,6 +126,16 @@ namespace Chubrik
             GoalPos = ArenaC + Vector3.up * 1.2f;
             Boss = new GameObject("Yeti").AddComponent<Yeti>();
             Boss.Build(ArenaC + new Vector3(0, 0, 4), Root);
+
+            // 15.11: 8 snowy keys — one for each friend in the ice
+            Pickups.I.Key("w4k0", V(-2, 1.2f, -8), true);
+            Pickups.I.Key("w4k1", V(-7, 1.2f, 31), true);
+            Pickups.I.Key("w4k2", V(1, 1.2f, 67.5f), true);
+            Pickups.I.Key("w4k3", V(-4.5f, 1.2f, 87), true);
+            Pickups.I.Key("w4k4", BoardTop + new Vector3(2, 1.1f, -1.5f), true);
+            Pickups.I.Key("w4k5", V(17, 1.2f, 144.5f), true);
+            Pickups.I.Key("w4k6", CaveC + new Vector3(2, 1.1f, -1), true);
+            Pickups.I.Key("w4k7", V(15, 1.2f, 170), true);
 
             Mountains();
             new GameObject("SnowFall").AddComponent<SnowFall>().transform.SetParent(Root, false);

@@ -55,14 +55,14 @@ namespace Chubrik
         }
 
         /// <summary>Golden key: opens one cage with a captured friend (taken once forever).</summary>
-        public void Key(string id, Vector3 pos)
+        public void Key(string id, Vector3 pos, bool snowy = false)
         {
             if (Save.P.found.Contains(id)) return;
             Parts.Layer = Layers.Pickup;
             var go = new GameObject("Key " + id) { layer = Layers.Pickup };
             go.transform.SetParent(transform, false);
             go.transform.position = pos;
-            KeyModel.Build(go.transform);
+            if (snowy) KeyModel.BuildSnow(go.transform); else KeyModel.Build(go.transform);
             go.AddComponent<Spin>().speed = 120;
             go.AddComponent<Bob>().amp = 0.15f;
             items.Add(new P { go = go, pos = pos, token = id, key = true });
@@ -195,23 +195,31 @@ namespace Chubrik
         }
     }
 
-    /// <summary>Places you can enter (shop, wardrobe, premium kiosk): the HUD shows a button while you stand there.</summary>
+    /// <summary>
+    /// Places you can enter. Portals and boxes: the HUD shows a button while you stand there.
+    /// The wardrobe opens by itself when you step onto its face; the shops open with a hit next to them.
+    /// </summary>
     public static class Zones
     {
-        public class Z { public Vector3 pos; public float r; public string label; public Action act; public Func<bool> active; }
+        public enum Kind { Button, Step, Hit }
+        public class Z { public Vector3 pos; public float r; public string label; public Action act; public Func<bool> active; public Kind kind; public bool inside; }
         public static readonly List<Z> All = new List<Z>();
-        public static void Add(Vector3 pos, float r, string label, Action act, Func<bool> active = null) => All.Add(new Z { pos = pos, r = r, label = label, act = act, active = active });
+        public static void Add(Vector3 pos, float r, string label, Action act, Func<bool> active = null, Kind kind = Kind.Button) =>
+            All.Add(new Z { pos = pos, r = r, label = label, act = act, active = active, kind = kind });
 
+        static bool In(Z z, PlayerCtl p)
+        {
+            if (z.active != null && !z.active()) return false;
+            var d = p.transform.position - z.pos; d.y = 0;
+            return d.magnitude < z.r && Mathf.Abs(p.transform.position.y - z.pos.y) < 3;
+        }
+
+        /// <summary>The button zone you stand in (the HUD's «ВОЙТИ»).</summary>
         public static Z Near()
         {
             var p = PlayerCtl.I;
             if (p == null || p.MenuOrbit) return null;
-            foreach (var z in All)
-            {
-                if (z.active != null && !z.active()) continue;
-                var d = p.transform.position - z.pos; d.y = 0;
-                if (d.magnitude < z.r && Mathf.Abs(p.transform.position.y - z.pos.y) < 3) return z;
-            }
+            foreach (var z in All) if (z.kind == Kind.Button && In(z, p)) return z;
             return null;
         }
 
@@ -221,6 +229,29 @@ namespace Chubrik
             if (z == null) return false;
             z.act();
             return true;
+        }
+
+        /// <summary>A hit next to a shop goes in. True when something opened.</summary>
+        public static bool HitEnter()
+        {
+            var p = PlayerCtl.I;
+            if (p == null) return false;
+            foreach (var z in All) if (z.kind == Kind.Hit && In(z, p)) { z.act(); return true; }
+            return false;
+        }
+
+        /// <summary>Every frame: stepping onto a step zone opens it (again only after stepping off).</summary>
+        public static void Tick()
+        {
+            var p = PlayerCtl.I;
+            if (p == null) return;
+            foreach (var z in All)
+            {
+                if (z.kind != Kind.Step) continue;
+                bool now = !p.MenuOrbit && p.Grounded && In(z, p);
+                if (now && !z.inside && UIRoot.Open == null && !Menus.AnyOpen) z.act();
+                z.inside = now;
+            }
         }
     }
 
