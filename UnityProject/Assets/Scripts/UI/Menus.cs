@@ -42,7 +42,7 @@ namespace Chubrik
             UIKit.Place(sub.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -220), new Vector2(1200, 50));
 
             var col = UIKit.Rect("Buttons", dim.transform);
-            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -150), new Vector2(560, 640));
+            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -170), new Vector2(560, 720));
             var vl = col.gameObject.AddComponent<VerticalLayoutGroup>();
             vl.spacing = 16; vl.childControlHeight = false; vl.childControlWidth = true; vl.childForceExpandHeight = false;
             void Btn(string label, Color c, System.Action a, float h = 92, float font = 40)
@@ -53,6 +53,7 @@ namespace Chubrik
             Btn("ИГРАТЬ", UIKit.Green, Play, 112, 52);
             Btn("ИГРОКИ ОНЛАЙН", UIKit.Violet, () => { CloseMain(); PlayersUI.Open(); });
             Btn("ТАБЛИЦА РЕКОРДОВ", UIKit.Orange, () => { CloseMain(); RecordsUI.Open(); });
+            Btn("ПРОМОКОДЫ", UIKit.Pink, () => { CloseMain(); PromoWindow(); });
             Btn("НАСТРОЙКИ", UIKit.Blue, () => { CloseMain(); Settings(); });
             var tip = UIKit.Txt(col, "Гардероб, магазин и премиум-наборы — в лобби: подойди к ним", 24, Color.white);
             tip.rectTransform.sizeDelta = new Vector2(560, 70);
@@ -95,6 +96,7 @@ namespace Chubrik
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
                 w.Row("Игроки онлайн", Online.I != null && Online.I.Peers.Count > 0 ? $"Сейчас играют: {Online.I.Peers.Count} — нажми и окажешься рядом" : "Кто сейчас играет — можно прийти к ним", "СМОТРЕТЬ", UIKit.Violet, PlayersUI.Open);
                 if (Online.I != null && Online.I.RoomWith != null) w.Row("Ты в комнате с другом", "Выйди, если хочешь играть один", "ВЫЙТИ", UIKit.Red, () => Online.I.LeaveRoom());
+                w.Row("Промокоды", "Напиши секретное слово — и случится что-то интересное", "ВВЕСТИ", UIKit.Pink, PromoWindow);
                 w.Row("Таблица рекордов", "Кто больше всех собрал монет, друзей, миров, жетонов и яиц", "СМОТРЕТЬ", UIKit.Orange, RecordsUI.Open);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
                 if (Worlds.Level)

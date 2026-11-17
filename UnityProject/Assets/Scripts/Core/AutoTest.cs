@@ -969,7 +969,14 @@ namespace Chubrik
                     Check("a bird flies up into the sky when you come close", bird.Flying && bird.transform.position.y > 1.5f, bird.transform.position.y.ToString("0.0"));
                 }
 
-                // promo codes
+                // promo codes: there is a menu section for them
+                Menus.Pause();
+                yield return Wait(0.4f);
+                bool promoRow = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "Промокоды") promoRow = true;
+                yield return Shot("76_menu_promo");
+                Window.Close();
+                Check("the menu has a «Промокоды» section", promoRow);
                 pl.Teleport(Lobby.Spawn, 180);
                 yield return Wait(0.3f);
                 Promo.Apply("Курица");
