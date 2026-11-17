@@ -63,6 +63,7 @@ namespace Chubrik
             Gates.Add(LobbyGate.Spawn(new Vector3(-39.05f, 0, -6.9f), 0, 8.5f, 25, "ГЛЮК-МИР 404", root));
             Clouds();
             Tokens();
+            Houses.Build(root);   // 17.11: little houses where nothing else stands
             MakeSolid();
             Eggs.SpawnLobby();
             Bird.ForWorld(1);

@@ -23,6 +23,13 @@ namespace Chubrik
         static readonly List<(Item it, Image frame, TextMeshProUGUI status)> tiles = new List<(Item, Image, TextMeshProUGUI)>();
         static readonly HashSet<string> NoPicture = new HashSet<string> { "jsnd", "lsnd", "dmg", "win", "walk", "emote", "shadow", "steps" };
 
+        static RectTransform leftPanel, rightPanel;
+        static ChubrikModel M => PlayerCtl.I.Model;
+        static ChubrikAnim A => PlayerCtl.I.Anim;
+
+        /// <summary>17.11: the try-on goes onto the real chubrik in the world.</summary>
+        static void TryOn(Look l) { PlayerCtl.I.ApplyLook(l); }
+
         public static void Open(string startDept = null)
         {
             Window.Close();
@@ -30,47 +37,34 @@ namespace Chubrik
             Menus.Unlock();
             if (startDept != null) dept = startDept;
             PlayerCtl.I.Frozen = true;
-            Preview.I.Show(true);
-            Preview.I.SetLook(Save.CurrentLook());
-            Preview.I.Yaw = 20;
+            PlayerCtl.I.StartWardrobeView();
+            TryOn(Save.CurrentLook());
+            var safe = UIRoot.Safe();
 
-            var dim = UIKit.Img(UIRoot.WinLayer, UIKit.White, new Color(0.05f, 0.1f, 0.25f, 0.55f), "Wardrobe", true);
-            UIKit.Fill(dim.rectTransform);
-            dim.transform.SetAsFirstSibling();
-            root = dim.gameObject;
-            var panel = UIKit.Img(dim.transform, UIKit.Panel, Color.white, "Panel", true);
-            UIKit.Place(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1570, 870));
-            var P = panel.transform;
+            // no dark curtain: the chubrik stands in the world between the panels
+            var rootRt = UIKit.Rect("Wardrobe", UIRoot.WinLayer);
+            UIKit.Fill(rootRt);
+            rootRt.SetAsFirstSibling();
+            root = rootRt.gameObject;
+            var drag = UIKit.Img(rootRt, UIKit.White, new Color(0, 0, 0, 0.001f), "Drag", true);
+            UIKit.Fill(drag.rectTransform);
+            drag.gameObject.AddComponent<PreviewDrag>();
+            var P = rootRt;
 
+            var bar = UIKit.Img(P, UIKit.White, new Color(0.07f, 0.14f, 0.34f, 1f), "TopBar", true);
+            UIKit.Place(bar.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(4000, 80));
             var title = UIKit.Txt(P, "ГАРДЕРОБ", 44, UIKit.Gold, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(30, -14), new Vector2(400, 60));
-            money = UIKit.Txt(P, "", 30, Color.white, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(money.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(330, -16), new Vector2(700, 56));
+            UIKit.Place(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(20 + safe.x, -10), new Vector2(300, 60));
+            money = UIKit.Txt(P, "", 28, Color.white, TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(money.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(330 + safe.x, -12), new Vector2(760, 56));
+            money.enableAutoSizing = true; money.fontSizeMin = 16; money.fontSizeMax = 28;
             var close = UIKit.Button(P, "ГОТОВО", UIKit.Green, Close, 30);
-            UIKit.Place(close.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-18, -14), new Vector2(210, 66));
+            UIKit.Place(close.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-14 - safe.z, -7), new Vector2(210, 66));
 
-            // preview
-            var pv = new GameObject("Preview", typeof(RectTransform)).AddComponent<RawImage>();
-            pv.transform.SetParent(P, false);
-            pv.texture = Preview.I.RT;
-            UIKit.Place(pv.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24, -92), new Vector2(448, 560));
-            pv.gameObject.AddComponent<PreviewDrag>();
-            var hintT = UIKit.Txt(pv.transform, "крути пальцем", 20, new Color(1, 1, 1, 0.8f), TextAlignmentOptions.Bottom, false);
-            UIKit.Place(hintT.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 6), new Vector2(400, 28));
-            selName = UIKit.Txt(P, "", 30, Color.white, TextAlignmentOptions.TopLeft);
-            UIKit.Place(selName.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(26, -660), new Vector2(450, 44));
-            selName.enableAutoSizing = true; selName.fontSizeMin = 18; selName.fontSizeMax = 30;
-            selInfo = UIKit.Txt(P, "", 22, UIKit.Muted, TextAlignmentOptions.TopLeft, false);
-            UIKit.Place(selInfo.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(26, -702), new Vector2(450, 34));
-            action = UIKit.Button(P, "", UIKit.Green, OnAction, 28);
-            UIKit.Place(action.Bg.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(24, 24), new Vector2(300, 84));
-            takeOff = UIKit.Button(P, "СНЯТЬ", UIKit.Red, OnTakeOff, 26);
-            UIKit.Place(takeOff.Bg.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(334, 24), new Vector2(140, 84));
-            test = UIKit.Button(P, "ТЕСТ", UIKit.Violet, Test, 24);
-            UIKit.Place(test.Bg.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -100), new Vector2(104, 56));
-
-            // departments
-            deptList = ScrollList(P, new Vector2(490, -92), new Vector2(320, 760), true);
+            // left: the departments, the lucky block button under them
+            var lp = UIKit.Img(P, UIKit.Panel, new Color(1, 1, 1, 0.92f), "Left", true);
+            leftPanel = UIKit.Place(lp.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12 + safe.x, -90), new Vector2(300, 700));
+            deptList = ScrollList(lp.transform, new Vector2(10, -10), new Vector2(280, 680), true);
             deptBtns.Clear();
             foreach (var d in Catalog.Depts)
             {
@@ -80,11 +74,58 @@ namespace Chubrik
                 b.Label.alignment = TextAlignmentOptions.MidlineLeft;
                 deptBtns[d.id] = b;
             }
+            var lucky = UIKit.Button(P, "ОТКРЫТЬ ЛАКИ-БЛОК", UIKit.Orange, LuckyUI.Open, 24, "LuckyButton");
+            UIKit.Place(lucky.Bg.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(12 + safe.x, 14 + safe.y), new Vector2(300, 86));
+            lucky.Bg.gameObject.AddComponent<Rainbow>();
 
-            // items
-            grid = ScrollList(P, new Vector2(826, -92), new Vector2(720, 760), false);
+            // right: the skins and under them the buy / wear button
+            var rp = UIKit.Img(P, UIKit.Panel, new Color(1, 1, 1, 0.92f), "Right", true);
+            rightPanel = UIKit.Place(rp.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-12 - safe.z, -90), new Vector2(570, 796 - safe.y));
+            var R = rp.transform;
+            grid = ScrollList(R, new Vector2(10, -10), new Vector2(550, 560), false);
+            selName = UIKit.Txt(R, "", 30, Color.white, TextAlignmentOptions.TopLeft);
+            UIKit.Place(selName.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -580), new Vector2(430, 44));
+            selName.enableAutoSizing = true; selName.fontSizeMin = 18; selName.fontSizeMax = 30;
+            selInfo = UIKit.Txt(R, "", 22, UIKit.Muted, TextAlignmentOptions.TopLeft, false);
+            UIKit.Place(selInfo.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -624), new Vector2(530, 34));
+            selInfo.enableAutoSizing = true; selInfo.fontSizeMin = 14; selInfo.fontSizeMax = 22;
+            test = UIKit.Button(R, "ТЕСТ", UIKit.Violet, Test, 24);
+            UIKit.Place(test.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-12, -576), new Vector2(104, 52));
+            action = UIKit.Button(R, "", UIKit.Green, OnAction, 28, "ActionButton");
+            UIKit.Place(action.Bg.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(12, 14), new Vector2(390, 84));
+            takeOff = UIKit.Button(R, "СНЯТЬ", UIKit.Red, OnTakeOff, 26);
+            UIKit.Place(takeOff.Bg.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-12, 14), new Vector2(150, 84));
+
+            var hintT = UIKit.Txt(P, "крути чубрика пальцем", 22, new Color(1, 1, 1, 0.85f), TextAlignmentOptions.Bottom);
+            UIKit.Place(hintT.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 14 + safe.y), new Vector2(400, 30));
+            root.AddComponent<CenterKeeper>().hint = hintT.rectTransform;
+
             SelectDept(dept);
             Refresh();
+        }
+
+        /// <summary>Keeps the chubrik in the middle of the free space between the two panels (any screen width).</summary>
+        class CenterKeeper : MonoBehaviour
+        {
+            public RectTransform hint;
+            readonly Vector3[] c = new Vector3[4];
+            void LateUpdate()
+            {
+                if (!leftPanel || !rightPanel || PlayerCtl.I == null) return;
+                leftPanel.GetWorldCorners(c); float l = c[2].x;
+                rightPanel.GetWorldCorners(c); float r = c[0].x;
+                float cx = (l + r) * 0.5f / Mathf.Max(1, Screen.width);
+                PlayerCtl.I.WardrobeCx = cx;
+                if (hint) hint.position = new Vector3((l + r) * 0.5f, hint.position.y, 0);
+            }
+        }
+
+        /// <summary>A slowly shifting rainbow tint (the lucky block button).</summary>
+        public class Rainbow : MonoBehaviour
+        {
+            Image img;
+            void Start() { img = GetComponent<Image>(); }
+            void Update() { if (img) img.color = Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime * 0.15f, 1), 0.55f, 1f); }
         }
 
         static RectTransform ScrollList(Transform parent, Vector2 pos, Vector2 size, bool vertical)
@@ -107,7 +148,7 @@ namespace Chubrik
             {
                 var gl = content.gameObject.AddComponent<GridLayoutGroup>();
                 gl.cellSize = new Vector2(166, 214); gl.spacing = new Vector2(10, 10); gl.padding = new RectOffset(6, 6, 6, 6);
-                gl.constraint = GridLayoutGroup.Constraint.FixedColumnCount; gl.constraintCount = 4;
+                gl.constraint = GridLayoutGroup.Constraint.FixedColumnCount; gl.constraintCount = 3;
             }
             content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             var sr = view.gameObject.AddComponent<ScrollRect>();
@@ -154,11 +195,11 @@ namespace Chubrik
             var list = new List<Item>();
             foreach (var it in d.items) if (raws.ContainsKey(it.id)) list.Add(it);
             Preview.I.Thumbs(list, (it, tex) => { if (raws.TryGetValue(it.id, out var r) && r) r.texture = tex; });
-            Preview.I.View = d.view == "fx" ? "body" : d.view;
+            PlayerCtl.I.WardrobeZoom = d.view == "fx" ? "body" : d.view;
             var worn = Catalog.Get(Save.Worn(id));
             sel = worn ?? (d.items.Count > 0 ? d.items[0] : null);
-            Preview.I.SetLook(Save.CurrentLook());
-            Preview.I.Walk = id == "walk" || id == "steps";
+            TryOn(Save.CurrentLook());
+            PlayerCtl.I.ShowWalk = id == "walk" || id == "steps";
             Refresh();
         }
 
@@ -167,7 +208,7 @@ namespace Chubrik
             sel = it;
             var l = Save.CurrentLook();
             l[it.dept] = it.id;
-            Preview.I.SetLook(l);
+            TryOn(l);
             Test();
             Refresh();
         }
@@ -176,16 +217,16 @@ namespace Chubrik
         static void Test()
         {
             if (sel == null) return;
-            var m = Preview.I.Model;
+            var m = M;
             int i = Mathf.Max(0, Catalog.Index(sel.id));
             switch (sel.dept)
             {
-                case "jsnd": AudioFx.Jump(i, false); Preview.I.Anim.Land(0.5f); break;
-                case "lsnd": AudioFx.Land(i); Preview.I.Anim.Land(1f); break;
+                case "jsnd": AudioFx.Jump(i, false); A.Land(0.5f); break;
+                case "lsnd": AudioFx.Land(i); A.Land(1f); break;
                 case "dmg": Effects.Damage(i, m); break;
                 case "win": Effects.Victory(i, m); break;
-                case "emote": Preview.I.Anim.emote = i; Preview.I.Anim.PlayEmote(); break;
-                case "weapon": Preview.I.Anim.Attack(); break;
+                case "emote": A.emote = i; A.PlayEmote(); break;
+                case "weapon": A.Attack(); break;
                 default: AudioFx.Play("click"); break;
             }
         }
@@ -204,16 +245,15 @@ namespace Chubrik
                 else if (it.Premium) { st.text = "★ НАБОР"; st.color = UIKit.Pink; }
                 else if (it.Reward) { st.text = "НАГРАДА"; st.color = UIKit.Gold; }
                 else if (it.promoOnly) { st.text = "ПРОМОКОД"; st.color = UIKit.Violet; }
-                else if (it.tokens) { st.text = it.price + " ЖЕТ."; st.color = UIKit.Violet; }
-                else { st.text = it.price + " МОНЕТ"; st.color = P.coins >= it.price ? UIKit.Gold : UIKit.Red; }
+                else { int r = Lucky.Rarity(it); st.text = Lucky.RarityName[r]; st.color = Lucky.RarityColor[r]; }
                 var tileImg = frame.transform.parent.GetComponent<Image>();
                 tileImg.color = own ? Color.white : new Color(0.82f, 0.86f, 0.92f);
             }
             var d = Catalog.Dept(dept);
             if (sel == null) { selName.text = ""; selInfo.text = ""; action.gameObject.SetActive(false); takeOff.gameObject.SetActive(false); return; }
             selName.text = sel.name;
-            selInfo.text = sel.Premium ? $"Премиум-набор «{Catalog.Sets[sel.set].name}»" : sel.Reward ? "Награда: " + sel.reward : d.name;
-            var pm = Preview.I.Model;
+            selInfo.text = sel.Premium ? $"Премиум-набор «{Catalog.Sets[sel.set].name}»" : sel.Reward ? "Награда: " + sel.reward : Lucky.InPool(sel) ? d.name + " · " + Lucky.RarityName[Lucky.Rarity(sel)].ToLower() : d.name;
+            var pm = M;
             if (pm && pm.look.Of(sel.dept) == sel.id && pm.PartCount.TryGetValue(sel.dept, out var pc) && pc >= 20) selInfo.text += $" · {pc} деталей";
             bool isWorn = Save.Worn(sel.dept) == sel.id, owns = Save.Owns(sel.id);
             action.gameObject.SetActive(true);
@@ -223,8 +263,7 @@ namespace Chubrik
             else if (sel.Premium) action.Set("ПРЕМИУМ-НАБОР", UIKit.Pink);
             else if (sel.Reward) action.Set("НАГРАДА", new Color(0.4f, 0.4f, 0.5f));
             else if (sel.promoOnly) action.Set("ПРОМОКОД", UIKit.Violet);
-            else if (sel.tokens) action.Set($"КУПИТЬ: {sel.price} ЖЕТ.", P.tokens >= sel.price ? UIKit.Violet : new Color(0.4f, 0.4f, 0.5f));
-            else action.Set($"КУПИТЬ: {sel.price}", P.coins >= sel.price ? UIKit.Orange : new Color(0.4f, 0.4f, 0.5f));
+            else action.Set("КУПИТЬ ЛАКИ-БЛОК", UIKit.Orange);   // 17.11: skins come only from lucky blocks
             takeOff.gameObject.SetActive(d.optional && !string.IsNullOrEmpty(Save.Worn(dept)));
             test.gameObject.SetActive(NoPicture.Contains(dept) || dept == "weapon");
         }
@@ -239,26 +278,20 @@ namespace Chubrik
                 if (sel.Premium) { AudioFx.Play("error"); Hud.Toast($"Набор «{Catalog.Sets[sel.set].name}» — в золотом премиум-киоске у фонтана", UIKit.Gold); return; }
                 if (sel.promoOnly) { AudioFx.Play("error"); Hud.Toast("Промокод вводится в золотом премиум-киоске", UIKit.Violet); return; }
                 if (sel.Reward) { AudioFx.Play("error"); Hud.Toast(sel.reward, UIKit.Gold); return; }
-                bool paid = sel.tokens ? Save.SpendTokens(sel.price) : Save.Spend(sel.price);
-                if (!paid)
-                {
-                    AudioFx.Play("error");
-                    Hud.Toast(sel.tokens ? "Не хватает жетонов — ищи их в лобби" : "Не хватает монет — собирай их в лобби или открой лутбокс", UIKit.Red);
-                    return;
-                }
-                Save.Give(sel.id);
-                AudioFx.Play("buy");
-                Effects.Victory(1, Preview.I.Model);
+                // 17.11: no buying a skin for coins — it falls out of a lucky block
+                Hud.Toast("Эта вещь выпадает только из лаки-блоков", UIKit.Orange);
+                LuckyUI.Open();
+                return;
             }
             Save.Wear(sel.dept, sel.id);
-            Preview.I.SetLook(Save.CurrentLook());
+            TryOn(Save.CurrentLook());
             Refresh();
         }
 
         static void OnTakeOff()
         {
             Save.Wear(dept, "");
-            Preview.I.SetLook(Save.CurrentLook());
+            TryOn(Save.CurrentLook());
             sel = null;
             Refresh();
         }
@@ -267,16 +300,16 @@ namespace Chubrik
         {
             if (root) Object.Destroy(root);
             root = null;
-            if (Preview.I) { Preview.I.Show(false); Preview.I.Walk = false; }
-            if (PlayerCtl.I) { PlayerCtl.I.ApplyLook(Save.CurrentLook()); PlayerCtl.I.Frozen = false; }
+            LuckyUI.Close();
+            if (PlayerCtl.I) { PlayerCtl.I.StopWardrobeView(); PlayerCtl.I.ApplyLook(Save.CurrentLook()); PlayerCtl.I.Frozen = false; }
         }
 
         /// <summary>Re-reads coins / ownership after a purchase made elsewhere (promo code, premium).</summary>
-        public static void Changed() { if (IsOpen) Refresh(); }
+        public static void Changed() { if (IsOpen) { Refresh(); TryOn(Save.CurrentLook()); } }
 
         class PreviewDrag : MonoBehaviour, IDragHandler
         {
-            public void OnDrag(PointerEventData e) { Preview.I.Yaw -= e.delta.x * 0.6f; }
+            public void OnDrag(PointerEventData e) { PlayerCtl.I.WardrobeSpin -= e.delta.x * 0.5f; }
         }
     }
 }

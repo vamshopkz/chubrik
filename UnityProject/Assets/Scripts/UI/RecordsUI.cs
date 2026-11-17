@@ -23,11 +23,11 @@ namespace Chubrik
             list.RemoveAll(r => r.pid == mine.pid);
             list.Add(mine);
             long V(Online.Record r) => b switch { By.Friends => r.friends, By.Worlds => r.worlds, By.Tokens => r.tokens, By.Eggs => r.eggs, _ => r.coins };
-            list.Sort((x, y) => V(y).CompareTo(V(x)));
+            list.Sort((x, y) => x.old != y.old ? (x.old ? 1 : -1) : V(y).CompareTo(V(x)));
             return list;
         }
 
-        static string Value(Online.Record r) => by switch
+        static string Value(Online.Record r) => r.old ? "старая версия" : by switch
         {
             By.Friends => r.friends + " друзей", By.Worlds => r.worlds + " миров", By.Tokens => UIKit.Num(r.tokens) + " жет.", By.Eggs => r.eggs + " яиц", _ => UIKit.Num(r.coins) + " мон.",
         };
@@ -52,7 +52,7 @@ namespace Chubrik
             if (Online.I == null || !Online.I.Connected) w.Text("Нет интернета — видно только тебя. Таблица загрузится, когда появится связь.", 24, UIKit.Muted);
             string me = Save.P.id;
             int shown = 0;
-            for (int i = 0; i < list.Count && shown < 50; i++, shown++)
+            for (int i = 0; i < list.Count && shown < 100; i++, shown++)
             {
                 var r = list[i];
                 bool mine = r.pid == me;
@@ -74,7 +74,7 @@ namespace Chubrik
                 val.enableAutoSizing = true; val.fontSizeMin = 16; val.fontSizeMax = 30;
             }
             int myPlace = list.FindIndex(r => r.pid == me) + 1;
-            w.Footer.text = $"Игроков в таблице: {list.Count} · твоё место: {myPlace} · ник меняется в настройках";
+            w.Footer.text = $"Все, кто когда-либо играл: {list.Count} · твоё место: {myPlace} · ник меняется в настройках";
         }
 
         class Refresher : MonoBehaviour

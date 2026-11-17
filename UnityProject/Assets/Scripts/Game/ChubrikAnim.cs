@@ -32,6 +32,9 @@ namespace Chubrik
         /// <summary>The leap forward (arms and legs back) and hanging on a ledge.</summary>
         public bool leap, hang;
         float leapK, hangK;
+        /// <summary>17.11 the plunge: in the air B sends the chubrik straight down head first, arms straight, legs back.</summary>
+        public bool plunge;
+        float plungeK;
         float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
@@ -166,7 +169,7 @@ namespace Chubrik
 
             m.Body.localPosition += Vector3.up * lift;
             // belly-first: the whole body tips forward round the tummy, arms stretched ahead like a superhero
-            bellyK = Mathf.MoveTowards(bellyK, belly ? 1 : 0, dt * 7);
+            bellyK = plunge ? 0 : Mathf.MoveTowards(bellyK, belly ? 1 : 0, dt * 7);
             if (bellyK > 0.001f)
             {
                 flipT = -1;
@@ -209,6 +212,21 @@ namespace Chubrik
                 armR = Quaternion.Slerp(armR, Quaternion.Euler(62, 0, 22), leapK);
                 legL = Quaternion.Slerp(legL, Quaternion.Euler(38, 0, -6), leapK);
                 legR = Quaternion.Slerp(legR, Quaternion.Euler(30, 0, 6), leapK);
+            }
+            // the plunge: head first straight down, arms stretched ahead, legs back and kicking a little
+            plungeK = Mathf.MoveTowards(plungeK, plunge ? 1 : 0, dt * 9);
+            if (plungeK > 0.001f && bellyK < 0.01f)
+            {
+                flipT = -1;
+                var r = Quaternion.Euler(150 * plungeK, 0, 0);
+                var pivot = new Vector3(0, 0.6f, 0);
+                m.Body.localRotation = r * m.Body.localRotation;
+                m.Body.localPosition += pivot - r * pivot;
+                float kick = Mathf.Sin(Time.time * 22) * 14;
+                armL = Quaternion.Slerp(armL, Quaternion.Euler(0, 0, -176), plungeK);
+                armR = Quaternion.Slerp(armR, Quaternion.Euler(0, 0, 176), plungeK);
+                legL = Quaternion.Slerp(legL, Quaternion.Euler(-30 + kick, 0, -10), plungeK);
+                legR = Quaternion.Slerp(legR, Quaternion.Euler(-30 - kick, 0, 10), plungeK);
             }
             // hanging on a ledge: both arms up holding the edge, legs dangling
             hangK = Mathf.MoveTowards(hangK, hang ? 1 : 0, dt * 12);

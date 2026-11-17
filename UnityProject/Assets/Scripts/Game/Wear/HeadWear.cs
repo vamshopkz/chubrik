@@ -688,6 +688,7 @@ namespace Chubrik
         {
             if (i >= 200) { RewardHat(i); return; }
             var h = Node("Hat", HeadC, new Vector3(0, hatY, 0));
+            h.localScale = new Vector3(HatScale, HatScaleY, HatScale);   // 17.11: fitted to the head shape
             // Cap: 6 panels with stitched seams, eyelets, button, stitched brim, back strap with snaps
             void Cap(string col, bool logo)
             {

@@ -81,7 +81,8 @@ namespace Chubrik
             D("win", "Победа и телепорт", false, "fx", "win_0", 90, "Телепортация пикселей", "Салют из конфетти", "Взрыв портала", "Растворение в дыму", "Золотой дождь", "Взлёт на ракете", "Код матрицы", "Магическое сияние");
             D("suit", "Костюмы", true, "body", "", 300, "Курица", "Богач Артём", "Богач Али", "Футболист: красная форма №7", "Футболист: бело-синяя №10", "Футболист: жёлто-зелёная №9",
               "Футболист: полосатая №11", "Вратарь №1", "Баскетболист №23", "Хоккеист №99", "Боксёр-чемпион", "Теннисист", "Пловец", "Лыжник", "Каратист", "Штангист",
-              "Робот-машина красный", "Робот-грузовик синий", "Робот-спорткар жёлтый", "Робот-самолёт", "Смартфон", "Кнопочный телефон", "Ноутбук", "Монитор-голова", "Игровой компьютер", "Планшет");
+              "Робот-машина красный", "Робот-грузовик синий", "Робот-спорткар жёлтый", "Робот-самолёт", "Смартфон", "Кнопочный телефон", "Ноутбук", "Монитор-голова", "Игровой компьютер", "Планшет",
+              "Богач Артемий", "Асхан-бродяга");
             D("secret", "Секретный модификатор", true, "body", "", 0, "Режим гиганта", "Режим мини-чубрик", "Растянутый аватар", "Плоский персонаж", "Угольный силуэт", "Прозрачный призрак", "Зеркальное отражение", "Ультимативный аватар «Артём 22 X»");
 
             // every regular item gets its own price: later items of a department cost a bit more
@@ -95,8 +96,8 @@ namespace Chubrik
                     if (d.id == "suit")
                     {
                         // the chicken comes only with the promo code; Артём's and Али's outfits are the priciest
-                        it.promoOnly = i == 0;
-                        it.price = i == 0 ? 0 : i <= 2 ? 5000 : 400 + (i % 6) * 60;
+                        // 17.11: every costume falls out of lucky blocks (the rich ones are legendary)
+                        it.price = i == 1 || i == 2 || i == 26 ? 5000 : 400 + (i % 6) * 60;
                         continue;
                     }
                     it.price = Mathf.RoundToInt(basePrice * (1f + i * 0.12f) / 5f) * 5;
@@ -140,7 +141,7 @@ namespace Chubrik
             Items[it.id] = it;
         }
 
-        public const string Chicken = "suit_0", RichArtem = "suit_1", RichAli = "suit_2";
+        public const string Chicken = "suit_0", RichArtem = "suit_1", RichAli = "suit_2", RichArtemiy = "suit_26", Tramp = "suit_27";
         public const string ShipoCrown = "hat_r0", Ushanka = "hat_r1", RedScarf = "neck_r0", Skates = "shoes_r0", IceSkin = "skin_r0";
         /// <summary>The Frosty lucky box of World 4 drops these.</summary>
         public static readonly string[] WinterItems = { Ushanka, RedScarf, Skates, IceSkin };

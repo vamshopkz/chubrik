@@ -222,6 +222,30 @@ namespace Chubrik
             return t;
         }
 
+        /// <summary>Autotest: a big picture of a whole look (hat fitting sheets).</summary>
+        public Texture2D BigLook(Look l, int size, string view, float yaw = 20)
+        {
+            bool wasActive = gameObject.activeSelf;
+            Show(true);
+            var keep = Model.look.Copy();
+            var small = thumbRT;
+            thumbRT = new RenderTexture(size, size, 24) { antiAliasing = 4 };
+            cam.targetTexture = thumbRT;
+            pet.gameObject.SetActive(false);
+            Model.Build(l);
+            Model.transform.localRotation = Quaternion.Euler(0, yaw, 0);
+            Frame(cam, view, Model.SizeScale, true);
+            readable = true;
+            var t = Grab();
+            readable = false;
+            cam.targetTexture = RT;
+            thumbRT.Release(); thumbRT = small;
+            pet.gameObject.SetActive(true);
+            SetLook(keep);
+            if (!wasActive) Show(false);
+            return t;
+        }
+
         readonly Dictionary<string, RenderTexture> portraits = new Dictionary<string, RenderTexture>();
 
         /// <summary>A whole-body picture of someone else's chubrik (online players list), cached by their look.</summary>

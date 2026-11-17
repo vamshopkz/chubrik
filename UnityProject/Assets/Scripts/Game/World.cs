@@ -272,9 +272,10 @@ namespace Chubrik
             foreach (var z in All)
             {
                 if (z.kind != Kind.Step) continue;
-                bool now = !p.MenuOrbit && p.Grounded && In(z, p);
+                bool inZone = !p.MenuOrbit && In(z, p);
+                bool now = inZone && p.Grounded;
                 if (now && !z.inside && UIRoot.Open == null && !Menus.AnyOpen) z.act();
-                z.inside = now;
+                z.inside = now || (z.inside && inZone);   // 17.11: a little hop inside the zone doesn't open it again — only stepping off and back on
             }
         }
     }

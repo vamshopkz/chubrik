@@ -10,7 +10,7 @@ namespace Chubrik
         static GameObject main;
         public static bool MainOpen => main != null;
         /// <summary>A full-screen page (wardrobe, loot box) is open.</summary>
-        public static bool OverlayOpen => MainOpen || WardrobeUI.IsOpen || ShopUI.BoxOpen;
+        public static bool OverlayOpen => MainOpen || WardrobeUI.IsOpen || ShopUI.BoxOpen || Cartoon.IsOpen || LuckyUI.IsOpen;
         public static bool AnyOpen => OverlayOpen || UIRoot.Open != null;
 
         public static void LockCursor()
@@ -165,7 +165,7 @@ namespace Chubrik
                         ("ВЫКЛ", UIKit.Red, !P.navigatorOn, () => { P.navigatorOn = false; Save.Write(); Window.Refresh(); }),
                     });
                 w.Row("Версии игры", "Сейчас: " + Application.version + " · можно выбрать новую или старую", "ВЫБРАТЬ", UIKit.Blue, VersionsUI.Open);
-                w.Text("На телефоне: A — прыжок (нажми два раза — двойной прыжок), B — удар. Рывок вперёд «хэ-хэй»: беги, нажми B, а сразу за ним A. Не допрыгнул до края — чубрик сам зацепится и залезет.", 24, UIKit.Gold);
+                w.Text("На телефоне: A — прыжок (нажми два раза — двойной прыжок), B — удар. Рывок вперёд «хэ-хэй»: беги, нажми B, а сразу за ним A. Не допрыгнул до края — чубрик сам зацепится и залезет. Прыжок вниз: A, потом B — маленький; A или 2×A и держи B — летит вниз головой и смешно плюхается.", 24, UIKit.Gold);
                 w.Text("Управление на компьютере: WASD — бег, ПРОБЕЛ — прыжок и двойной прыжок (держи с крыльями — полёт), F или клик — удар (рывок: беги, F, потом ПРОБЕЛ), Q — эмоция, E — войти, мышь — камера, Esc — меню.", 24, UIKit.Muted);
             }, 1000, 760);
         }
@@ -200,7 +200,7 @@ namespace Chubrik
         {
             Window.Show("ПРОМОКОД", w =>
             {
-                w.Text("Введите промокод — он может открыть премиум-наборы бесплатно (а может превратить тебя в курицу…).", 28);
+                w.Text("Введите промокод — секретное слово, и случится что-то интересное.", 28);
                 var holder = UIKit.Rect("PromoRow", w.Content);
                 holder.gameObject.AddComponent<LayoutElement>().minHeight = 96;
                 var input = UIKit.Input(holder, "Промокод", 32, 34);
@@ -244,57 +244,38 @@ namespace Chubrik
             return sb.ToString();
         }
 
-        public const long TeapotSum = 300_000_000_000L;
+        public const long BillionSum = 300_000_000_000L, DevCoins = 10_000_000L, DevTokens = 100_000L;
 
         public static bool Apply(string code)
         {
             var n = Norm(code);
             var P = Save.P;
-            // 17.11: fun codes from the player
-            if (n == Norm("Курица"))
-            {
-                Save.Give(Catalog.Chicken);
-                Save.Wear("suit", Catalog.Chicken);
-                PlayerCtl.I?.ApplyLook(Save.CurrentLook());
-                AudioFx.Play("cluck"); PlayerCtl.I?.PlayVictory();
-                Hud.Toast("Ко-ко-ко! Ты превратился в КУРИЦУ! Отменить — промокод «Курятник»", UIKit.Gold);
-                return true;
-            }
-            if (n == Norm("Курятник"))
-            {
-                if (ChubrikModel.IsChicken(Catalog.Index(Save.Worn("suit")))) Save.Wear("suit", "");
-                PlayerCtl.I?.ApplyLook(Save.CurrentLook());
-                AudioFx.Play("portal");
-                Hud.Toast("Курица ушла в курятник — ты снова чубрик!", UIKit.Cyan);
-                return true;
-            }
-            if (n == Norm("Чайник"))
-            {
-                if (P.teapot) { Hud.Toast("Чайник уже вскипел — 300 миллиардов у тебя!", UIKit.Gold); return true; }
-                P.teapot = true; P.coins += TeapotSum; P.tokens += TeapotSum; Save.Write();
-                AudioFx.Play("buy"); PlayerCtl.I?.PlayVictory();
-                Hud.Toast("ЧАЙНИК! +300 000 000 000 монет и жетонов! Отменить — «Чайник нет»", UIKit.Gold);
-                return true;
-            }
-            if (n == Norm("Чайник нет"))
-            {
-                if (!P.teapot) { Hud.Toast("Чайник и так выключен", UIKit.Muted); return true; }
-                P.teapot = false; P.coins = System.Math.Max(0, P.coins - TeapotSum); P.tokens = System.Math.Max(0, P.tokens - TeapotSum); Save.Write();
-                AudioFx.Play("error");
-                Hud.Toast("Чайник выключен — 300 миллиардов ушли обратно", UIKit.Orange);
-                return true;
-            }
-            if (n == Norm("BUTTER 22X"))
-            {
-                P.butter = false; Save.Write(); Butter.Set(false);
-                Hud.Toast("Масло растаяло — всё снова как было", UIKit.Cyan);
-                return true;
-            }
+            // 17.11 (v0.19): the new set of codes — the old ones (Курица, Чайник, BUTTER 22X…) are gone
             if (n == Norm("BUTTER"))
             {
-                P.butter = true; Save.Write(); Butter.Set(true);
+                P.butter = !P.butter; Save.Write(); Butter.Set(P.butter);
                 AudioFx.Play("magic");
-                Hud.Toast("BUTTER! Теперь всё из сливочного масла. Отменить — «BUTTER 22X»", Parts.Hex("FFE680"));
+                Hud.Toast(P.butter ? "BUTTER! Теперь всё из сливочного масла. Ещё раз «BUTTER» — растопить" : "Масло растаяло — всё снова как было", Parts.Hex("FFE680"));
+                return true;
+            }
+            if (n == Norm("Миллиард"))
+            {
+                P.coins += BillionSum; P.tokens += BillionSum; Save.Write();
+                AudioFx.Play("buy"); PlayerCtl.I?.PlayVictory();
+                Hud.Toast("МИЛЛИАРД! +300 000 000 000 монет и +300 000 000 000 жетонов!", UIKit.Gold);
+                WardrobeUI.Changed();
+                return true;
+            }
+            if (n == Norm("Лукашарики"))
+            {
+                Window.Close();
+                Cartoon.Play();
+                return true;
+            }
+            if (n == Norm("Секрет"))
+            {
+                Window.Close();
+                Secrets.Show();
                 return true;
             }
             if (n != Norm(DevCode))
@@ -304,15 +285,12 @@ namespace Chubrik
                 return false;
             }
             bool again = Save.P.promo;
-            if (again && Save.P.sets.Count >= Catalog.Sets.Count)
-            {
-                Hud.Toast("Промокод уже активирован — всё открыто!", UIKit.Gold);
-                return true;
-            }
             UnlockAll();
+            Save.P.coins += DevCoins; Save.P.tokens += DevTokens; Save.Write();
+            WardrobeUI.Changed();
             AudioFx.Play("token");
             PlayerCtl.I?.PlayVictory();
-            Hud.Toast(again ? "Промокод снова сработал — все 8 премиум-наборов опять твои!" : "ПРОМОКОД «АРТЁМ 22 X»: 6 сердечек и все 8 премиум-наборов бесплатно!", UIKit.Gold);
+            Hud.Toast(again ? "Артём22X снова: +10 000 000 монет, +100 000 жетонов, все 8 премиум-наборов твои!" : "ПРОМОКОД «АРТЁМ22X»: +10 000 000 монет, +100 000 жетонов и все 8 премиум-наборов!", UIKit.Gold);
             return true;
         }
 

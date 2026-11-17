@@ -49,6 +49,8 @@ namespace Chubrik
                 case 23: MonitorHead(t); break;
                 case 24: GamingPC(t); break;
                 case 25: Tablet(t); break;
+                case 26: RichArtemiy(t); break;
+                case 27: Tramp(t); break;
             }
         }
 
@@ -667,6 +669,168 @@ namespace Chubrik
             Rod(HandR, new Vector3(0, -0.02f, 0.05f), new Vector3(0, -0.22f, 0.12f), 0.02f, M("FFFFFF", 0.6f));
             foreach (var g in new[] { LegL, LegR }) Cy(g, new Vector3(0, -0.13f, 0), new Vector3(0.18f, 0.13f, 0.18f), M("5C6BC0", 0.3f));
             Boots(M("FFFFFF", 0.4f), M("FFB74D", 0.3f), M("FFB74D", 0.3f), 0);
+        }
+
+        // ================= 17.11: Богач Артемий — the coolest outfit in the game =================
+
+        void RichArtemiy(Transform t)
+        {
+            var gold = M("FFC83A", 0.95f, 0.95f); var goldD = M("C9921A", 0.9f, 0.85f);
+            var velvet = M("5B1A8C", 0.55f); var white = M("FAFAF5", 0.4f);
+            var diamond = G("D8F4FF", 1.8f); var ruby = G("FF2D55", 1.6f); var emer = G("3CFF9A", 1.5f);
+            // a golden jacket with a diamond grid
+            S(t, SC, SR * 2.02f, gold);
+            for (int r = 0; r < 3; r++)
+                for (int k = 0; k < 8; k++)
+                    BodyKit.Flat(t, SC, SR, 50 + r * 26, k * 45 + (r % 2) * 22, new Vector3(0.035f, 0.035f, 0.008f), diamond, 1.03f, 45);
+            // white shirt front, a ruby bow tie, velvet lapels
+            BodyKit.Panel(t, SC, SR, 40, 105, 75, 105, 3, 4, 0.006f, white, 1.01f);
+            foreach (var sd in new[] { -1f, 1f })
+            {
+                BodyKit.Band(t, BodyKit.SP(SC, SR, 30, 100, 90 + sd * 14, 90 + sd * 28, 1.035f), BodyKit.EN(SC, SR), 6, 0.055f, 0.012f, velvet);
+                S(t, Dt.Ell(SC, SR, 36, 90 + sd * 5, 1.08f), new Vector3(0.08f, 0.06f, 0.04f), ruby);
+            }
+            S(t, Dt.Ell(SC, SR, 36, 90, 1.1f), 0.035f, diamond);
+            for (int k = 0; k < 2; k++) Dt.Gem(t, Dt.Ell(SC, SR, 75 + k * 25, 104, 1.03f), 0.035f, k % 2 == 0 ? emer : ruby, gold, Dt.EllN(SR, 70 + k * 15, 104));
+            // three gold chains and a big diamond «А»
+            BodyKit.Band(t, BodyKit.SP(SC, SR, 34, 34, 35, 145, 1.06f), BodyKit.EN(SC, SR), 10, 0.035f, 0.012f, gold);   // a wide gold necklace
+            var med = Msh(Meshes.Star(), t, Dt.Ell(SC, SR, 62, 90, 1.14f), new Vector3(0.16f, 0.16f, 0.05f), gold);
+            Prim.Text(med.transform, "А", new Vector3(0, 0, 0.6f), 3, Hex("FF2D55"));
+            // the royal velvet cape with ermine and gold stars
+            var cape = Node("Cape", Torso, new Vector3(0, 0.46f, -0.2f), new Vector3(12, 0, 0));
+            B(cape, new Vector3(0, -0.36f, -0.06f), new Vector3(0.78f, 0.78f, 0.03f), velvet);
+            B(cape, new Vector3(0, -0.36f, -0.04f), new Vector3(0.72f, 0.72f, 0.02f), M("8E24AA", 0.5f));
+            Ca(cape, new Vector3(0, -0.76f, -0.06f), new Vector3(0.08f, 0.4f, 0.08f), white, new Vector3(0, 0, 90));
+            for (int k = 0; k < 6; k++) Msh(Meshes.Star(), cape, new Vector3(-0.25f + (k % 3) * 0.25f, -0.2f - (k / 3) * 0.3f, -0.08f), new Vector3(0.07f, 0.07f, 0.02f), gold).transform.localRotation = Quaternion.Euler(0, 180, 0);
+            Cy(Torso, new Vector3(0, 0.47f, -0.05f), new Vector3(0.62f, 0.05f, 0.5f), white);   // ermine collar
+            for (int k = 0; k < 4; k++) B(Torso, new Vector3(Mathf.Cos(k * 1.57f + 0.4f) * 0.3f, 0.48f, Mathf.Sin(k * 1.57f + 0.4f) * 0.24f - 0.05f), new Vector3(0.04f, 0.02f, 0.06f), M("1A1A1A", 0.3f));
+            // sleeves: gold with velvet cuffs, diamond watches on both wrists, rings
+            foreach (var a in new[] { ArmL, ArmR })
+            {
+                Ca(a, new Vector3(0, -0.13f, 0), new Vector3(0.18f, 0.15f, 0.18f), gold);
+                Ring(a, new Vector3(0, -0.25f, 0), 0.08f, 0.02f, velvet);
+                Cy(a, new Vector3(0, -0.21f, 0), new Vector3(0.17f, 0.03f, 0.17f), diamond);
+            }
+            foreach (var h in new[] { HandL, HandR })
+            {
+                S(h, Vector3.zero, Vector3.one * 0.17f, white);
+                for (int k = 0; k < 2; k++) { Ring(h, new Vector3(-0.03f + k * 0.06f, -0.06f, 0.05f), 0.022f, 0.008f, gold); Ls(h, new Vector3(-0.03f + k * 0.06f, -0.045f, 0.07f), 0.028f, k == 1 ? ruby : diamond); }
+            }
+            // a sceptre with a glowing crystal
+            Rod(HandR, new Vector3(0, 0.05f, 0.03f), new Vector3(0, -0.6f, 0.1f), 0.03f, gold);
+            S(HandR, new Vector3(0, 0.1f, 0.03f), 0.13f, emer);
+            for (int k = 0; k < 4; k++) Cone(HandR, new Vector3(Mathf.Cos(k * 1.57f) * 0.07f, 0.12f, 0.03f + Mathf.Sin(k * 1.57f) * 0.07f), new Vector3(0.03f, 0.08f, 0.03f), gold);
+            // white trousers with gold stripes, golden sneakers with diamond soles
+            foreach (var g in new[] { LegL, LegR })
+            {
+                Cy(g, new Vector3(0, -0.13f, 0), new Vector3(0.18f, 0.13f, 0.18f), white);
+                foreach (var sd in new[] { -1f, 1f }) B(g, new Vector3(sd * 0.09f, -0.13f, 0), new Vector3(0.012f, 0.25f, 0.03f), gold);
+            }
+            foreach (var f in new[] { FootL, FootR })
+            {
+                S(f, new Vector3(0, 0.04f, 0.05f), new Vector3(0.21f, 0.13f, 0.31f), gold);
+                B(f, new Vector3(0, -0.02f, 0.05f), new Vector3(0.2f, 0.035f, 0.31f), diamond);
+                Dt.Laces(f, new Vector3(0, 0.1f, 0.12f), new Vector3(0, 0.08f, 0.0f), Vector3.right, 4, velvet);
+                Msh(Meshes.Star(), f, new Vector3(0.1f, 0.05f, 0.04f), new Vector3(0.05f, 0.05f, 0.02f), ruby).transform.localRotation = Quaternion.Euler(0, 90, 0);
+            }
+            // the crown: a tall golden crown with gems and a spinning diamond on top, and a halo
+            var cr = Node("Crown", HeadC, new Vector3(0, hatY - 0.02f, 0));
+            cr.localScale = new Vector3(HatScale, HatScaleY, HatScale);
+            Cy(cr, new Vector3(0, 0.05f, 0), new Vector3(0.5f, 0.06f, 0.5f), gold);
+            Ring(cr, new Vector3(0, 0.0f, 0), 0.25f, 0.025f, white);
+            for (int k = 0; k < 8; k++)
+            {
+                float a = k * Mathf.PI / 4;
+                var pp = new Vector3(Mathf.Cos(a) * 0.23f, 0.17f, Mathf.Sin(a) * 0.23f);
+                Cone(cr, pp, new Vector3(0.08f, 0.2f, 0.08f), gold);
+                S(cr, pp + Vector3.up * 0.11f, 0.05f, k % 2 == 0 ? diamond : ruby);
+                if (k % 2 == 0) Dt.Gem(cr, new Vector3(Mathf.Cos(a + 0.39f) * 0.255f, 0.05f, Mathf.Sin(a + 0.39f) * 0.255f), 0.04f, k % 3 == 0 ? emer : ruby, goldD, new Vector3(Mathf.Cos(a + 0.39f), 0, Mathf.Sin(a + 0.39f)));
+            }
+            S(cr, new Vector3(0, 0.12f, 0), new Vector3(0.38f, 0.16f, 0.38f), velvet);
+            var top = S(cr, new Vector3(0, 0.36f, 0), 0.12f, diamond);
+            top.AddComponent<Spin>();
+            Ring(cr, new Vector3(0, 0.52f, 0), 0.22f, 0.02f, G("FFE14D", 2.5f));
+            // golden shades
+            foreach (var sd in new[] { -1f, 1f }) { S(HeadC, new Vector3(sd * eyeX, eyeY, faceZ + 0.04f), new Vector3(0.15f, 0.1f, 0.04f), M("111111", 0.95f)); Ring(HeadC, new Vector3(sd * eyeX, eyeY, faceZ + 0.045f), 0.072f, 0.012f, gold, new Vector3(90, 0, 0), new Vector3(1, 1, 0.75f)); }
+            B(HeadC, new Vector3(0, eyeY + 0.01f, faceZ + 0.05f), new Vector3(0.06f, 0.015f, 0.015f), gold);
+            // two money bags on the belt and floating gold coins around
+            foreach (var sd in new[] { -1f, 1f })
+            {
+                var bag = S(Torso, new Vector3(sd * 0.3f, -0.02f, 0.12f), new Vector3(0.16f, 0.18f, 0.14f), M("C9A66B", 0.2f));
+                Prim.Text(bag.transform, "$", new Vector3(0, 0, 0.52f), 4, Hex("2E7D32"));
+                Ring(Torso, new Vector3(sd * 0.3f, 0.07f, 0.12f), 0.04f, 0.012f, gold);
+            }
+            var orbit = Node("Coins", Torso, new Vector3(0, 0.3f, 0));
+            orbit.gameObject.AddComponent<Spin>().speed = 70;
+            for (int k = 0; k < 4; k++) { float a = k * Mathf.PI / 2; Cy(orbit, new Vector3(Mathf.Cos(a) * 0.62f, Mathf.Sin(k) * 0.12f, Mathf.Sin(a) * 0.62f), new Vector3(0.1f, 0.012f, 0.1f), gold).transform.localRotation = Quaternion.Euler(90, k * 60, 0); }
+        }
+
+        // ================= 17.11: Асхан-бродяга — patched old clothes and a bundle on a stick =================
+
+        void Tramp(Transform t)
+        {
+            var coat = M("6D4C33", 0.15f); var coatD = M("4E3524", 0.1f);
+            var thread = M("E8DCC0", 0.2f);
+            string[] patchCols = { "C0392B", "2E86C1", "27AE60", "F1C40F", "8E44AD", "E67E22" };
+            // a long old coat with patches sewn on with big stitches
+            S(t, SC, SR * 2.04f, coat);
+            for (int k = 0; k < 6; k++)
+            {
+                float th = 60 + (k % 3) * 30, ph = 40 + k * 55;
+                var pt = Dt.TorsoPatch(t, th, ph, new Vector3(0.12f, 0.1f, 0.01f), M(patchCols[k], 0.2f), 1.05f);
+                Dt.Stitches(t, BodyKit.SP(SC, SR, th - 9, th + 9, ph - 10, ph + 10, 1.065f), 6, 0.025f, 0.006f, thread);
+            }
+            Cy(Torso, new Vector3(0, -0.06f, 0), new Vector3(0.74f, 0.14f, 0.64f), coat);   // the long hem
+            for (int k = 0; k < 10; k++) Cone(Torso, new Vector3(Mathf.Cos(k * 0.63f) * 0.36f, -0.14f, Mathf.Sin(k * 0.63f) * 0.31f), new Vector3(0.06f, 0.07f, 0.03f), coatD, new Vector3(180, 0, 0));   // frayed edge
+            for (int k = 0; k < 3; k++) BodyKit.Disc(t, SC, SR, 70 + k * 20, 100, 0.032f, 0.01f, M(patchCols[k + 2], 0.3f), 1.05f);   // odd buttons
+            Rod(Torso, new Vector3(-0.34f, 0.04f, 0.1f), new Vector3(0.34f, 0.04f, 0.12f), 0.02f, M("A1887F", 0.1f));   // a rope for a belt
+            // a long knitted scarf
+            Ring(Torso, new Vector3(0, 0.47f, 0.02f), 0.2f, 0.05f, M("C0392B", 0.15f));
+            Ca(Torso, new Vector3(0.12f, 0.25f, 0.29f), new Vector3(0.09f, 0.2f, 0.04f), M("C0392B", 0.15f));
+            for (int k = 0; k < 4; k++) B(Torso, new Vector3(0.12f, 0.36f - k * 0.08f, 0.31f), new Vector3(0.09f, 0.012f, 0.01f), M("F5F5F5", 0.2f));
+            // sleeves too long with patches on the elbows, fingerless gloves
+            foreach (var a in new[] { ArmL, ArmR })
+            {
+                Ca(a, new Vector3(0, -0.15f, 0), new Vector3(0.19f, 0.17f, 0.19f), coat);
+                S(a, new Vector3(0, -0.15f, -0.08f), new Vector3(0.1f, 0.1f, 0.03f), M("27AE60", 0.2f));
+                Ring(a, new Vector3(0, -0.27f, 0), 0.09f, 0.018f, coatD);
+            }
+            foreach (var h in new[] { HandL, HandR })
+            {
+                Cy(h, new Vector3(0, -0.01f, 0), new Vector3(0.17f, 0.06f, 0.17f), M("5D6D7E", 0.1f));
+                for (int k = 0; k < 4; k++) S(h, new Vector3(-0.045f + k * 0.03f, -0.075f, 0.04f), 0.03f, Skin);
+            }
+            // trousers with holes and a patch on the knee, mismatched shoes with the sole coming off
+            foreach (var g in new[] { LegL, LegR })
+            {
+                Cy(g, new Vector3(0, -0.13f, 0), new Vector3(0.19f, 0.13f, 0.19f), M("566573", 0.1f));
+                S(g, new Vector3(0.02f, -0.15f, 0.09f), new Vector3(0.07f, 0.05f, 0.02f), Skin);   // a hole
+            }
+            S(LegL, new Vector3(-0.02f, -0.08f, 0.095f), new Vector3(0.09f, 0.08f, 0.02f), M("F1C40F", 0.2f));
+            S(FootL, new Vector3(0, 0.04f, 0.06f), new Vector3(0.2f, 0.13f, 0.32f), M("3E2723", 0.3f));
+            S(FootR, new Vector3(0, 0.04f, 0.06f), new Vector3(0.2f, 0.13f, 0.32f), M("2E86C1", 0.2f));
+            foreach (var f in new[] { FootL, FootR }) { var sole = B(f, new Vector3(0, -0.03f, 0.1f), new Vector3(0.18f, 0.03f, 0.25f), M("212121", 0.2f)); sole.transform.localRotation = Quaternion.Euler(12, 0, 0); }
+            S(FootR, new Vector3(0.06f, 0.08f, 0.18f), 0.04f, Skin);   // a toe out of a hole
+            // a beanie with a hole and a pom-pom hanging on a thread
+            var cap = Node("Beanie", HeadC, new Vector3(0, hatY, 0));
+            cap.localScale = new Vector3(HatScale, HatScaleY, HatScale);
+            S(cap, new Vector3(0, -0.08f, 0), new Vector3(0.84f, 0.5f, 0.8f), M("7F8C8D", 0.1f));
+            BodyKit.Knit(cap, new Vector3(0, -0.12f, 0), 0.42f, 0.41f, 0.1f, 22, M("7F8C8D", 0.1f), M("95A5A6", 0.1f));
+            S(cap, new Vector3(0.12f, 0.12f, 0.08f), new Vector3(0.1f, 0.06f, 0.08f), Skin);   // the hole
+            Rod(cap, new Vector3(-0.05f, 0.16f, 0), new Vector3(-0.2f, 0.05f, -0.1f), 0.006f, thread);
+            S(cap, new Vector3(-0.2f, 0.03f, -0.1f), 0.12f, M("E67E22", 0.1f));
+            // a funny stubble and a sad-funny look: eyebrows up
+            for (int k = 0; k < 10; k++) S(HeadC, new Vector3(-0.12f + (k % 5) * 0.06f, -0.17f - (k / 5) * 0.04f, faceZ - 0.01f), 0.018f, M("3E2723", 0.1f));
+            foreach (var sd in new[] { -1f, 1f }) B(HeadC, new Vector3(sd * eyeX, eyeY + 0.11f, faceZ + 0.01f), new Vector3(0.1f, 0.022f, 0.02f), M("3E2723", 0.1f)).transform.localRotation = Quaternion.Euler(0, 0, sd * 14);
+            // a bundle on a stick over the shoulder and a tin can in the other hand
+            var stick = Node("Bindle", HandR, Vector3.zero, new Vector3(-50, 0, 0));
+            Rod(stick, Vector3.zero, new Vector3(0, 0.75f, 0), 0.025f, M("8D6E63", 0.1f));
+            var bun = S(stick, new Vector3(0, 0.8f, 0), new Vector3(0.26f, 0.22f, 0.26f), M("D32F2F", 0.15f));
+            for (int k = 0; k < 8; k++) S(bun.transform, new Vector3(Mathf.Cos(k * 0.785f) * 0.42f, 0.2f, Mathf.Sin(k * 0.785f) * 0.42f), 0.12f, M("FFFFFF", 0.1f));   // polka dots
+            Cone(stick, new Vector3(0, 0.95f, 0), new Vector3(0.1f, 0.1f, 0.1f), M("D32F2F", 0.15f));   // the knot
+            Cy(HandL, new Vector3(0, -0.08f, 0.04f), new Vector3(0.11f, 0.08f, 0.11f), M("B0BEC5", 0.8f, 0.7f));
+            Ring(HandL, new Vector3(0, 0.0f, 0.04f), 0.055f, 0.008f, M("90A4AE", 0.8f, 0.7f));
+            Prim.Text(HandL, "¤", new Vector3(0, -0.08f, 0.1f), 1.6f, Hex("FFC83A"));
         }
     }
 }

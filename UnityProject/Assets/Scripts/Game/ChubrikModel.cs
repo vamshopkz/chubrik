@@ -26,6 +26,12 @@ namespace Chubrik
         readonly List<Mesh> baked = new List<Mesh>();
         int layer;
         float faceZ = 0.38f, hatY = 0.39f, eyeY = 0.04f, eyeX = 0.14f;
+        /// <summary>17.11: how the hat is fitted to this head (measured from the skull): its top, half width and the hat scale.</summary>
+        public float SkullTop { get; private set; }
+        public float SkullHalfW { get; private set; }
+        public float HatScale { get; private set; } = 1f;
+        public float HatScaleY { get; private set; } = 1f;
+        public bool BoxHead { get; private set; }
         bool hairHidden, earsHidden, suitOn, chickenOn;
 
         public static ChubrikModel Create(string name, Transform parent, Look look, int layer)
@@ -91,8 +97,10 @@ namespace Chubrik
             int made = Parts.Made;
             HeadShape(chicken ? 2 : look.Idx("head"));
             PartCount["head"] = Parts.Made - made;
+            FitHat();
             suitOn = suit >= 0; chickenOn = chicken;
             Do("hat", Hat);
+            SeatHatOnBox();
             Do("hair", Hair);
             Do("ears", Ears);
             Do("eyes", Glasses);
@@ -118,6 +126,63 @@ namespace Chubrik
             }
             if (layer != 0) foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
             foreach (var r in GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        /// <summary>
+        /// 17.11: hats sit right on top of every head shape. The biggest part of the head is the skull; its top in the
+        /// head's space is where a hat's base goes (a square head ends flat at its top, the alien's is tall, the
+        /// round one is low) and the hat grows or shrinks with the skull's width.
+        /// </summary>
+        void FitHat()
+        {
+            Renderer best = null; float bestV = 0; Bounds bb = default; int verts = 0;
+            var inv = HeadC.worldToLocalMatrix;
+            foreach (var r in HeadC.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                var b = Xf(inv * r.transform.localToWorldMatrix, mf.sharedMesh.bounds);
+                float v = b.size.x * b.size.y * b.size.z;
+                if (v > bestV) { bestV = v; best = r; bb = b; verts = mf.sharedMesh.vertexCount; }
+            }
+            HatScale = HatScaleY = 1; BoxHead = false;
+            if (best == null) { SkullTop = hatY; SkullHalfW = 0.41f; return; }
+            BoxHead = verts <= 24;                                     // a cube: the square and the robot heads
+            SkullTop = bb.max.y;
+            // a box has corners: the hat has to reach round them, but it stays as tall (it sits on the flat top)
+            SkullHalfW = BoxHead ? Mathf.Sqrt(bb.extents.x * bb.extents.x + bb.extents.z * bb.extents.z) * 0.98f : Mathf.Max(bb.extents.x, bb.extents.z * 1.05f);
+            hatY = SkullTop + 0.01f;               // the wolf head: top 0.38 → 0.39 as the hats were made for
+            HatScale = Mathf.Clamp(SkullHalfW / 0.41f, 0.82f, 1.32f);
+            HatScaleY = HatScale;
+            if (BoxHead) { HatScale = Mathf.Clamp(Mathf.Max(bb.extents.x, bb.extents.z) / 0.41f * 1.04f, 0.82f, 1.2f); HatScaleY = HatScale; }
+        }
+
+        /// <summary>A square head is flat on top: the hat's lowest point goes right onto it (not sunk into the box).</summary>
+        void SeatHatOnBox()
+        {
+            if (!BoxHead || HeadC == null) return;
+            var h = HeadC.Find("Hat");
+            if (h == null) return;
+            float min = float.MaxValue;
+            var inv = HeadC.worldToLocalMatrix;
+            foreach (var mf in h.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null) continue;
+                var b = Xf(inv * mf.transform.localToWorldMatrix, mf.sharedMesh.bounds);
+                // only what is above the face counts (ear flaps, straps and ribbons may hang down the sides)
+                if (Mathf.Abs(b.center.x) < SkullHalfW * 0.6f && b.max.y > SkullTop - 0.15f) min = Mathf.Min(min, b.min.y);
+            }
+            if (min == float.MaxValue) return;
+            h.localPosition += Vector3.up * (SkullTop - 0.03f - min);
+        }
+
+        static Bounds Xf(Matrix4x4 m, Bounds b)
+        {
+            var c = b.center; var e = b.extents;
+            var r = new Bounds(m.MultiplyPoint3x4(c), Vector3.zero);
+            for (int k = 0; k < 8; k++)
+                r.Encapsulate(m.MultiplyPoint3x4(c + new Vector3((k & 1) == 0 ? -e.x : e.x, (k & 2) == 0 ? -e.y : e.y, (k & 4) == 0 ? -e.z : e.z)));
+            return r;
         }
 
         /// <summary>15.11 the hero is a wolf: a light belly and a bushy tail (unless a tail or a shirt is worn).</summary>

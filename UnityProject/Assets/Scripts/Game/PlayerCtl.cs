@@ -33,6 +33,15 @@ namespace Chubrik
         float leapReady;
         public bool Leaping => leaping;
         public int Leaps { get; private set; }
+        /// <summary>17.11 the plunge: one or two jumps, then B — straight down head first with a funny flop on landing.
+        /// A quick tap after one jump = a small plunge; holding B (after one or two jumps) = the big one.</summary>
+        int plunge;          // 0 = no, 1 = small, 2 = big
+        float attackDownT = -1;
+        public bool Plunging => plunge != 0;
+        public bool PlungeBig => plunge == 2;
+        public int Plunges { get; private set; }
+        public bool HoldAttack;   // tests: B held from code
+        public bool AttackHeld { get; private set; }
         /// <summary>Ledge grab: a jump that falls short catches the edge by itself and climbs up.</summary>
         int hang;            // 0 = no, 1 = hanging / climbing
         float hangT, grabCd;
@@ -63,6 +72,15 @@ namespace Chubrik
         Vector3 groundLocal; Quaternion groundRot;
         public Vector3 SafePos = new Vector3(0, 0.5f, -4);
         public bool MenuOrbit;         // title screen: camera circles the lobby
+        /// <summary>17.11 the wardrobe shows the real chubrik in the world: the camera turns to the nearest wall
+        /// (he stands with his back to it), the chubrik sits in the free middle between the wardrobe panels.</summary>
+        public bool WardrobeView;
+        public float WardrobeCx = 0.5f, WardrobeSpin;
+        public string WardrobeZoom = "body";
+        public bool ShowWalk;
+        public Vector3 WardrobeDir { get; private set; }   // from the chubrik to the camera
+        public bool WardrobeWall { get; private set; }
+        Vector3 wCamPos; Quaternion wCamRot; bool wCamInit;
         float orbitT;
         public float RunSpeed = 6.8f;
         public float WaterY = -0.9f;
@@ -127,6 +145,7 @@ namespace Chubrik
             ground = null;
             SetDive(0);
             EndLeap();
+            plunge = 0; Anim.plunge = false; attackDownT = -1;
             if (hang != 0) { hang = 0; Anim.hang = false; }
             if (!float.IsNaN(faceYaw)) { yaw = faceYaw; transform.rotation = Quaternion.Euler(0, faceYaw, 0); }
         }
@@ -144,6 +163,13 @@ namespace Chubrik
             Backrooms.Tick(this);
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             if (MenuOrbit) { vel = Vector3.zero; Anim.speed01 = 0; Anim.grounded = true; return; }
+            if (WardrobeView)
+            {
+                vel = Vector3.zero;
+                transform.rotation = Quaternion.LookRotation(WardrobeDir) * Quaternion.Euler(0, WardrobeSpin, 0);
+                Anim.grounded = true; Anim.vy = 0; Anim.speed01 = ShowWalk ? 0.8f : 0;
+                return;
+            }
 
             // ---- input ----
             Vector2 mv = MoveInput;
@@ -164,6 +190,7 @@ namespace Chubrik
                     LookDelta += new Vector2(Input.GetAxisRaw("Mouse X"), -Input.GetAxisRaw("Mouse Y")) * 2.2f * Save.P.sens;
             }
             else { mv = Vector2.zero; JumpHeld = false; }
+            AttackHeld = !Frozen && (HoldAttack || Hud.AttackButtonHeld || (!UIRoot.TypingText && (Input.GetKey(KeyCode.F) || (Cursor.lockState == CursorLockMode.Locked && Input.GetMouseButton(0)))));
             Steer = mv;
             if (kbAttack) Attack();
             yaw += LookDelta.x * 0.9f;
@@ -195,7 +222,9 @@ namespace Chubrik
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
             float accel = Grounded ? (OnIce && !Skates && !Snowmobile ? 3.5f : 40f) : 16f;   // ice: hard to start, harder to stop
-            if (dive == 1) { }                                                               // flying belly-first: no steering
+            if (plunge == 2) hv = Vector3.MoveTowards(hv, Vector3.zero, 40f * dt);            // the big plunge: straight down
+            else if (plunge == 1) hv = Vector3.MoveTowards(hv, hv * 0.5f, 10f * dt);
+            else if (dive == 1) { }                                                               // flying belly-first: no steering
             else if (leaping) hv = Vector3.MoveTowards(hv, hv.normalized * 14f + wish * 3f, 4f * dt);
             else if (dive == 2) hv = Vector3.MoveTowards(hv, Vector3.zero, (OnIce ? 4f : 28f) * dt);   // a short belly slide (~2.5 m, longer on ice)
             else hv = Vector3.MoveTowards(hv, target, accel * dt);
@@ -222,7 +251,12 @@ namespace Chubrik
                 Effects.Emit("dust", transform.position, 8, 0.4f);
                 wantJump = false;
             }
-            if (dive == 1) wantJump = false;
+            if (dive == 1 || plunge != 0) wantJump = false;
+            if (attackDownT >= 0 && !Grounded && plunge != 2 && hang == 0 && !Riding)
+            {
+                if (!AttackHeld) attackDownT = -1;
+                else if (Time.time - attackDownT > 0.15f) StartPlunge(true);   // B held: the big one
+            }
             if (wantJump && !Frozen && !Menus.AnyOpen)
             {
                 if (coyote > 0 && Time.time < leapReady && dive == 0 && !Riding && !Snowmobile) { Leap(); hv = new Vector3(vel.x, 0, vel.z); }
@@ -238,6 +272,8 @@ namespace Chubrik
                 hv = Vector3.MoveTowards(hv, wish * speed * 1.25f, 12 * dt);
             }
             else vel.y += g * dt;
+            if (plunge == 2) vel.y = Mathf.Min(vel.y, -24f);
+            else if (plunge == 1) vel.y = Mathf.Min(vel.y, -11f);
             if (Grounded && vel.y < 0) vel.y = -3f;
             vel.x = hv.x; vel.z = hv.z;
 
@@ -250,7 +286,8 @@ namespace Chubrik
             OnIce = Grounded && ground != null && ground.GetComponentInParent<Ice>() != null;
             if ((flags & CollisionFlags.Above) != 0 && vel.y > 0) vel.y = 0;
             if (Grounded && ground != null) { groundLocal = ground.InverseTransformPoint(transform.position); groundRot = ground.rotation; }
-            if (dive == 1 && Grounded)
+            if (plunge != 0 && Grounded) PlungeLand();
+            else if (dive == 1 && Grounded)
             {
                 SetDive(2);
                 AudioFx.Play("land4", 0.5f); AudioFx.Play("jump4");
@@ -266,7 +303,7 @@ namespace Chubrik
             }
             if (wasGrounded && !Grounded) fallStart = transform.position.y;
             grabCd -= dt;
-            if (!Grounded && dive == 0 && grabCd <= 0 && vel.y < 2.5f && !Frozen && !Snowmobile && TryGrab()) return;
+            if (!Grounded && dive == 0 && plunge == 0 && grabCd <= 0 && vel.y < 2.5f && !Frozen && !Snowmobile && TryGrab()) return;
 
             // safe spot for respawns
             if (Grounded && ground != null && ground.GetComponent<Mover>() == null)
@@ -385,6 +422,38 @@ namespace Chubrik
             AudioFx.Play("jump4", 0.6f);
         }
 
+        void StartPlunge(bool big)
+        {
+            if (big && plunge == 2) return;
+            bool was = plunge != 0;
+            SetDive(0);
+            EndLeap();
+            plunge = big ? 2 : 1;
+            attackDownT = -1;
+            Anim.plunge = true;
+            if (!was) Plunges++;
+            vel = new Vector3(vel.x * (big ? 0.2f : 0.5f), big ? -24f : -11f, vel.z * (big ? 0.2f : 0.5f));
+            AudioFx.Play("swing"); AudioFx.Play(big ? "jump5" : "jump4", big ? 0.4f : 0.7f);
+            Effects.Emit("stardust", transform.position + Vector3.up * 0.6f, big ? 14 : 6, 0.3f);
+        }
+
+        /// <summary>Hits the ground head first: a funny flop on the belly with a little bounce (a big plunge also smashes things).</summary>
+        void PlungeLand()
+        {
+            bool big = plunge == 2;
+            plunge = 0; Anim.plunge = false;
+            SetDive(2);
+            vel = new Vector3(0, big ? 4.5f : 2.5f, 0); Grounded = false;   // boing!
+            AudioFx.Play("land4", big ? 1f : 0.6f); AudioFx.Play("punch", big ? 0.9f : 0.5f);
+            AudioFx.Voice("heyhey", big ? 0.7f : 0.9f, 0.6f);
+            Effects.Emit("dust", transform.position, big ? 26 : 12, big ? 0.8f : 0.5f);
+            Effects.Emit("stardust", transform.position + Vector3.up * 0.8f, big ? 10 : 4, 0.4f);
+            Hit(transform.position + Vector3.up * 0.3f, big ? 1.8f : 1.1f);   // like a jump attack: breaks boxes, snowmen, ice cubes
+            World4.HitNear(transform.position, true);
+            Rescue.HitNear(transform.position);
+            Anim.Land(1f);
+        }
+
         void SetDive(int d)
         {
             dive = d;
@@ -397,6 +466,7 @@ namespace Chubrik
             vel.y = v;
             Grounded = false; coyote = 0; airJumps = Model.HasJet ? 2 : 1;
             SetDive(0);
+            plunge = 0; Anim.plunge = false; attackDownT = -1;
             Anim.Land(0.6f);
         }
 
@@ -506,9 +576,24 @@ namespace Chubrik
 
         public void Attack()
         {
-            if (Frozen || attackCd > 0 || dive != 0) return;
+            if (Frozen || plunge != 0) return;
+            if (dive == 1 && !Grounded) { attackDownT = Time.time; return; }   // holding B turns the dive into the plunge
+            if (attackCd > 0 || dive != 0) return;
+            if (!Grounded && !airJumped && !Riding && hang == 0 && !Snowmobile && !leaping)
+            {
+                // one jump, then B: a small plunge; hold B for the big one
+                StartPlunge(false);
+                attackDownT = Time.time;
+                attackCd = 0.3f;
+                // it is still a jump attack: ice cubes, snowmen, cages, crates next to you get it
+                World4.HitNear(transform.position, true);
+                Rescue.HitNear(transform.position);
+                Hit(transform.position + Vector3.up * 0.6f + transform.forward * 0.6f, 1.0f);
+                return;
+            }
             if (!Grounded && airJumped && !Riding)
             {
+                attackDownT = Time.time;
                 // the dive: forward and down on the belly
                 var f = transform.forward; f.y = 0; f.Normalize();
                 vel = f * 12.5f + Vector3.up * Mathf.Max(vel.y * 0.3f, 3.5f);
@@ -568,6 +653,64 @@ namespace Chubrik
 
         // ---------------- camera ----------------
 
+        /// <summary>Wardrobe: finds the nearest wall around the chubrik; the camera will look at it, he stands with his back to it.</summary>
+        public void StartWardrobeView()
+        {
+            var chest = transform.position + Vector3.up * 0.9f * Model.SizeScale;
+            float best = 999; Vector3 bestDir = Vector3.zero;
+            for (int k = 0; k < 32; k++)
+            {
+                var d = Quaternion.Euler(0, k * 11.25f, 0) * Vector3.forward;
+                if (!Physics.Raycast(chest, d, out var hit, 16f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) continue;
+                if (Mathf.Abs(hit.normal.y) > 0.5f || hit.distance < 0.7f) continue;
+                // the camera stands on the other side: it needs some room there
+                float room = Physics.SphereCast(chest, 0.25f, -d, out var back, 4f, Layers.SolidMask, QueryTriggerInteraction.Ignore) ? back.distance : 4f;
+                if (room < 1.6f) continue;
+                if (hit.distance < best) { best = hit.distance; bestDir = d; }
+            }
+            WardrobeWall = best < 999;
+            var toWall = WardrobeWall ? bestDir : Quaternion.Euler(0, yaw, 0) * Vector3.forward;
+            WardrobeDir = -toWall;
+            WardrobeSpin = 0;
+            WardrobeView = true;
+            yaw = Quaternion.LookRotation(toWall).eulerAngles.y;
+            pitch = 10;
+            SetDive(0); EndLeap(); plunge = 0; Anim.plunge = false;
+        }
+
+        public void StopWardrobeView()
+        {
+            if (!WardrobeView) return;
+            WardrobeView = false; ShowWalk = false;
+            transform.rotation = Quaternion.Euler(0, Quaternion.LookRotation(WardrobeDir).eulerAngles.y + WardrobeSpin, 0);
+        }
+
+        void WardrobeCamera()
+        {
+            float s = Model.SizeScale;
+            float h, dist;
+            switch (WardrobeZoom)
+            {
+                case "head": h = 1.15f; dist = 2.3f; break;
+                case "feet": h = 0.45f; dist = 2.1f; break;
+                case "back": h = 0.85f; dist = 2.7f; break;
+                case "hand": h = 0.7f; dist = 2.2f; break;
+                default: h = 0.8f; dist = 2.7f; break;
+            }
+            h *= s; dist *= Mathf.Clamp(s, 0.7f, 1.8f);
+            var target = transform.position + Vector3.up * h;
+            var dir = (WardrobeDir + Vector3.up * 0.18f).normalized;
+            if (Physics.SphereCast(target, 0.2f, dir, out var hit, dist, Layers.SolidMask, QueryTriggerInteraction.Ignore)) dist = Mathf.Max(1.0f, hit.distance - 0.1f);
+            var rot = Quaternion.LookRotation(-dir);
+            // shift the camera sideways so the chubrik stands in the middle of the free space between the panels
+            float halfW = Mathf.Tan(Cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * Cam.aspect * dist;
+            var pos = target + dir * dist + rot * Vector3.right * ((0.5f - WardrobeCx) * 2f * halfW);
+            if (!wCamInit) { wCamPos = Cam.transform.position; wCamRot = Cam.transform.rotation; wCamInit = true; }
+            float k = 1f - Mathf.Exp(-Time.unscaledDeltaTime * 6f);
+            wCamPos = Vector3.Lerp(wCamPos, pos, k); wCamRot = Quaternion.Slerp(wCamRot, rot, k);
+            Cam.transform.SetPositionAndRotation(wCamPos, wCamRot);
+        }
+
         void LateUpdate()
         {
             if (Cam == null) return;
@@ -579,6 +722,8 @@ namespace Chubrik
                 Cam.transform.rotation = Quaternion.LookRotation(c - Cam.transform.position);
                 return;
             }
+            if (WardrobeView) { WardrobeCamera(); return; }
+            wCamInit = false;
             float s = Model.SizeScale;
             var targetPos = transform.position + Vector3.up * (1.15f * s + 0.2f);
             var rot = Quaternion.Euler(pitch, yaw, 0);

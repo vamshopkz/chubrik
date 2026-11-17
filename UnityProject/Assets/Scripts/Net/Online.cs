@@ -30,7 +30,14 @@ namespace Chubrik
             public long coins, tokens;
             public int friends, worlds, eggs;
             public Look look;
+            public string raw;     // the «R|…» line as it came (kept in the local book of everyone)
+            public bool old;       // an older game version without records: seen online, numbers unknown
         }
+        /// <summary>17.11: everyone ever seen is kept on the device too (the public relay may forget retained lines);
+        /// lines the relay has lost are given back to it, so the table keeps everyone who has ever played.</summary>
+        readonly HashSet<string> fromRelay = new HashSet<string>();
+        bool bookDirty; float bookT = 30f, reshareAt = -1; bool reshared;
+        static string BookPath => System.IO.Path.Combine(Application.persistentDataPath, "records_book.txt");
         public readonly Dictionary<string, Record> Records = new Dictionary<string, Record>();
         /// <summary>The player we are «in a room» with (we came to them or they came to us).</summary>
         public string RoomWith;
@@ -79,6 +86,46 @@ namespace Chubrik
             avatarsRoot = new GameObject("OnlinePlayers").transform;
             DontDestroyOnLoad(avatarsRoot.gameObject);
             foreach (var b in Brokers) relays.Add(new Relay { broker = b, link = MqttLink.Create(b, Subs, Topic) });
+            LoadBook();
+        }
+
+        void LoadBook()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(BookPath)) return;
+                foreach (var line in System.IO.File.ReadAllLines(BookPath))
+                {
+                    var r = ParseRecord(line);
+                    if (r != null && r.pid != Save.P?.id && !Records.ContainsKey(r.pid)) Records[r.pid] = r;
+                }
+            }
+            catch (Exception e) { Debug.Log("[Online] records book: " + e.Message); }
+        }
+
+        void SaveBook()
+        {
+            bookDirty = false;
+            try
+            {
+                var lines = new List<string>();
+                foreach (var r in Records.Values) if (!string.IsNullOrEmpty(r.raw) && !r.old) lines.Add(r.raw);
+                System.IO.File.WriteAllLines(BookPath, lines);
+            }
+            catch (Exception e) { Debug.Log("[Online] records book: " + e.Message); }
+        }
+
+        public static Record ParseRecord(string line)
+        {
+            var f = (line ?? "").Split('|');
+            if (f.Length < 9 || f[0] != "R" || string.IsNullOrEmpty(f[1])) return null;
+            var r = new Record { pid = f[1], nick = f[2], raw = line };
+            long.TryParse(f[3], NumberStyles.Integer, Inv, out r.coins);
+            int.TryParse(f[4], out r.friends); int.TryParse(f[5], out r.worlds);
+            long.TryParse(f[6], NumberStyles.Integer, Inv, out r.tokens);
+            int.TryParse(f[7], out r.eggs);
+            r.lookStr = f[8]; r.look = ParseLook(r.lookStr);
+            return r;
         }
 
         static string Subs => Topic + "\n" + StatsTopic + "/#";
@@ -177,7 +224,19 @@ namespace Chubrik
                 PublishRecord(false);
                 var mine = Mine();
                 Records[mine.pid] = mine;
+                if (reshareAt < 0) reshareAt = now + 15f;
             }
+            // give the relay back the lines it has lost (players from the local book it no longer remembers)
+            if (!reshared && reshareAt > 0 && now >= reshareAt && Connected)
+            {
+                reshared = true;
+                int n = 0;
+                foreach (var r in Records.Values)
+                    if (!r.old && !string.IsNullOrEmpty(r.raw) && !fromRelay.Contains(r.pid) && r.pid != Save.P.id && n++ < 300)
+                        foreach (var rl in relays) if (rl.link != null && rl.link.Ready) rl.link.Publish(StatsTopic + "/" + r.pid, r.raw, true);
+                if (n > 0) Debug.Log("[Online] gave back " + n + " record lines");
+            }
+            if (bookDirty && now >= bookT) { bookT = now + 30f; SaveBook(); }
             // our position, only while someone else is in the same world
             if (playing && now >= stateT && AnyoneHere())
             {
@@ -230,6 +289,9 @@ namespace Chubrik
                     peer.ver = f[2];
                     int.TryParse(f[3], out peer.world);
                     if (f.Length >= 6) peer.nick = f[5];
+                    // an older game (before the records): still put them in the table while they are online
+                    if (string.Compare(peer.ver, "0.17", StringComparison.Ordinal) < 0 && peer.ver.Length <= 4 && !Records.ContainsKey("s:" + id))
+                        Records["s:" + id] = new Record { pid = "s:" + id, nick = string.IsNullOrEmpty(peer.nick) ? "Игрок (старая версия)" : peer.nick, old = true, lookStr = f[4], look = ParseLook(f[4]) };
                     var ls = f[4];
                     if (ls != peer.lookStr)
                     {
@@ -262,12 +324,11 @@ namespace Chubrik
                 case "R" when f.Length >= 9:
                 {
                     if (f[1] == Save.P.id) break;   // our own line comes back from the relay
-                    var r = new Record { pid = f[1], nick = f[2] };
-                    long.TryParse(f[3], NumberStyles.Integer, Inv, out r.coins);
-                    int.TryParse(f[4], out r.friends); int.TryParse(f[5], out r.worlds);
-                    long.TryParse(f[6], NumberStyles.Integer, Inv, out r.tokens);
-                    int.TryParse(f[7], out r.eggs);
-                    r.lookStr = f[8]; r.look = ParseLook(r.lookStr);
+                    var r = ParseRecord(string.Join("|", f));
+                    if (r == null) break;
+                    if (injecting) { r.raw = null; Records[r.pid] = r; break; }
+                    fromRelay.Add(r.pid);
+                    if (!Records.TryGetValue(r.pid, out var had) || had.raw != r.raw) bookDirty = true;
                     Records[r.pid] = r;
                     break;
                 }
@@ -314,7 +375,9 @@ namespace Chubrik
         void OnApplicationQuit() => Send($"B|{Id}");
 
         /// <summary>Tests: feed a message in as if it came from the relay.</summary>
-        public void Inject(string text) => Handle(text);
+        bool injecting;
+        /// <summary>Tests: a message as if it came from the relay (never written to the book nor given back to the relay).</summary>
+        public void Inject(string text) { injecting = true; try { Handle(text); } finally { injecting = false; } }
     }
 
     /// <summary>Another player's chubrik in our world: follows their position smoothly and plays their moves.</summary>

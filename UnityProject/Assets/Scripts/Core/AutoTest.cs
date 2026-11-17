@@ -182,6 +182,38 @@ namespace Chubrik
             pl.Attack();
             Check("on the ground a hit is still a hit", !pl.Diving && !pl.Lying);
 
+            // ---- 17.11 the plunge: one jump + B = a small one, B held after one or two jumps = straight down ----
+            pl.Teleport(Lobby.Spawn, diveYaw);
+            yield return Wait(0.6f);
+            pl.QueueJump();
+            yield return Wait(0.25f);
+            pl.Attack();
+            bool smallP = pl.Plunging && !pl.PlungeBig;
+            for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
+            Check("one jump then B: a small plunge down, a funny flop on landing", smallP && pl.Lying);
+            yield return Wait(0.6f);
+            pl.QueueJump();
+            yield return Wait(0.8f);
+            var pz0 = pl.transform.position;
+            pl.QueueJump();
+            yield return Wait(0.3f);
+            pl.QueueJump();
+            yield return Wait(0.12f);
+            pl.HoldAttack = true;
+            pl.Attack();
+            bool bigP = false;
+            for (float tt = 0; tt < 0.3f && !bigP; tt += Time.deltaTime) { bigP = pl.PlungeBig; yield return null; }
+            yield return Shot("77_plunge");
+            for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
+            pl.HoldAttack = false;
+            var pz1 = pl.transform.position;
+            Check("two jumps then B held: straight down head first, then lying", bigP && pl.Lying && new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude < 4.5f, $"{new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude:0.0} m sideways");
+            yield return Wait(0.5f);
+            yield return Shot("78_plunge_flop");
+            pl.QueueJump();
+            yield return Wait(0.6f);
+            Check("a jump stands up after the plunge", !pl.Lying && !pl.Plunging);
+
             // ---- bounce mushroom ----
             pl.Teleport(Lobby.TestMushroom + Vector3.up * 2.6f, 0);
             float bTop = 0;
@@ -314,19 +346,82 @@ namespace Chubrik
             PremiumUI.Cancel(new[] { 4, 5, 6, 7 });
             Check("cancel all sets", Save.P.sets.Count == 0 && !Save.Owns("hat_p7") && Save.Owns("secret_7"));
             Check("promo code returns the cancelled sets", Promo.Apply("Артём 22 X") && Save.P.sets.Count == 8 && Save.Owns("hat_p0"));
-            Check("set bonus is paid only once", Save.P.coins == coinsBefore && Save.P.tokens == tokensBefore, $"coins {coinsBefore} → {Save.P.coins}");
+            Check("set bonus is paid only once (the code itself adds its 10 000 000 coins)", Save.P.coins == coinsBefore + Promo.DevCoins && Save.P.tokens == tokensBefore + Promo.DevTokens, $"coins {coinsBefore} → {Save.P.coins}");
 
-            // ---- wardrobe ----
+            // ---- wardrobe: the real chubrik between the panels, the camera turned to the nearest wall ----
+            pl.Teleport(new Vector3(-5, 0.3f, 18.2f), 90);
+            yield return Wait(0.5f);
             WardrobeUI.Open("hat");
-            yield return Wait(0.5f);
+            yield return Wait(1.2f);
             yield return Shot("10_wardrobe_hats");
+            var vp = pl.Cam.WorldToViewportPoint(pl.transform.position + Vector3.up * 0.8f);
+            Check("wardrobe: the camera turns to the wall, the chubrik stands in the free middle", pl.WardrobeView && pl.WardrobeWall && vp.z > 0 && Mathf.Abs(vp.x - pl.WardrobeCx) < 0.06f && vp.y > 0.2f && vp.y < 0.85f, $"x {vp.x:0.00} (middle {pl.WardrobeCx:0.00}) y {vp.y:0.00}");
+            var toCam = pl.Cam.transform.position - pl.transform.position; toCam.y = 0;
+            Check("wardrobe: the chubrik faces the camera", Vector3.Angle(pl.transform.forward, toCam) < 25, Vector3.Angle(pl.transform.forward, toCam).ToString("0"));
+            bool lukyBtn = false, noCoinPrice = true;
+            foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) { if (tx.text == "ОТКРЫТЬ ЛАКИ-БЛОК") lukyBtn = true; if (tx.text.EndsWith(" МОНЕТ") && tx.transform.parent.name.StartsWith("Tile")) noCoinPrice = false; }
+            Check("wardrobe: «Открыть лаки-блок» button, skins are not sold for coins", lukyBtn && noCoinPrice);
             WardrobeUI.SelectDept("wings");
-            yield return Wait(0.5f);
+            yield return Wait(0.8f);
             yield return Shot("11_wardrobe_wings");
-            WardrobeUI.SelectDept("pet");
+            WardrobeUI.SelectDept("suit");
+            yield return Wait(0.8f);
+            yield return Shot("12_wardrobe_suits");
+            // lucky blocks
+            Save.P.coins = 1_000_000;
+            int lb0 = Lucky.Pool().FindAll(i => Save.Owns(i.id)).Count;
+            LuckyUI.Open();
             yield return Wait(0.5f);
-            yield return Shot("12_wardrobe_pets");
+            yield return Shot("79_lucky_blocks");
+            LuckyUI.Buy(1);
+            yield return Wait(4.5f);
+            yield return Shot("80_lucky_ten");
+            int lb1 = Lucky.Pool().FindAll(i => Save.Owns(i.id)).Count;
+            Check("the 1000-coin block gives 10 new things", lb1 == lb0 + 10 && Save.P.coins == 1_000_000 - 1000, $"{lb0} → {lb1}");
+            var one = Lucky.Open(0);
+            Check("the 400-coin block gives one thing", one != null && one.Count == 1 && Save.Owns(one[0].id));
+            bool rare = true;
+            for (int k = 0; k < 5; k++) { var rb = Lucky.Open(2); if (rb == null || rb.Count != 1 || Lucky.Rarity(rb[0]) < 2) rare = false; }
+            Check("the rainbow block (5000) gives only the rarest things", rare && Save.P.coins == 1_000_000 - 1000 - 400 - 5 * 5000, Save.P.coins.ToString());
+            LuckyUI.Buy(2);
+            yield return Wait(2.5f);
+            yield return Shot("81_lucky_rainbow");
+            LuckyUI.Close();
+            Check("every costume and skin is in the lucky blocks (except premium and rewards)", Lucky.InPool(Catalog.Get(Catalog.RichArtemiy)) && Lucky.InPool(Catalog.Get(Catalog.Tramp)) && Lucky.InPool(Catalog.Get("hat_3")) && !Lucky.InPool(Catalog.Get("hat_p0")));
             WardrobeUI.Close();
+            Check("closing the wardrobe gives the normal camera back", !pl.WardrobeView && !pl.Frozen);
+
+            // hats sit on top of every head shape
+            {
+                const int hcell = 200;
+                string[] hats = { "", "hat_0", "hat_3", "hat_4", "hat_6", "hat_7", "hat_p7", "hat_r1" };
+                var sheet = new Texture2D(hats.Length * hcell, 8 * hcell, TextureFormat.RGB24, false);
+                bool fits = true; var info = new StringBuilder();
+                for (int hd = 0; hd < 8; hd++)
+                    for (int k = 0; k < hats.Length; k++)
+                    {
+                        var hl = Look.Default(); hl["head"] = "head_" + hd; if (hats[k] != "") hl["hat"] = hats[k];
+                        var tex = Preview.I.BigLook(hl, hcell - 4, "head", 30);
+                        sheet.SetPixels(k * hcell + 2, (7 - hd) * hcell + 2, hcell - 4, hcell - 4, tex.GetPixels());
+                        Destroy(tex);
+                        if (k == 1)
+                        {
+                            bool bake = ChubrikModel.BakeParts; ChubrikModel.BakeParts = false;
+                            var pm = ChubrikModel.Create("FitTest", null, hl, 0);
+                            ChubrikModel.BakeParts = bake;
+                            var hatT = pm.HeadC.Find("Hat");
+                            bool ok = hatT != null && hatT.localPosition.y - pm.SkullTop > -0.08f && hatT.localPosition.y - pm.SkullTop < 0.4f && pm.SkullTop > 0.2f;
+                            if (!ok) fits = false;
+                            info.Append($"head{hd}: top {pm.SkullTop:0.00} w {pm.SkullHalfW:0.00} box {pm.BoxHead} scale {pm.HatScale:0.00}; ");
+                            Destroy(pm.gameObject);
+                        }
+                        if (k % 4 == 3) yield return null;
+                    }
+                sheet.Apply();
+                File.WriteAllBytes(Path.Combine(dir, "82_hat_fit.png"), sheet.EncodeToPNG());
+                Destroy(sheet);
+                Check("a hat sits right on top of every head shape", fits, info.ToString());
+            }
 
             // ---- a fully dressed chubrik ----
             string[] outfit = { "head_4", "hair_6", "ears_0", "hat_p0", "eyes_0", "neck_5", "color_1", "skin_0", "top_0", "wings_p0", "hands_7", "wrist_0", "tail_p0", "pants_2", "belt_0", "shoes_5", "steps_0", "walk_1", "emote_0", "pet_5", "weapon_3", "wcolor_2", "aura_0" };
@@ -979,28 +1074,75 @@ namespace Chubrik
                 Check("the menu has a «Промокоды» section", promoRow);
                 pl.Teleport(Lobby.Spawn, 180);
                 yield return Wait(0.3f);
-                Promo.Apply("Курица");
-                yield return Wait(0.5f);
-                Check("promo «Курица» turns the chubrik into a chicken", Save.Worn("suit") == Catalog.Chicken && pl.Model.PartCount.ContainsKey("suit"));
-                pl.yaw = 0;
-                yield return Wait(0.3f);
-                yield return Shot("71_chicken");
-                Promo.Apply("Курятник");
-                yield return Wait(0.3f);
-                Check("promo «Курятник» turns him back", Save.Worn("suit") == "" && !pl.Model.PartCount.ContainsKey("suit"));
+                bool oldGone = !Promo.Apply("Курица") && !Promo.Apply("Чайник") && !Promo.Apply("BUTTER 22X");
+                Check("the old promo codes are gone (Курица, Чайник, BUTTER 22X)", oldGone);
                 long tc = Save.P.coins, tt = Save.P.tokens;
-                Promo.Apply("Чайник");
-                bool rich = Save.P.coins == tc + Promo.TeapotSum && Save.P.tokens == tt + Promo.TeapotSum;
-                yield return Wait(0.3f);
-                Promo.Apply("Чайник нет");
-                Check("«Чайник» gives 300 billion coins and tokens, «Чайник нет» takes them back", rich && Save.P.coins == tc && Save.P.tokens == tt, $"{tc} → {Save.P.coins}");
+                Promo.Apply("Миллиард");
+                Check("«Миллиард» gives 300 billion coins and 300 billion tokens", Save.P.coins == tc + Promo.BillionSum && Save.P.tokens == tt + Promo.BillionSum, $"{tc} → {Save.P.coins}");
+                Save.P.coins = tc; Save.P.tokens = tt;
+                long dc = Save.P.coins;
+                Check("«Артем22X» gives lots of money and all 8 premium sets", Promo.Apply("Артем22X") && Save.P.coins >= dc + Promo.DevCoins && Save.P.sets.Count == 8);
                 Promo.Apply("BUTTER");
                 yield return Wait(1.2f);
                 int buttered = Butter.Buttered;
                 yield return Shot("72_butter");
-                Promo.Apply("BUTTER 22X");
+                Promo.Apply("BUTTER");
                 yield return Wait(0.3f);
-                Check("«BUTTER» makes everything butter, «BUTTER 22X» melts it back", buttered > 200 && Butter.Buttered == 0 && !Save.P.butter, buttered + " things");
+                Check("«BUTTER» makes everything butter, again «BUTTER» melts it back", buttered > 200 && Butter.Buttered == 0 && !Save.P.butter, buttered + " things");
+                Promo.Apply("Секрет");
+                yield return Wait(0.4f);
+                yield return Shot("83_secret_nooks");
+                Check("«Секрет» shows where each of the 10 nooks is", Secrets.IsOpen && Eggs.Where.Length == 10 && Eggs.Total == 10);
+                Secrets.Hide();
+                Promo.Apply("Лукашарики");
+                yield return Wait(1.5f);
+                yield return Shot("84_cartoon_title");
+                for (float t = 0; t < 20 && Cartoon.Scene < 4; t += Time.unscaledDeltaTime) yield return null;
+                yield return Wait(1.5f);
+                yield return Shot("85_cartoon_tears");
+                for (float t = 0; t < 25 && Cartoon.Scene < 8; t += Time.unscaledDeltaTime) yield return null;
+                yield return Wait(0.5f);
+                yield return Shot("86_cartoon_end");
+                Check("«Лукашарики» plays the cartoon to the end", Cartoon.IsOpen && Cartoon.Scene == 8);
+                Cartoon.Stop();
+                Check("the cross closes the cartoon", !Cartoon.IsOpen && !pl.Frozen);
+
+                // 17.11 the coolest outfit for Артемий and Асхан the tramp
+                Save.Give(Catalog.RichArtemiy); Save.Wear("suit", Catalog.RichArtemiy); pl.ApplyLook(Save.CurrentLook());
+                pl.Teleport(Lobby.Spawn, 180); pl.yaw = 0; pl.pitch = 8;
+                yield return Wait(0.6f);
+                yield return Shot("87_rich_artemiy");
+                Check("«Богач Артемий» is the most detailed costume", pl.Model.PartCount.TryGetValue("suit", out var ap) && ap >= 100, ap.ToString());
+                Save.Give(Catalog.Tramp); Save.Wear("suit", Catalog.Tramp); pl.ApplyLook(Save.CurrentLook());
+                yield return Wait(0.5f);
+                yield return Shot("88_tramp_ashan");
+                Save.Wear("suit", ""); pl.ApplyLook(Save.CurrentLook());
+
+                // houses in the lobby: you can walk in, friends come to visit
+                Check("3 little houses in the lobby", Houses.All.Count == 3, Houses.All.Count.ToString());
+                if (Houses.All.Count > 0)
+                {
+                    var hs = Houses.All[0];
+                    pl.Teleport(hs.Front + Vector3.up * 0.3f, hs.t.eulerAngles.y + 180);
+                    yield return Wait(0.4f);
+                    pl.yaw = hs.t.eulerAngles.y + 180;
+                    pl.MoveInput = new Vector2(0, 1);
+                    for (float t = 0; t < 3 && !hs.Contains(pl.transform.position); t += Time.deltaTime) yield return null;
+                    yield return Wait(0.5f);
+                    pl.MoveInput = Vector2.zero;
+                    Check("you can walk into a house through its door", hs.Contains(pl.transform.position), hs.t.InverseTransformPoint(pl.transform.position).ToString());
+                    Houses.Visit(0);
+                    for (float t = 0; t < 10 && (Houses.Current == null || !Houses.Current.InsideNow); t += Time.deltaTime) yield return null;
+                    pl.yaw = hs.t.eulerAngles.y + 180; pl.pitch = 15;
+                    pl.Teleport(hs.t.TransformPoint(new Vector3(-0.8f, 0.3f, 2.2f)), hs.t.eulerAngles.y + 180);
+                    yield return Wait(0.6f);
+                    yield return Shot("89_house_guest");
+                    Check("a rescued friend comes to visit the house", Houses.Current != null && Houses.Current.InsideNow);
+                    pl.Teleport(hs.Front + hs.t.forward * 5 + Vector3.up * 0.5f, hs.t.eulerAngles.y + 180);
+                    pl.yaw = hs.t.eulerAngles.y + 180; pl.pitch = 14;
+                    yield return Wait(0.6f);
+                    yield return Shot("90_house_outside");
+                }
 
                 // costumes: Артём's rich outfit on the player
                 Save.Give(Catalog.RichArtem); Save.Wear("suit", Catalog.RichArtem); pl.ApplyLook(Save.CurrentLook());

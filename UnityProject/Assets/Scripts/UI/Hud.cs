@@ -12,6 +12,7 @@ namespace Chubrik
         public static Hud I;
         public static bool Touch => Application.isMobilePlatform || Boot.Has("-touch");
         public static bool JumpButtonHeld => I != null && I.jumpBtn != null && I.jumpBtn.Held;
+        public static bool AttackButtonHeld => I != null && I.hitBtn != null && I.hitBtn.Held;
         RectTransform root, touchRoot, heartsRow;
         TextMeshProUGUI coins, tokens, keys, friends, toast, hint, navTxt;
         Image flash, crack;

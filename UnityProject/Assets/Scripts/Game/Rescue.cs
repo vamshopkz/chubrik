@@ -38,7 +38,7 @@ namespace Chubrik
                 var v = Look.Default();
                 if (id == "vipArtem") { v["suit"] = Catalog.RichArtem; v["aura"] = "aura_4"; v["pet"] = "pet_p5"; v["emote"] = "emote_5"; }
                 else if (id == "vipAli") { v["suit"] = Catalog.RichAli; v["aura"] = "aura_4"; v["emote"] = "emote_4"; }
-                else { v["hat"] = "hat_p7"; v["top"] = "top_p7"; v["weapon"] = "weapon_p7"; v["aura"] = "aura_p7"; v["neck"] = "neck_p5"; v["eyes"] = "eyes_p5"; v["pet"] = "pet_p5"; v["color"] = "color_7"; v["emote"] = "emote_5"; }
+                else { v["suit"] = Catalog.RichArtemiy; v["aura"] = "aura_p7"; v["pet"] = "pet_p5"; v["color"] = "color_7"; v["emote"] = "emote_5"; }   // 17.11 the coolest outfit
                 return v;
             }
             var r = new Rng(id.GetHashCode());

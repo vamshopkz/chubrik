@@ -15,6 +15,21 @@ namespace Chubrik
         public static readonly List<string> Bad = new List<string>();
         static readonly HashSet<int> spawned = new HashSet<int>();
 
+        /// <summary>17.11 promo code «Секрет» shows where every nook is.</summary>
+        public static readonly string[] Where =
+        {
+            "Лобби: узкая щель между красным магазином и синим",
+            "Лобби: крыша премиум-киоска — двойной прыжок и зацепись за край",
+            "Лобби: дальний угол водяной пещеры",
+            "Закулисье: тупик лабиринта (вход — двойной прыжок у Пончика)",
+            "Закулисье: второй тупик лабиринта, ещё дальше",
+            "Закулисье: третий тупик, самый дальний от входа",
+            "Мир 2: тайная роща на боковой тропинке, наверху",
+            "Мир 5: в самой глубине пещеры в джунглях",
+            "Мир 67: за первой ненастоящей стеной",
+            "Мир 67: за второй ненастоящей стеной",
+        };
+
         public static int Found { get { int n = 0; foreach (var f in Save.P.found) if (f.StartsWith("egg")) n++; return n; } }
 
         public static void SpawnLobby()

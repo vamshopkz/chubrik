@@ -10,6 +10,7 @@ namespace Chubrik
         void RewardHat(int i)
         {
             var h = Node("Hat", HeadC, new Vector3(0, hatY, 0));
+            h.localScale = new Vector3(HatScale, HatScaleY, HatScale);
             if (i == 200)
             {
                 var gold = M("E8B730", 0.85f, 0.8f); var bone = M("F3EBD2", 0.45f); var green = G("4CE35A", 1.4f); var scale = M("3E8A3A", 0.5f, 0.2f);
