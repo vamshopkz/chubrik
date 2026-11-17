@@ -105,6 +105,9 @@ namespace Chubrik
             Clip("error", 0.32f, t => { float f = t < 0.14f ? 330 : 247; return (Tri(t * TAU * f) * 0.3f + Mathf.Sin(t * TAU * f * 0.5f) * 0.2f) * Env(t % 0.16f, 0.004f, 0.06f); });
             { var nz = N(); Clip("token", 1.0f, t => { int i = Mathf.Min(4, (int)(t / 0.08f)); float f = 1046.5f * Mathf.Pow(2, new[] { 0, 4, 7, 12, 16 }[i] / 12f); return Bell(t - i * 0.08f, f) * 0.25f * Env(t - i * 0.08f, 0.002f, i == 4 ? 0.4f : 0.07f) + nz.High() * 0.03f * Env(t, 0.01f, 0.3f); }); }
             Clip("boing", 0.55f, t => Mathf.Sin(TAU * (160 * t + 70 * Mathf.Sin(t * 38) * t + 700 * t * t)) * Env(t, 0.004f, 0.22f) * 0.5f);
+            // World 67: a bugged trampoline «boing» (it skips and repeats) and a dial-up modem screech for the swapping digits
+            Clip("glitchboing", 0.75f, t => { float u = t < 0.3f ? (t % 0.075f) * 2 : t - 0.15f; return Mathf.Sin(TAU * (160 * u + 70 * Mathf.Sin(u * 38) * u + 700 * u * u)) * Env(t, 0.004f, 0.3f) * 0.5f + Sq(t * TAU * 67) * 0.04f * Env(t, 0.002f, 0.1f); });
+            { var nz = N(); Clip("modem", 1.3f, t => t < 0.35f ? (Mathf.Sin(TAU * 1270 * t) * 0.18f + Mathf.Sin(TAU * 2225 * t) * 0.12f) : t < 0.7f ? Sq(t * TAU * (980 + Mathf.Sin(t * 90) * 400)) * 0.08f + nz.High() * 0.06f : (Mathf.Sin(TAU * (1650 + Mathf.Sin(t * 230) * 600) * t) * 0.12f + nz.Band(0.4f) * 0.12f) * Env(t - 0.7f, 0.01f, 0.4f)); }
             { var nz = N(); Clip("splash", 0.8f, t => (nz.Band(0.35f) * 0.9f + Mathf.Sin(TAU * (700 * t - 600 * t * t)) * 0.12f * Env(t, 0.005f, 0.08f)) * Env(t, 0.01f, 0.22f)); }
             { var nz = N(); Clip("hurt", 0.38f, t => (Mathf.Sin(TAU * (520 * t - 700 * t * t + 6 * Mathf.Sin(t * 60))) * 0.35f + nz.Low(0.3f) * 0.25f) * Env(t, 0.004f, 0.12f)); }
             { var nz = N(); Clip("zap", 0.45f, t => (nz.High() * 0.5f + Sq(t * TAU * (110 + Mathf.Sin(t * 260) * 50)) * 0.18f) * Env(t, 0.002f, 0.13f)); }
@@ -405,6 +408,25 @@ namespace Chubrik
         {
             if (I == null || !I.clips.TryGetValue(name, out var c)) return;
             I.src.PlayOneShot(c, vol);
+        }
+
+        /// <summary>World 67: the music stutters for a moment (a slice repeats) and goes on in rhythm.</summary>
+        public static void Stutter()
+        {
+            if (I == null || I.music == null || !I.music.isPlaying) return;
+            I.StartCoroutine(I.StutterCo());
+        }
+
+        System.Collections.IEnumerator StutterCo()
+        {
+            float t0 = music.time;
+            for (int k = 0; k < 3; k++)
+            {
+                music.time = t0; music.pitch = k == 1 ? 1.08f : 0.95f;
+                yield return new WaitForSeconds(0.11f);
+            }
+            music.pitch = 1;
+            if (music.clip != null) music.time = Mathf.Min(t0 + 0.33f, music.clip.length - 0.01f);
         }
 
         public static void Jump(int i, bool air) => Play("jump" + Mathf.Clamp(i, 0, 7), air ? 0.8f : 1f);

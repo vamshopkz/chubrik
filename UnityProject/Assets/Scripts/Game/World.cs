@@ -260,13 +260,16 @@ namespace Chubrik
     {
         public float power = 19f;
         public Transform top;
+        /// <summary>World 67: a bugged trampoline — a skipping sound and a glitch.</summary>
+        public bool glitch;
         float squash;
 
         public void Bounce(PlayerCtl p)
         {
             p.Launch(power);
             squash = 1;
-            AudioFx.Play("boing");
+            if (glitch) { AudioFx.Play("glitchboing"); Hud.Glitch(); Effects.Float("BOING.exe", transform.position + Vector3.up * 1.5f, new Color(0.3f, 1f, 0.4f), 3); }
+            else AudioFx.Play("boing");
             Effects.Emit("stardust", transform.position + Vector3.up * 0.6f, 8, 0.6f);
         }
 

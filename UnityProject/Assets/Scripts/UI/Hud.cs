@@ -187,7 +187,10 @@ namespace Chubrik
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
             if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }
             string wp = "w" + Worlds.Current;
-            friends.text = Worlds.Level ? (Worlds.Current == 3 ? $"Кристаллы: {World3.Crystals()} из {World3.CrystalsTotal}  ·  " : "") + $"Друзья спасены: {Rescue.Rescued(wp)} из {Rescue.Total(wp)}" : (P.rescued.Count > 0 ? $"Спасённых друзей: {P.rescued.Count}" : "");
+            friends.fontSize = Worlds.Current == World67.Id ? 30 : 26;
+            friends.textWrappingMode = TextWrappingModes.NoWrap;
+            if (Worlds.Current == World67.Id) friends.text = $"Спасено друзей: {Rescue.Rescued("w7")} / 67   Ключей собрано: {8 - (Pickups.I != null ? Pickups.I.KeysLeftIn("w7k") : 8)} / 67";
+            else friends.text = Worlds.Level ? (Worlds.Current == 3 ? $"Кристаллы: {World3.Crystals()} из {World3.CrystalsTotal}  ·  " : "") + $"Друзья спасены: {Rescue.Rescued(wp)} из {Rescue.Total(wp)}" : (P.rescued.Count > 0 ? $"Спасённых друзей: {P.rescued.Count}" : "");
             if (P.maxHearts != shownHearts) RebuildHearts();
             int full = Worlds.Level && PlayerCtl.I ? Mathf.Clamp(PlayerCtl.I.Hearts, 0, P.maxHearts) : P.maxHearts;
             if (full != shownFull)
@@ -267,6 +270,8 @@ namespace Chubrik
 
         /// <summary>Tests: is the joke HUD showing?</summary>
         public static bool PrankShown => I != null && I.prankOn;
+        /// <summary>Tests: the friends / keys counter line.</summary>
+        public static string CounterText => I != null && I.friends != null ? I.friends.text : "";
 
         void RebuildHearts()
         {

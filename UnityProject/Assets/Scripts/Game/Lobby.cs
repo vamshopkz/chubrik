@@ -26,6 +26,7 @@ namespace Chubrik
         /// <summary>Spots the autotest uses.</summary>
         public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(19, 0.07f, -5), PadTo = new Vector3(-20, 4.9f, 12), CactusPos = new Vector3(-22, 0, 0);
         /// <summary>Rescued friends needed to open the way to each world.</summary>
+        public static readonly Vector3 Portal67 = new Vector3(-47.5f, 0, -3.2f);
         public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, _ => 0 };
         public static bool Open(int world) => Save.P.rescued.Count >= NeedFor(world);
 
@@ -489,7 +490,7 @@ namespace Chubrik
             surf.AddComponent<Spin>().axis = Vector3.up;
             var s2 = Cy(t, new Vector3(0, 3, 0.05f), new Vector3(3.4f, 0.02f, 4f), Add("FFFFFF", 0.25f), new Vector3(90, 0, 0));
             s2.AddComponent<Pulse>();
-            var tx = Prim.Text(t, $"МИР {world}", new Vector3(0, 6.5f, -0.85f), 8, Color.white);
+            var tx = Prim.Text(t, $"МИР {(world == World67.Id ? 67 : world)}", new Vector3(0, 6.5f, -0.85f), 8, Color.white);
             tx.transform.localRotation = Quaternion.identity;
             var t2 = Prim.Text(t, title, new Vector3(0, 0.6f, -1.2f), 4, Hex(col));
             t2.transform.localRotation = Quaternion.identity;
@@ -508,7 +509,7 @@ namespace Chubrik
                     foreach (var sd in new[] { -1, 1 }) Spike(t, new Vector3(sd * 3, 6, 0), new Vector3(sd * 3.6f, 8.4f, 0), 0.7f, G("A66BFF", 1.6f));
                     break;
             }
-            Zones.Add(t.TransformPoint(new Vector3(0, 0, -1.2f)), 2.6f, $"МИР {world}: {title}", () => Worlds.Enter(world), () => Worlds.Current == 1);
+            Zones.Add(t.TransformPoint(new Vector3(0, 0, -1.2f)), 2.6f, $"МИР {(world == World67.Id ? 67 : world)}: {title}", () => Worlds.Enter(world), () => Worlds.Current == 1);
         }
 
         // ---------------- areas ----------------
@@ -553,6 +554,8 @@ namespace Chubrik
 
         static void Glitch()
         {
+            // the portal to World 67 in the park's left corner, facing the park
+            PortalArch(Portal67, 270, World67.Id, "ГЛЮЧНЫЙ СИКС-СЕВЕН", "39FF6A", M("3A1C78", 0.3f), "glitch");
             var r = new Rng(66);
             for (int k = 0; k < 6; k++)
                 Box(new Vector3(r.F(-40, -26), 0.8f + (k % 2) * 0.8f, r.F(-21, -11)), new Vector3(1.6f, 1.6f + (k % 2) * 1.6f, 1.6f), checker, r.F(0, 45));

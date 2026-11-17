@@ -347,7 +347,7 @@ namespace Chubrik
         public void HurtBy(Vector3 from)
         {
             if (invuln > 0) return;
-            if (Worlds.Current == 6) { Hurt(from); return; }   // endless lives in the glitch world
+            if (Worlds.Current == 6 || Worlds.Current == World67.Id) { Hurt(from); return; }   // endless lives in the glitch worlds
             var away = transform.position - from; away.y = 0;
             if (away.sqrMagnitude < 0.01f) away = -transform.forward;
             vel = away.normalized * 8 + Vector3.up * 6;
@@ -359,11 +359,11 @@ namespace Chubrik
         /// <summary>World 2: fell off the islands — a heart less, back to the last safe spot.</summary>
         void FellOff()
         {
-            if (Worlds.Current == 6)
+            if (Worlds.Current == 6 || Worlds.Current == World67.Id)
             {
-                // the glitch world: lives are endless here (the HUD says 100)
+                // the glitch worlds: lives are endless here (the HUD says 100)
                 Teleport(SafePos); invuln = 1f; Hud.Glitch();
-                Hud.Toast("ОШИБКА ПАДЕНИЯ… возвращаем на место! (жизни тут бесконечные)", UIKit.Pink);
+                Hud.Toast(Worlds.Current == 6 ? "ОШИБКА ПАДЕНИЯ… возвращаем на место! (жизни тут бесконечные)" : "ОШИБКА 67: падение отменено! Возвращаем на место", UIKit.Pink);
                 return;
             }
             Effects.Damage(Mathf.Max(0, look.Idx("dmg")), Model);

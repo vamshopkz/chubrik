@@ -112,6 +112,7 @@ namespace Chubrik
                     WorldRow(5, "Мир 5: Джунгли", "Река, болото, пирамида и Древний Голем", UIKit.Green);
                     WorldRow(3, "Мир 3 — Кристальные пещеры", "Лава, кристаллы и Страж", UIKit.Violet);
                     WorldRow(6, "Мир 6: Глюк-мир", "Мир-розыгрыш: всё сломалось, и это весело", UIKit.Pink);
+                    WorldRow(World67.Id, "Мир 67: Глючный Сикс-Севен", "67 друзей, 67 ключей… или нет?", UIKit.Lime);
                     w.Row("Вернуться в центр лобби", "Телепорт к табличке «Лобби Чубриков»", "ТЕЛЕПОРТ", UIKit.Cyan, () => { Window.Close(); PlayerCtl.I.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0)); });
                 }
                 w.Row("История Чубрика", "Сюжет: прочитанные главы", "ЧИТАТЬ", UIKit.Pink, Story.Book);

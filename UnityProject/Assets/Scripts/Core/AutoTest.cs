@@ -805,6 +805,58 @@ namespace Chubrik
             yield return Enter(1);
             Check("normal HUD back in the lobby", Worlds.Current == 1 && !Hud.PrankShown);
 
+            // ---- World 67: «Глючный Сикс-Севен» ----
+            yield return Enter(World67.Id);
+            Check("world 67 entered", Worlds.Current == World67.Id && Vector3.Distance(pl.transform.position, World67.Spawn) < 3, pl.transform.position.ToString());
+            yield return Wait(0.3f);
+            yield return Shot("64_world67_start");
+            Check("only 8 real cages and 8 real keys (not 67)", Rescue.Total("w7") == 8 && Pickups.I.KeysLeftIn("w7k") == 8, $"cages {Rescue.Total("w7")}, keys {Pickups.I.KeysLeftIn("w7k")}");
+            Check("the HUD counts to 67", Hud.CounterText.Contains("/ 67"), Hud.CounterText);
+            int hp7 = pl.Hearts;
+            pl.Teleport(World67.O + new Vector3(30, 0, 20), 0);
+            yield return Wait(2.5f);
+            Check("falling in World 67 costs no heart", pl.Hearts == hp7 && pl.transform.position.y > World67.O.y - 3, $"hearts {hp7} → {pl.Hearts}, y {pl.transform.position.y:0.0}");
+            var flk = World67.Flickers[0];
+            pl.Teleport(flk.transform.position + Vector3.up * 1.2f, 0);
+            yield return Wait(0.4f);
+            flk.Flick();
+            yield return Wait(0.6f);
+            Check("a flickering platform flickers but stays solid", flk.Flickers > 0 && pl.Grounded && pl.transform.position.y > flk.transform.position.y, pl.transform.position.ToString());
+            Check("fake glitch walls can be walked through", World67.FakeWalls.Count == 2 && World67.FakeWalls.TrueForAll(w => w.GetComponent<Collider>() == null));
+            pl.Teleport(World67.FirstTrampoline.transform.position + Vector3.up * 1.4f, 0);
+            float y67 = pl.transform.position.y;
+            yield return Wait(0.6f);
+            Check("a glitchy trampoline bounces you up", pl.transform.position.y > y67 + 2, $"{y67:0.0} → {pl.transform.position.y:0.0}");
+            yield return Wait(2.5f);
+            World67Fx.I.ShowPopup();
+            yield return null;
+            var pop = GameObject.Find("Popup67");
+            Check("a fake error window pops up", pop != null);
+            yield return Shot("65_world67_popup");
+            if (pop != null) pop.GetComponent<UIButton>().OnClick();
+            yield return null;
+            Check("a tap breaks the error window into pixels", pop == null);
+            yield return World67Fx.I.Trail();
+            Check("a trail of 6–7 copies after a jump", World67Fx.I.Trails > 0);
+            Popup3D.All[0].Break();
+            Check("a floating error window shatters when touched", Popup3D.All[0].Broken);
+            var bot = World67.Bots[0];
+            bot.OnHit(bot.transform.position);
+            yield return null;
+            Check("a glitch-bot can be beaten", bot == null || bot.Dead);
+            var gate = World67.Gate;
+            pl.Teleport(gate.transform.position + new Vector3(0, 0.3f, -6), 0);
+            yield return Wait(1f);
+            Check("the gate of 67 locks stays shut with fewer than 8 friends", !gate.Started);
+            foreach (var c in Rescue.Cages.FindAll(c => c.id.StartsWith("w7"))) { Save.P.keys++; c.TryOpen(); }
+            Check("all 8 friends of World 67 rescued", Rescue.Rescued("w7") == 8, Rescue.Rescued("w7").ToString());
+            for (float t = 0; t < 10 && !gate.Opened; t += Time.unscaledDeltaTime) yield return null;
+            yield return Wait(1.2f);
+            yield return Shot("66_world67_gate");
+            Check("«67» falls off, the paper «8» — the gate opens: 100%", gate.Opened && Save.P.done.Contains(World67.Id) && gate.Dancers == 8);
+            Window.Close();
+            yield return Enter(1);
+
             // ---- online: the real public relay, a made-up player whose messages go through it ----
             for (float t = 0; t < 20 && !Online.I.Connected; t += Time.unscaledDeltaTime) yield return null;
             Check("connected to the online relay", Online.I.Connected);
