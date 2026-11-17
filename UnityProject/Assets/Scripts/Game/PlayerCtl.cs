@@ -24,9 +24,21 @@ namespace Chubrik
         /// and lies there until you press jump.</summary>
         int dive;            // 0 = no, 1 = flying belly-first, 2 = lying / sliding on the ground
         bool airJumped;      // the second jump was used (the dive needs it)
+        public bool AirJumped => airJumped;
         public bool Diving => dive == 1;
         public bool Lying => dive == 2;
         public int Dives { get; private set; }
+        /// <summary>The leap: running, B (hit) then A (jump) — flying far forward with a «хэ-хэй!».</summary>
+        bool leaping;
+        float leapReady;
+        public bool Leaping => leaping;
+        public int Leaps { get; private set; }
+        /// <summary>Ledge grab: a jump that falls short catches the edge by itself and climbs up.</summary>
+        int hang;            // 0 = no, 1 = hanging / climbing
+        float hangT, grabCd;
+        Vector3 hangPos, hangTop;
+        public bool Hanging => hang != 0;
+        public int Grabs { get; private set; }
         /// <summary>The jet snowmobile from the frozen mailbox: fast, climbs steep slopes, knocks snowmen over.</summary>
         public bool Snowmobile;
         /// <summary>Standing on ice (a collider with an Ice marker): you slide unless you wear skates.</summary>
@@ -114,6 +126,8 @@ namespace Chubrik
             vel = Vector3.zero;
             ground = null;
             SetDive(0);
+            EndLeap();
+            if (hang != 0) { hang = 0; Anim.hang = false; }
             if (!float.IsNaN(faceYaw)) { yaw = faceYaw; transform.rotation = Quaternion.Euler(0, faceYaw, 0); }
         }
 
@@ -127,6 +141,7 @@ namespace Chubrik
         void Update()
         {
             Zones.Tick();
+            Backrooms.Tick(this);
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             if (MenuOrbit) { vel = Vector3.zero; Anim.speed01 = 0; Anim.grounded = true; return; }
 
@@ -155,6 +170,7 @@ namespace Chubrik
             pitch = Mathf.Clamp(pitch + LookDelta.y * 0.6f, -10f, 65f);
             LookDelta = Vector2.zero;
 
+            if (hang != 0) { HangUpdate(dt); return; }
             if (Riding) { ground = null; vel = Vector3.zero; Grounded = true; Anim.grounded = true; Anim.speed01 = 0.3f; return; }   // the snowboard moves us
 
             // ---- ride moving platforms ----
@@ -180,6 +196,7 @@ namespace Chubrik
             var target = wish * speed;
             float accel = Grounded ? (OnIce && !Skates && !Snowmobile ? 3.5f : 40f) : 16f;   // ice: hard to start, harder to stop
             if (dive == 1) { }                                                               // flying belly-first: no steering
+            else if (leaping) hv = Vector3.MoveTowards(hv, hv.normalized * 14f + wish * 3f, 4f * dt);
             else if (dive == 2) hv = Vector3.MoveTowards(hv, Vector3.zero, (OnIce ? 4f : 28f) * dt);   // a short belly slide (~2.5 m, longer on ice)
             else hv = Vector3.MoveTowards(hv, target, accel * dt);
             if (wish.sqrMagnitude > 0.01f && dive == 0)
@@ -208,7 +225,8 @@ namespace Chubrik
             if (dive == 1) wantJump = false;
             if (wantJump && !Frozen && !Menus.AnyOpen)
             {
-                if (coyote > 0) DoJump(11f, false);
+                if (coyote > 0 && Time.time < leapReady && dive == 0 && !Riding && !Snowmobile) { Leap(); hv = new Vector3(vel.x, 0, vel.z); }
+                else if (coyote > 0) DoJump(11f, false);
                 else if (airJumps > 0) { airJumps--; airJumped = true; DoJump(9.5f, true); }
             }
             float g = -30f;
@@ -241,11 +259,14 @@ namespace Chubrik
             else if (dive == 2 && !Grounded && vel.y < -4) SetDive(1);   // slid off an edge: fly belly-first again
             if (!wasGrounded && Grounded)
             {
+                EndLeap();
                 float impact = Mathf.InverseLerp(-4, -22, vyBefore);
                 Anim.Land(impact);
                 if (vyBefore < -6) { AudioFx.Land(Mathf.Max(0, look.Idx("lsnd"))); Effects.Emit("dust", transform.position, 6, 0.3f); }
             }
             if (wasGrounded && !Grounded) fallStart = transform.position.y;
+            grabCd -= dt;
+            if (!Grounded && dive == 0 && grabCd <= 0 && vel.y < 2.5f && !Frozen && !Snowmobile && TryGrab()) return;
 
             // safe spot for respawns
             if (Grounded && ground != null && ground.GetComponent<Mover>() == null)
@@ -277,6 +298,7 @@ namespace Chubrik
 
         void DoJump(float v, bool air)
         {
+            EndLeap();
             vel.y = v;
             Grounded = false; coyote = 0;
             Jumps++;
@@ -290,6 +312,77 @@ namespace Chubrik
             }
             if (Anim.emoting) Anim.StopEmote();
             idle = 0;
+        }
+
+        void Leap()
+        {
+            leapReady = 0;
+            var f = transform.forward; f.y = 0; f.Normalize();
+            vel = f * 14.5f + Vector3.up * 9.5f;
+            Grounded = false; coyote = 0;
+            leaping = true; Anim.leap = true;
+            Jumps++; Leaps++;
+            AudioFx.Voice("heyhey", 1.35f);
+            AudioFx.Play("swing", 0.6f);
+            Effects.Emit("stardust", transform.position + Vector3.up * 0.5f, 12, 0.35f);
+            if (Anim.emoting) Anim.StopEmote();
+            idle = 0;
+        }
+
+        void EndLeap() { leaping = false; if (Anim) Anim.leap = false; }
+
+        /// <summary>A wall right in front at chest height with a flat top within reach: hang on its edge.</summary>
+        bool TryGrab()
+        {
+            var f = transform.forward; f.y = 0;
+            if (f.sqrMagnitude < 0.01f) return false;
+            f.Normalize();
+            var hv = new Vector3(vel.x, 0, vel.z);
+            if (Vector3.Dot(hv, f) < 1.2f && Vector3.Dot(Steer, Vector2.up) < 0.3f && Steer.sqrMagnitude < 0.1f) return false;
+            float s = Mathf.Clamp(Model.SizeScale, 0.6f, 1.6f);
+            var chest = transform.position + Vector3.up * 1.0f * s;
+            if (!Physics.Raycast(chest, f, out var wall, 0.8f * s, Layers.SolidMask, QueryTriggerInteraction.Ignore)) return false;
+            if (Mathf.Abs(wall.normal.y) > 0.35f) return false;
+            if (wall.collider.GetComponentInParent<BouncePad>() != null || wall.collider.GetComponentInParent<Hurter>() != null || wall.collider.GetComponentInParent<Mover>() != null) return false;
+            var n = wall.normal; n.y = 0; n.Normalize();
+            var from = wall.point - n * 0.3f * s + Vector3.up * 1.4f * s;
+            if (!Physics.Raycast(from, Vector3.down, out var top, 1.9f * s, Layers.SolidMask, QueryTriggerInteraction.Ignore)) return false;
+            if (top.normal.y < 0.75f || top.collider.GetComponentInParent<Hurter>() != null) return false;
+            float rise = top.point.y - transform.position.y;
+            if (rise < 0.55f * s || rise > 1.95f * s) return false;
+            var stand = new Vector3(wall.point.x, top.point.y + 0.06f, wall.point.z) - n * 0.5f * s;
+            float r = CC.radius * 0.85f;
+            if (Physics.CheckCapsule(stand + Vector3.up * (r + 0.08f), stand + Vector3.up * (CC.height - r), r, Layers.BlockMask, QueryTriggerInteraction.Ignore)) return false;
+            hang = 1; hangT = 0; Grabs++;
+            hangTop = stand;
+            hangPos = new Vector3(wall.point.x, top.point.y - 1.3f * s, wall.point.z) + n * 0.42f * s;
+            CC.enabled = false;
+            transform.position = hangPos;
+            transform.rotation = Quaternion.LookRotation(-n);
+            vel = Vector3.zero;
+            EndLeap();
+            Anim.hang = true; Anim.grounded = false; Anim.speed01 = 0; Anim.vy = 0;
+            AudioFx.Play("land4", 0.5f);
+            Effects.Emit("dust", new Vector3(wall.point.x, top.point.y, wall.point.z), 6, 0.25f);
+            return true;
+        }
+
+        /// <summary>Hang for a moment, then pull up and step onto the top.</summary>
+        void HangUpdate(float dt)
+        {
+            hangT += dt;
+            Anim.grounded = false; Anim.speed01 = 0; Anim.vy = 0;
+            const float hold = 0.3f, climb = 0.4f;
+            if (hangT < hold) { transform.position = hangPos; return; }
+            float t = Mathf.Clamp01((hangT - hold) / climb);
+            if (t < 0.6f) transform.position = Vector3.Lerp(hangPos, new Vector3(hangPos.x, hangTop.y, hangPos.z), t / 0.6f);
+            else transform.position = Vector3.Lerp(new Vector3(hangPos.x, hangTop.y, hangPos.z), hangTop, (t - 0.6f) / 0.4f);
+            if (t < 1) return;
+            hang = 0; Anim.hang = false; grabCd = 0.4f;
+            CC.enabled = true;
+            vel = Vector3.zero; Grounded = true; coyote = 0.12f;
+            Anim.Land(0.4f);
+            AudioFx.Play("jump4", 0.6f);
         }
 
         void SetDive(int d)
@@ -428,6 +521,7 @@ namespace Chubrik
             }
             attackCd = 0.4f;
             Anim.Attack();
+            if (Grounded && new Vector3(vel.x, 0, vel.z).magnitude > RunSpeed * 0.35f) leapReady = Time.time + 0.6f;   // B then A on the run = the leap
             if (Grounded && Zones.HitEnter()) { AudioFx.Play("punch"); return; }   // a hit next to a shop goes in
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
             World3.HitNear(transform.position);   // singing crystals of the Masters' riddle

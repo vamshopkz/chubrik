@@ -58,6 +58,7 @@ namespace Chubrik
             Hud.Create();
             Save.Changed += WardrobeUI.Changed;
             PlayerCtl.I.Teleport(Lobby.Spawn, 0);
+            if (Save.P.butter) Butter.Set(true);
 
             if (Testing) gameObject.AddComponent<AutoTest>();
             else Menus.Main();

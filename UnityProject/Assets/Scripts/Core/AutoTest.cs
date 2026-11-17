@@ -56,9 +56,10 @@ namespace Chubrik
             var pl = PlayerCtl.I;
 
             // ---- catalogue ----
-            Check("31 departments", Catalog.Depts.Count == 31, Catalog.Depts.Count.ToString());
+            Check("32 departments (with «Костюмы»)", Catalog.Depts.Count == 32, Catalog.Depts.Count.ToString());
             bool eight = true;
-            foreach (var d in Catalog.Depts) if (d.items.FindAll(i => !i.Premium && !i.Reward).Count != 8) eight = false;
+            foreach (var d in Catalog.Depts) if (d.id != "suit" && d.items.FindAll(i => !i.Premium && !i.Reward).Count != 8) eight = false;
+            Check("25+ costumes: chicken, rich Артём and Али, footballers, sport, robots, phones, computers", Catalog.Dept("suit").items.Count >= 26, Catalog.Dept("suit").items.Count.ToString());
             Check("8 named items in every department", eight);
             Check("200+ items in total", Catalog.Items.Count >= 200, Catalog.Items.Count + " (regular " + Catalog.RegularCount + ")");
             Check("8 premium sets priced 1000–3000 ₸", Catalog.Sets.Count == 8 && Catalog.Sets.TrueForAll(s => s.price >= 1000 && s.price <= 3000 && s.items.Count >= 3));
@@ -68,6 +69,7 @@ namespace Chubrik
             test.transform.position = new Vector3(200, -300, 0);
             int bad = 0; var badList = new List<string>();
             var few = new List<string>();
+            var suitFew = new List<string>();
             var report = new StringBuilder();
             int maxVerts = 0; string maxVertsId = "";
             var detailed = new HashSet<string> { "hair", "ears", "hat", "eyes", "mask", "neck", "top", "wings", "hands", "wrist", "back", "tail", "pants", "belt", "shoes", "weapon", "pet" };
@@ -90,6 +92,7 @@ namespace Chubrik
                     int verts = 0;
                     foreach (var mf in test.GetComponentsInChildren<MeshFilter>()) if (mf.sharedMesh) verts += mf.sharedMesh.vertexCount;
                     if (verts > maxVerts) { maxVerts = verts; maxVertsId = it.id; }
+                    if (it.dept == "suit" && parts < 60) suitFew.Add($"{it.id}:{parts}");
                     if (detailed.Contains(it.dept) || it.dept == "head")
                     {
                         report.AppendLine($"{it.id}\t{parts}\t{verts}\t{it.name}");
@@ -101,6 +104,7 @@ namespace Chubrik
             File.WriteAllText(Path.Combine(dir, "parts.txt"), report.ToString());
             Check("every item builds", bad == 0, $"{Catalog.Items.Count} items, {sw.ElapsedMilliseconds} ms" + (bad > 0 ? " bad: " + string.Join(", ", badList.GetRange(0, Mathf.Min(10, badList.Count))) : ""));
             Check("every skin is detailed (100+ parts, heads 60+)", few.Count == 0, few.Count == 0 ? "parts.txt" : few.Count + " items: " + string.Join(", ", few.GetRange(0, Mathf.Min(20, few.Count))));
+            Check("every costume is detailed (60+ parts)", suitFew.Count == 0, string.Join(", ", suitFew));
             Check("a dressed-up item stays light for phones", maxVerts < 45000, $"max {maxVerts} verts ({maxVertsId})");
             Destroy(test.gameObject);
             yield return null;
@@ -298,7 +302,7 @@ namespace Chubrik
 
             // ---- cancelling premium sets ----
             Save.Wear("hat", "hat_p0"); pl.ApplyLook(Save.CurrentLook());
-            int coinsBefore = Save.P.coins, tokensBefore = Save.P.tokens;
+            long coinsBefore = Save.P.coins, tokensBefore = Save.P.tokens;
             PremiumUI.Cancel(new[] { 0 });
             Check("cancel one set: its items are gone and taken off", !Save.P.sets.Contains(0) && !Save.Owns("hat_p0") && Save.Worn("hat") != "hat_p0" && Save.P.sets.Count == 7);
             PremiumUI.Open();
@@ -380,7 +384,7 @@ namespace Chubrik
             Check("coins in world 2", Pickups.I.CoinsWithin(World2.O, 300) >= 30, Pickups.I.CoinsWithin(World2.O, 300).ToString());
             Check("coin navigator points somewhere", Pickups.I.NearestCoin.HasValue);
             var coinPos = Pickups.I.CoinNear(pl.transform.position).Value;
-            int c0 = Save.P.coins;
+            long c0 = Save.P.coins;
             pl.Teleport(coinPos - Vector3.up * 0.7f, 0);
             yield return Wait(0.2f);
             Check("coin pickup by touch", Save.P.coins > c0, $"{c0} → {Save.P.coins}");
@@ -394,7 +398,7 @@ namespace Chubrik
             yield return Shot("20_world2_plaza");
 
             var slime = World2.Enemies.Find(e => e.kind == EnemyKind.Slime);
-            int cs0 = Save.P.coins;
+            long cs0 = Save.P.coins;
             pl.Teleport(slime.transform.position + Vector3.up * 2.4f, 0);
             for (float t = 0; t < 1.5f && !slime.Dead; t += Time.deltaTime) yield return null;
             Check("jump on a mob's head beats it", slime.Dead && Save.P.coins > cs0, $"coins {cs0} → {Save.P.coins}");
@@ -461,7 +465,7 @@ namespace Chubrik
             yield return Wait(0.5f);
             pl.Attack();
             Check("a punch takes 74 lives", Shipozavr.I.Hp == hp0s - Shipozavr.Punch || Shipozavr.I.Hp < hp0s, $"{hp0s} → {Shipozavr.I.Hp}");
-            int sc0 = Save.P.coins, st0 = Save.P.tokens, sk0 = Save.P.keys;
+            long sc0 = Save.P.coins, st0 = Save.P.tokens; int sk0 = Save.P.keys;
             Shipozavr.I.TestDamage(Shipozavr.I.Hp);
             yield return Wait(1f);
             Check("Shipozavr runs away when his lives are over", Shipozavr.I.Defeated && Shipozavr.Beaten);
@@ -781,7 +785,7 @@ namespace Chubrik
             pl.Teleport(ban.transform.position + Vector3.up * 0.3f, 0);
             yield return Wait(0.5f);
             Check("a banana peel makes you slip", ban.Slips > 0);
-            int c6 = Save.P.coins, t6 = Save.P.tokens;
+            long c6 = Save.P.coins, t6 = Save.P.tokens;
             World6.Marks[0].Take();
             Check("a «?» gives something (or a joke)", World6.Marks[0].Taken);
             World6.Pause.Press();
@@ -856,6 +860,176 @@ namespace Chubrik
             Check("«67» falls off, the paper «8» — the gate opens: 100%", gate.Opened && Save.P.done.Contains(World67.Id) && gate.Dancers == 8);
             Window.Close();
             yield return Enter(1);
+
+            // ---- 17.11: barriers, backrooms, A/B, leap, ledge grab, eggs, promo codes, birds, nick, records, rooms ----
+            {
+                pl.Teleport(Lobby.Spawn, 0);
+                yield return Wait(0.5f);
+                Check("see-through barriers over every lobby wall", Lobby.Barriers >= 30, Lobby.Barriers.ToString());
+                bool barrierBlocks = Physics.Raycast(new Vector3(0, 0, 0) + Vector3.up * 12, Vector3.forward, out var bh, 200, Layers.BlockMask) && bh.collider.gameObject.layer == Layers.Barrier;
+                Check("a barrier goes on up over the wall (it stops the player, not the camera)", barrierBlocks && (Layers.SolidMask & (1 << Layers.Barrier)) == 0, barrierBlocks ? bh.point.ToString() : "nothing hit");
+                var rounds = new List<string>(); foreach (var ub in FindObjectsByType<UIButton>(FindObjectsInactive.Include, FindObjectsSortMode.None)) rounds.Add(ub.name);
+                Check("touch buttons are A (jump) and B (hit)", rounds.Contains("Round A") && rounds.Contains("Round B"));
+
+                // the leap: run, B then A — flying forward with arms and legs back
+                float leapYaw = 0;
+                foreach (var cand in new float[] { 0, 90, 180, 270, 45, 135, 225, 315 })
+                    if (!Physics.SphereCast(Lobby.Spawn + Vector3.up * 0.8f, 0.5f, Quaternion.Euler(0, cand, 0) * Vector3.forward, out _, 16f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) { leapYaw = cand; break; }
+                pl.Teleport(Lobby.Spawn, leapYaw); pl.yaw = leapYaw;
+                yield return Wait(0.3f);
+                pl.MoveInput = Vector2.up;
+                yield return Wait(0.5f);
+                int leaps0 = pl.Leaps;
+                pl.Attack();
+                yield return Wait(0.1f);
+                pl.QueueJump();
+                yield return Wait(0.15f);
+                bool leaping = pl.Leaping;
+                var leapFrom = pl.transform.position;
+                yield return Shot("67_leap");
+                for (float t = 0; t < 3 && !pl.Grounded; t += Time.deltaTime) yield return null;
+                pl.MoveInput = Vector2.zero;
+                float leapDist = Vector3.Distance(new Vector3(leapFrom.x, 0, leapFrom.z), new Vector3(pl.transform.position.x, 0, pl.transform.position.z));
+                Check("run + B + A = the leap «хэ-хэй» (flies far forward)", leaping && pl.Leaps == leaps0 + 1 && leapDist > 4f, $"leaps {pl.Leaps - leaps0}, flew {leapDist:0.0} m");
+
+                // ledge grab: jump at a ledge that is too high — he catches the edge and climbs up
+                var lt = new GameObject("LedgeTest").transform;
+                var lfloor = Lobby.Solid(PrimitiveType.Cube, new Vector3(500, 99.75f, 500), new Vector3(20, 0.5f, 20), Mats.Lit(Color.gray), default, lt);
+                Lobby.Solid(PrimitiveType.Cube, new Vector3(500, 101.4f, 503), new Vector3(6, 2.8f, 2), Mats.Lit(Color.white), default, lt);
+                yield return null;
+                pl.WaterY = 90;
+                pl.Teleport(new Vector3(500, 100.2f, 500.6f), 0); pl.yaw = 0;
+                yield return Wait(0.4f);
+                int grabs0 = pl.Grabs;
+                pl.MoveInput = Vector2.up;
+                pl.QueueJump();
+                bool sawHang = false;
+                for (float t = 0; t < 3; t += Time.deltaTime) { if (pl.Hanging) { sawHang = true; if (t > 0.1f) break; } yield return null; }
+                if (sawHang) yield return Shot("68_ledge_grab");
+                for (float t = 0; t < 2 && pl.Hanging; t += Time.deltaTime) yield return null;
+                pl.MoveInput = Vector2.zero;
+                yield return Wait(0.3f);
+                Check("a jump that falls short grabs the edge and climbs up by itself", sawHang && pl.Grabs == grabs0 + 1 && pl.transform.position.y > 102.6f, $"grabs {pl.Grabs - grabs0}, y {pl.transform.position.y:0.00}");
+                Destroy(lt.gameObject);
+                pl.WaterY = -0.9f;
+
+                // the backrooms: a double jump into the glitch over Пончик
+                var seam = Backrooms.SeamPos;
+                var donut = GameObject.Find("Friend w2c0");
+                if (donut) donut.transform.position += new Vector3(6, 0, 0);   // step Пончик aside so we don't land on him
+                pl.Teleport(new Vector3(seam.x + 0.9f, 0.3f, seam.z), 270);
+                yield return Wait(0.5f);
+                pl.Teleport(new Vector3(seam.x + 0.9f, pl.transform.position.y, seam.z), 270);
+                pl.QueueJump();
+                yield return Wait(0.3f);
+                pl.QueueJump();
+                float maxY = 0, minH = 99; bool sawAir = false;
+                for (float t = 0; t < 2 && !Backrooms.Inside; t += Time.deltaTime)
+                {
+                    var pp = pl.transform.position; maxY = Mathf.Max(maxY, pp.y); minH = Mathf.Min(minH, new Vector2(pp.x - seam.x, pp.z - seam.z).magnitude); sawAir |= pl.AirJumped;
+                    yield return null;
+                }
+                bool byJump = Backrooms.Inside;
+                if (!byJump) Backrooms.Enter();
+                yield return Wait(1f);
+                Check("a double jump over Пончик drops you into the backrooms", byJump, $"seam {seam}, max y {maxY:0.0}, min dist {minH:0.0}, air jump {sawAir}");
+                Check("the backrooms: a yellow maze with lamps, an exit and the rich friends' cages", Backrooms.Inside && Backrooms.Root != null && Rescue.Cages.FindAll(c => c.id.StartsWith("vip")).Count == 3, $"dead ends {Backrooms.DeadEnds.Count}");
+                pl.yaw = 45; pl.pitch = 10;
+                yield return Wait(0.6f);
+                yield return Shot("69_backrooms");
+                // rescue Артём: go to his cage with a key
+                var vc = Rescue.Cages.Find(c => c.id == "vipArtem");
+                Save.P.keys++;
+                vc.TryOpen();
+                yield return Wait(0.3f);
+                Check("Артём in the rich outfit is rescued from the backrooms", Save.P.rescued.Contains("vipArtem") && Rescue.NameOf("vipArtem") == "Артём" && Rescue.LookOf("vipArtem").Of("suit") == Catalog.RichArtem);
+                pl.Teleport(Backrooms.ExitPos + new Vector3(0, 0.3f, 2.2f), 180);
+                yield return Wait(0.3f);
+                pl.Teleport(Backrooms.ExitPos + new Vector3(0, 0.3f, 0.5f), 180);
+                yield return Wait(1.5f);
+                Check("the EXIT door takes you back to the lobby", !Backrooms.Inside && pl.transform.position.y < 5, pl.transform.position + " exit " + Backrooms.ExitPos + " inside " + Backrooms.Inside);
+
+                // golden eggs
+                Check("10 golden eggs, every one on solid ground (none stuck in walls)", Eggs.Bad.Count == 0, string.Join("; ", Eggs.Bad));
+                int found0 = Eggs.Found; long ec = Save.P.coins;
+                pl.Teleport(new Vector3(-3.2f, 0.3f, -13.3f), 270);
+                yield return Wait(0.3f);
+                pl.Teleport(new Vector3(-4.3f, 0.3f, -13.3f), 270);
+                yield return Wait(0.8f);
+                Check("an egg in the gap between the shops can be taken (+100 coins)", Eggs.Found == found0 + 1 && Save.P.coins >= ec + 100, $"eggs {Eggs.Found}");
+
+                // birds fly off when you come close
+                var bird = Bird.All.Find(b => b != null && !b.Flying && b.transform.position.y < 3);
+                Check("little birds hop about in the lobby", Bird.All.Count >= 20, Bird.All.Count.ToString());
+                if (bird != null)
+                {
+                    pl.Teleport(bird.transform.position + new Vector3(2.5f, 0.3f, 0), 270);
+                    yield return Wait(0.6f);
+                    yield return Shot("70_birds");
+                    Check("a bird flies up into the sky when you come close", bird.Flying && bird.transform.position.y > 1.5f, bird.transform.position.y.ToString("0.0"));
+                }
+
+                // promo codes
+                pl.Teleport(Lobby.Spawn, 180);
+                yield return Wait(0.3f);
+                Promo.Apply("Курица");
+                yield return Wait(0.5f);
+                Check("promo «Курица» turns the chubrik into a chicken", Save.Worn("suit") == Catalog.Chicken && pl.Model.PartCount.ContainsKey("suit"));
+                pl.yaw = 0;
+                yield return Wait(0.3f);
+                yield return Shot("71_chicken");
+                Promo.Apply("Курятник");
+                yield return Wait(0.3f);
+                Check("promo «Курятник» turns him back", Save.Worn("suit") == "" && !pl.Model.PartCount.ContainsKey("suit"));
+                long tc = Save.P.coins, tt = Save.P.tokens;
+                Promo.Apply("Чайник");
+                bool rich = Save.P.coins == tc + Promo.TeapotSum && Save.P.tokens == tt + Promo.TeapotSum;
+                yield return Wait(0.3f);
+                Promo.Apply("Чайник нет");
+                Check("«Чайник» gives 300 billion coins and tokens, «Чайник нет» takes them back", rich && Save.P.coins == tc && Save.P.tokens == tt, $"{tc} → {Save.P.coins}");
+                Promo.Apply("BUTTER");
+                yield return Wait(1.2f);
+                int buttered = Butter.Buttered;
+                yield return Shot("72_butter");
+                Promo.Apply("BUTTER 22X");
+                yield return Wait(0.3f);
+                Check("«BUTTER» makes everything butter, «BUTTER 22X» melts it back", buttered > 200 && Butter.Buttered == 0 && !Save.P.butter, buttered + " things");
+
+                // costumes: Артём's rich outfit on the player
+                Save.Give(Catalog.RichArtem); Save.Wear("suit", Catalog.RichArtem); pl.ApplyLook(Save.CurrentLook());
+                yield return Wait(0.4f);
+                yield return Shot("73_rich_artem");
+                Save.Wear("suit", ""); pl.ApplyLook(Save.CurrentLook());
+
+                // nickname and the records table
+                string nick0 = Save.P.nick;
+                Save.P.nick = "Тестер";
+                Check("the nickname from the settings is used", Online.Nick == "Тестер");
+                Online.I.Inject("R|zz998877|Чемпион|999999999999|40|7|12|10|color=color_2");
+                var recTop = RecordsUI.Sorted(RecordsUI.By.Coins);
+                Check("records table: everyone who ever played, sorted (coins, friends, worlds, tokens, eggs)", recTop.Count >= 2 && recTop[0].pid == "zz998877" && recTop.Exists(r => r.pid == Save.P.id), recTop.Count + " lines");
+                RecordsUI.Open();
+                yield return Wait(0.6f);
+                yield return Shot("74_records");
+                Window.Close();
+                Save.P.nick = nick0;
+                Online.I.Records.Remove("zz998877");
+
+                // a room with a friend and «Выйти из комнаты»
+                Online.I.Inject($"H|room1peer|{Application.version}|1|color=color_1|Друг");
+                Online.I.Inject($"J|room1peer|{Online.I.Id}");
+                bool inRoom = Online.I.RoomWith == "room1peer";
+                PlayersUI.Open();
+                yield return Wait(0.5f);
+                bool leaveBtn = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ВЫЙТИ ИЗ КОМНАТЫ") leaveBtn = true;
+                yield return Shot("75_room");
+                Online.I.LeaveRoom();
+                yield return Wait(1f);
+                Check("joined players get «Выйти из комнаты» and can leave", inRoom && leaveBtn && Online.I.RoomWith == null);
+                Online.I.Inject("B|room1peer");
+                yield return Enter(1);
+            }
 
             // ---- online: the real public relay, a made-up player whose messages go through it ----
             for (float t = 0; t < 20 && !Online.I.Connected; t += Time.unscaledDeltaTime) yield return null;

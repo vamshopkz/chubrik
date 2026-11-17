@@ -21,6 +21,8 @@ namespace Chubrik
         bool Ready { get; }
         bool Failed { get; }
         void Send(string msg);
+        /// <summary>A message to another topic; retained ones stay on the relay for everyone who comes later.</summary>
+        void Publish(string topic, string msg, bool retain);
         void Poll(List<NetIncoming> into);
         void Close();
     }
@@ -76,10 +78,7 @@ namespace Chubrik
                 while (got < 4) { int n = stream.Read(ack, got, 4 - got); if (n <= 0) throw new Exception("closed"); got += n; }
                 if ((ack[0] >> 4) != 2 || ack[3] != 0) throw new Exception("refused");
 
-                var sub = new List<byte> { 0, 1 };
-                sub.AddRange(Str(subTopic));
-                sub.Add(0);
-                Write(Packet(0x82, sub));
+                Write(Subscribe(subTopic));
                 stream.ReadTimeout = Timeout.Infinite;
                 state = 1;
             }
@@ -98,6 +97,21 @@ namespace Chubrik
 #else
             return new MqttLink(broker, subTopic, pubTopic);
 #endif
+        }
+
+        /// <summary>SUBSCRIBE to every topic of the list (topics separated by '\n'), QoS 0.</summary>
+        internal static byte[] Subscribe(string topics)
+        {
+            var sub = new List<byte> { 0, 1 };
+            foreach (var t in topics.Split('\n')) { sub.AddRange(Str(t)); sub.Add(0); }
+            return Packet(0x82, sub);
+        }
+
+        internal static byte[] Pub(string topic, string msg, bool retain)
+        {
+            var body = new List<byte>(Str(topic));
+            body.AddRange(Encoding.UTF8.GetBytes(msg));
+            return Packet((byte)(0x30 | (retain ? 1 : 0)), body);
         }
 
         internal static byte[] Str(string s)
@@ -126,12 +140,14 @@ namespace Chubrik
         public void Send(string msg)
         {
             if (state != 1) return;
-            try
-            {
-                var body = new List<byte>(Str(pubTopic));
-                body.AddRange(Encoding.UTF8.GetBytes(msg));
-                Write(Packet(0x30, body));
-            }
+            try { Write(Pub(pubTopic, msg, false)); }
+            catch { state = 2; }
+        }
+
+        public void Publish(string topic, string msg, bool retain)
+        {
+            if (state != 1) return;
+            try { Write(Pub(topic, msg, retain)); }
             catch { state = 2; }
         }
 

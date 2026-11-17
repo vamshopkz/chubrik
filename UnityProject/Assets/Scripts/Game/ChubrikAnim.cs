@@ -29,6 +29,9 @@ namespace Chubrik
         /// <summary>Lying on the belly (the dive and the slide after it).</summary>
         public bool belly;
         float bellyK;
+        /// <summary>The leap forward (arms and legs back) and hanging on a ledge.</summary>
+        public bool leap, hang;
+        float leapK, hangK;
         float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
@@ -192,6 +195,31 @@ namespace Chubrik
                     m.Body.localRotation = r;
                     m.Body.localPosition += pivot - r * pivot;
                 }
+            }
+            // the leap (hit + jump on the run): flying forward, arms and legs a little back
+            leapK = Mathf.MoveTowards(leapK, leap ? 1 : 0, dt * 8);
+            if (leapK > 0.001f && bellyK < 0.01f)
+            {
+                flipT = -1;
+                var r = Quaternion.Euler(32 * leapK, 0, 0);
+                var pivot = new Vector3(0, 0.62f, 0);
+                m.Body.localRotation = r * m.Body.localRotation;
+                m.Body.localPosition += pivot - r * pivot;
+                armL = Quaternion.Slerp(armL, Quaternion.Euler(62, 0, -22), leapK);
+                armR = Quaternion.Slerp(armR, Quaternion.Euler(62, 0, 22), leapK);
+                legL = Quaternion.Slerp(legL, Quaternion.Euler(38, 0, -6), leapK);
+                legR = Quaternion.Slerp(legR, Quaternion.Euler(30, 0, 6), leapK);
+            }
+            // hanging on a ledge: both arms up holding the edge, legs dangling
+            hangK = Mathf.MoveTowards(hangK, hang ? 1 : 0, dt * 12);
+            if (hangK > 0.001f)
+            {
+                flipT = -1;
+                float sw = Mathf.Sin(Time.time * 5) * 6;
+                armL = Quaternion.Slerp(armL, Quaternion.Euler(-165, 0, -12), hangK);
+                armR = Quaternion.Slerp(armR, Quaternion.Euler(-165, 0, 12), hangK);
+                legL = Quaternion.Slerp(legL, Quaternion.Euler(8 + sw, 0, -4), hangK);
+                legR = Quaternion.Slerp(legR, Quaternion.Euler(8 - sw, 0, 4), hangK);
             }
             m.Body.localScale = new Vector3(sx * Mathf.Sign(bs.x) * Mathf.Abs(BaseScale(m).x), sy * BaseScale(m).y, sx * BaseScale(m).z);
             m.ArmL.localRotation = armL; m.ArmR.localRotation = armR;

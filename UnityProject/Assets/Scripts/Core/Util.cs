@@ -385,7 +385,9 @@ namespace Chubrik
 
     public static class Layers
     {
-        public const int World = 8, Player = 9, Pickup = 10, Preview = 11, Icon = 31;
+        public const int World = 8, Player = 9, Pickup = 10, Preview = 11, Barrier = 12, Icon = 31;
+        /// <summary>Invisible barriers over the lobby walls: they stop the player but not the camera.</summary>
+        public static readonly int BlockMask = (1 << World) | (1 << Barrier);
         public static readonly int SolidMask = 1 << World;
     }
 }

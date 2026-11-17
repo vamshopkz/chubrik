@@ -16,8 +16,14 @@ namespace Chubrik
         static readonly List<GameObject> lobbyFriends = new List<GameObject>();
 
         /// <summary>Cage "w2c5" → its own name: 8 different friends per world.</summary>
+        /// <summary>17.11: special friends in the richest outfits, locked deep in the backrooms.</summary>
+        public static readonly string[] Vips = { "vipArtemiy", "vipArtem", "vipAli" };
+
         public static string NameOf(string id)
         {
+            if (id == "vipArtemiy") return "Артемий";
+            if (id == "vipArtem") return "Артём";
+            if (id == "vipAli") return "Али";
             int c = id.IndexOf('c');
             if (id.Length > 1 && id[0] == 'w' && c > 1 && int.TryParse(id.Substring(1, c - 1), out var w) && int.TryParse(id.Substring(c + 1), out var n))
                 return Names[((w - 2) * 8 + n) % Names.Length];
@@ -27,6 +33,14 @@ namespace Chubrik
         /// <summary>A random but stable look for the friend of cage <paramref name="id"/>.</summary>
         public static Look LookOf(string id)
         {
+            if (id.StartsWith("vip"))
+            {
+                var v = Look.Default();
+                if (id == "vipArtem") { v["suit"] = Catalog.RichArtem; v["aura"] = "aura_4"; v["pet"] = "pet_p5"; v["emote"] = "emote_5"; }
+                else if (id == "vipAli") { v["suit"] = Catalog.RichAli; v["aura"] = "aura_4"; v["emote"] = "emote_4"; }
+                else { v["hat"] = "hat_p7"; v["top"] = "top_p7"; v["weapon"] = "weapon_p7"; v["aura"] = "aura_p7"; v["neck"] = "neck_p5"; v["eyes"] = "eyes_p5"; v["pet"] = "pet_p5"; v["color"] = "color_7"; v["emote"] = "emote_5"; }
+                return v;
+            }
             var r = new Rng(id.GetHashCode());
             var l = Look.Default();
             void Pick(string dept, float chance)
@@ -285,6 +299,8 @@ namespace Chubrik
         }
 
         Vector3 home;
+        /// <summary>Where this friend lives (walks around).</summary>
+        public Vector3 Home => home;
 
         /// <summary>Is the straight way clear (no walls or things)? Friends never walk through them.</summary>
         static bool Clear(Vector3 from, Vector3 to)

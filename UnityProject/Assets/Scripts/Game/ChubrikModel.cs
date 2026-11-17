@@ -26,7 +26,7 @@ namespace Chubrik
         readonly List<Mesh> baked = new List<Mesh>();
         int layer;
         float faceZ = 0.38f, hatY = 0.39f, eyeY = 0.04f, eyeX = 0.14f;
-        bool hairHidden, earsHidden;
+        bool hairHidden, earsHidden, suitOn, chickenOn;
 
         public static ChubrikModel Create(string name, Transform parent, Look look, int layer)
         {
@@ -53,10 +53,13 @@ namespace Chubrik
             CanGlide = HasJet = false; SizeScale = 1f; hairHidden = earsHidden = false;
             Parts.Layer = layer;
 
+            int suit = look.Idx("suit");
+            bool chicken = IsChicken(suit);
             var bodyCol = BodyColor(look.Idx("color"));
             int skinIdx = look.Idx("skin");
             Skin = skinIdx >= 0 ? Mats.Tex(Patterns.Skin(skinIdx, bodyCol), Color.white, skinIdx == 7 ? 0.75f : 0.35f) : Mats.Lit(bodyCol, 0.35f);
             if (skinIdx == 6) { Skin.SetFloat("_Smoothness", 0.85f); }
+            if (chicken) Skin = suit == 200 ? Mats.Emissive(null, Hex("FFD24A"), Hex("FF9A00") * 0.35f, null, 0.9f) : M("FAFAF5", 0.25f);
             if (skinIdx == 200)
             {
                 // Алмазный Ледяной Чубрик: icy facets that glow and shimmer
@@ -84,10 +87,11 @@ namespace Chubrik
             FootL = Node("FootL", LegL, new Vector3(0, -0.3f, 0.04f));
             FootR = Node("FootR", LegR, new Vector3(0, -0.3f, 0.04f));
 
-            WolfBody();
+            if (suit < 0) WolfBody();
             int made = Parts.Made;
-            HeadShape(look.Idx("head"));
+            HeadShape(chicken ? 2 : look.Idx("head"));
             PartCount["head"] = Parts.Made - made;
+            suitOn = suit >= 0; chickenOn = chicken;
             Do("hat", Hat);
             Do("hair", Hair);
             Do("ears", Ears);
@@ -104,6 +108,7 @@ namespace Chubrik
             Do("belt", Belt);
             Do("shoes", Shoes, true);
             Do("weapon", WeaponBuild);
+            Do("suit", Suit);
             Secret(look.Of("secret"));
             if (BakeParts)
             {
@@ -140,6 +145,13 @@ namespace Chubrik
         {
             var id = look.Of(dept);
             if (string.IsNullOrEmpty(id) && !always) return;
+            if (suitOn && SuitHides.Contains(dept))
+            {
+                // a costume replaces the clothes; bare hands and feet stay under it
+                if (always) b(-1, -1);
+                return;
+            }
+            if (chickenOn && dept == "ears") return;
             int made = Parts.Made;
             b(Catalog.Index(id), Catalog.SetOf(id));
             if (!string.IsNullOrEmpty(id)) PartCount[dept] = Parts.Made - made;

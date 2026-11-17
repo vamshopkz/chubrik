@@ -21,11 +21,27 @@ namespace Chubrik
     {
         public static Online I;
         public const string Topic = "chubrik/v1/all";
+        /// <summary>17.11 the records table: each profile keeps one retained message «R|…» at StatsTopic/profileId.</summary>
+        public const string StatsTopic = "chubrik/v1/stats";
+
+        public class Record
+        {
+            public string pid, nick = "", lookStr = "";
+            public long coins, tokens;
+            public int friends, worlds, eggs;
+            public Look look;
+        }
+        public readonly Dictionary<string, Record> Records = new Dictionary<string, Record>();
+        /// <summary>The player we are «in a room» with (we came to them or they came to us).</summary>
+        public string RoomWith;
+        public Peer RoomPeer => RoomWith != null && Peers.TryGetValue(RoomWith, out var p) ? p : null;
+        float recordT = 4f;
+        string lastRecord = "";
         static readonly string[] Brokers = { "broker.emqx.io", "broker.hivemq.com" };
 
         public class Peer
         {
-            public string id, ver = "", lookStr = "";
+            public string id, ver = "", lookStr = "", nick = "";
             public Look look;
             public int world = 1, seq = -1;
             public float seen, stateSeen = -99;
@@ -62,7 +78,41 @@ namespace Chubrik
             Id = Guid.NewGuid().ToString("N").Substring(0, 10);
             avatarsRoot = new GameObject("OnlinePlayers").transform;
             DontDestroyOnLoad(avatarsRoot.gameObject);
-            foreach (var b in Brokers) relays.Add(new Relay { broker = b, link = MqttLink.Create(b, Topic, Topic) });
+            foreach (var b in Brokers) relays.Add(new Relay { broker = b, link = MqttLink.Create(b, Subs, Topic) });
+        }
+
+        static string Subs => Topic + "\n" + StatsTopic + "/#";
+
+        public static string Clean(string s) => (s ?? "").Replace("|", "").Replace(";", "").Replace("\n", "").Trim();
+
+        /// <summary>Our own line for the records table.</summary>
+        public static Record Mine()
+        {
+            var P = Save.P;
+            return new Record { pid = P.id, nick = Nick, coins = P.coins, tokens = P.tokens, friends = P.rescued.Count, worlds = P.done.Count, eggs = Eggs.Found, lookStr = LookString(Save.CurrentLook()), look = Save.CurrentLook() };
+        }
+
+        /// <summary>The player's nickname (Settings); a default one until they choose.</summary>
+        public static string Nick => string.IsNullOrEmpty(Save.P.nick) ? "Чубрик-" + ((Save.P.id ?? "") + "0000").Substring(0, 4).ToUpperInvariant() : Save.P.nick;
+
+        void PublishRecord(bool force)
+        {
+            var r = Mine();
+            var msg = string.Format(Inv, "R|{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}", r.pid, Clean(r.nick), r.coins, r.friends, r.worlds, r.tokens, r.eggs, r.lookStr);
+            if (!force && msg == lastRecord) return;
+            lastRecord = msg;
+            foreach (var rl in relays) if (rl.link != null && rl.link.Ready) rl.link.Publish(StatsTopic + "/" + r.pid, msg, true);
+        }
+
+        /// <summary>Leave the room: say goodbye to the friend and go back to the lobby.</summary>
+        public void LeaveRoom()
+        {
+            if (RoomWith != null) Send($"L|{Id}|{RoomWith}");
+            RoomWith = null;
+            Window.Close();
+            if (Worlds.Current != 1) Worlds.Enter(1);
+            else PlayerCtl.I?.PlayVictory(() => PlayerCtl.I.Teleport(Lobby.Spawn, 0));
+            Hud.Toast("Ты вышел из комнаты", UIKit.Cyan);
         }
 
         public static string WorldName(int w) => w switch
@@ -105,7 +155,7 @@ namespace Chubrik
                 if (r.retryAt <= 0) { r.retryAt = now + 10; continue; }
                 if (now < r.retryAt) continue;
                 r.link?.Close();
-                r.link = MqttLink.Create(r.broker, Topic, Topic);
+                r.link = MqttLink.Create(r.broker, Subs, Topic);
                 r.retryAt = 0;
             }
             inbox.Clear();
@@ -118,7 +168,15 @@ namespace Chubrik
             {
                 helloT = now + 3f;
                 lookStr = LookString(Save.CurrentLook());
-                Send($"H|{Id}|{Application.version}|{Worlds.Current}|{lookStr}");
+                Send($"H|{Id}|{Application.version}|{Worlds.Current}|{lookStr}|{Clean(Nick)}");
+            }
+            // our line in the records table (kept on the relay), when something changed
+            if (now >= recordT && Connected && p != null)
+            {
+                recordT = now + 20f;
+                PublishRecord(false);
+                var mine = Mine();
+                Records[mine.pid] = mine;
             }
             // our position, only while someone else is in the same world
             if (playing && now >= stateT && AnyoneHere())
@@ -140,6 +198,7 @@ namespace Chubrik
                 else if (!show && peer.avatar != null) { Destroy(peer.avatar.gameObject); peer.avatar = null; }
             }
             foreach (var g in gone) Remove(g);
+            if (RoomWith != null && !Peers.ContainsKey(RoomWith)) { RoomWith = null; Hud.Toast("Друг вышел из игры — комната закрыта", UIKit.Orange); }
         }
 
         bool AnyoneHere()
@@ -160,7 +219,7 @@ namespace Chubrik
             var f = text.Split('|');
             if (f.Length < 2) return;
             string id = f[1];
-            if (id == Id) return;   // our own message back from the relay
+            if (id == Id && f[0] != "R") return;   // our own message back from the relay
             float now = Time.unscaledTime;
             switch (f[0])
             {
@@ -170,6 +229,7 @@ namespace Chubrik
                     peer.seen = now;
                     peer.ver = f[2];
                     int.TryParse(f[3], out peer.world);
+                    if (f.Length >= 6) peer.nick = f[5];
                     var ls = f[4];
                     if (ls != peer.lookStr)
                     {
@@ -194,8 +254,23 @@ namespace Chubrik
                     break;
                 }
                 case "J" when f.Length >= 3:
-                    if (f[2] == Id && Peers.ContainsKey(id)) Hud.Toast("К тебе пришёл друг! Он рядом с тобой", UIKit.Lime);
+                    if (f[2] == Id && Peers.ContainsKey(id)) { RoomWith = id; Hud.Toast("К тебе пришёл друг! Он рядом с тобой", UIKit.Lime); }
                     break;
+                case "L" when f.Length >= 3:
+                    if (f[2] == Id && RoomWith == id) { RoomWith = null; Hud.Toast("Друг вышел из комнаты", UIKit.Orange); }
+                    break;
+                case "R" when f.Length >= 9:
+                {
+                    if (f[1] == Save.P.id) break;   // our own line comes back from the relay
+                    var r = new Record { pid = f[1], nick = f[2] };
+                    long.TryParse(f[3], NumberStyles.Integer, Inv, out r.coins);
+                    int.TryParse(f[4], out r.friends); int.TryParse(f[5], out r.worlds);
+                    long.TryParse(f[6], NumberStyles.Integer, Inv, out r.tokens);
+                    int.TryParse(f[7], out r.eggs);
+                    r.lookStr = f[8]; r.look = ParseLook(r.lookStr);
+                    Records[r.pid] = r;
+                    break;
+                }
                 case "B":
                     Remove(id);
                     break;
@@ -208,6 +283,7 @@ namespace Chubrik
             var p = PlayerCtl.I;
             if (p == null || peer == null) return;
             Window.Close();
+            RoomWith = peer.id;
             Send($"J|{Id}|{peer.id}");
             StartCoroutine(JoinRoutine(peer));
         }

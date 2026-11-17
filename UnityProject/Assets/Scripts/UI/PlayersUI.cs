@@ -27,6 +27,11 @@ namespace Chubrik
                 w.Footer.text = "Нужен интернет";
                 return;
             }
+            var room = on.RoomPeer;
+            if (on.RoomWith != null)
+            {
+                w.Row(room != null && room.nick != "" ? "Ты в комнате с игроком «" + room.nick + "»" : "Ты в комнате с другом", room != null ? "Он сейчас: " + Online.WorldName(room.world) : null, "ВЫЙТИ ИЗ КОМНАТЫ", UIKit.Red, () => on.LeaveRoom());
+            }
             var list = new List<Online.Peer>(on.Peers.Values);
             list.Sort((a, b) => (b.SameVersion ? 1 : 0) - (a.SameVersion ? 1 : 0));
             if (list.Count == 0)
@@ -84,6 +89,7 @@ namespace Chubrik
                 var sb = new StringBuilder(on.Connected ? "c" : "n");
                 var keys = new List<string>(on.Peers.Keys); keys.Sort();
                 foreach (var k in keys) { var p = on.Peers[k]; sb.Append(k).Append(p.world).Append(p.lookStr.GetHashCode()); }
+                sb.Append(on.RoomWith);
                 return sb.ToString();
             }
         }

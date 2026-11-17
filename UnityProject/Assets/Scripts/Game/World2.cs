@@ -18,6 +18,8 @@ namespace Chubrik
             if (w == 5 && World5.Root == null) World5.Build();
             if (w == 6 && World6.Root == null) World6.Build();
             if (w == World67.Id && World67.Root == null) World67.Build();
+            Eggs.SpawnWorld(w);
+            Bird.ForWorld(w);
             if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
             AudioFx.Play("portal");

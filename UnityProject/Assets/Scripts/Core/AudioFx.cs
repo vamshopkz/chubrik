@@ -108,6 +108,10 @@ namespace Chubrik
             // World 67: a bugged trampoline «boing» (it skips and repeats) and a dial-up modem screech for the swapping digits
             Clip("glitchboing", 0.75f, t => { float u = t < 0.3f ? (t % 0.075f) * 2 : t - 0.15f; return Mathf.Sin(TAU * (160 * u + 70 * Mathf.Sin(u * 38) * u + 700 * u * u)) * Env(t, 0.004f, 0.3f) * 0.5f + Sq(t * TAU * 67) * 0.04f * Env(t, 0.002f, 0.1f); });
             { var nz = N(); Clip("modem", 1.3f, t => t < 0.35f ? (Mathf.Sin(TAU * 1270 * t) * 0.18f + Mathf.Sin(TAU * 2225 * t) * 0.12f) : t < 0.7f ? Sq(t * TAU * (980 + Mathf.Sin(t * 90) * 400)) * 0.08f + nz.High() * 0.06f : (Mathf.Sin(TAU * (1650 + Mathf.Sin(t * 230) * 600) * t) * 0.12f + nz.Band(0.4f) * 0.12f) * Env(t - 0.7f, 0.01f, 0.4f)); }
+            // the backrooms: the buzz of old fluorescent lamps; birds flying off; a chicken
+            { var nz = N(); Clip("hum", 2.0f, t => (Sq(t * TAU * 120) * 0.035f + Mathf.Sin(t * TAU * 240) * 0.05f + Mathf.Sin(t * TAU * 360) * 0.02f + nz.Low(0.05f) * 0.05f) * Mathf.Min(1, Mathf.Min(t, 2 - t) * 8)); }
+            { var nz = N(); Clip("flutter", 0.6f, t => nz.Band(0.3f) * (0.5f + 0.5f * Mathf.Sin(t * TAU * 22)) * Env(t, 0.01f, 0.25f) * 0.6f); }
+            Clip("cluck", 0.5f, t => { float u = t % 0.17f; return (Tri(TAU * (520 - 900 * u) * u) * 0.35f + Mathf.Sin(TAU * 1040 * u) * 0.1f) * Env(u, 0.003f, 0.05f) * (t < 0.51f ? 1 : 0); });
             { var nz = N(); Clip("splash", 0.8f, t => (nz.Band(0.35f) * 0.9f + Mathf.Sin(TAU * (700 * t - 600 * t * t)) * 0.12f * Env(t, 0.005f, 0.08f)) * Env(t, 0.01f, 0.22f)); }
             { var nz = N(); Clip("hurt", 0.38f, t => (Mathf.Sin(TAU * (520 * t - 700 * t * t + 6 * Mathf.Sin(t * 60))) * 0.35f + nz.Low(0.3f) * 0.25f) * Env(t, 0.004f, 0.12f)); }
             { var nz = N(); Clip("zap", 0.45f, t => (nz.High() * 0.5f + Sq(t * TAU * (110 + Mathf.Sin(t * 260) * 50)) * 0.18f) * Env(t, 0.002f, 0.13f)); }
@@ -406,8 +410,29 @@ namespace Chubrik
 
         public static void Play(string name, float vol = 1f)
         {
-            if (I == null || !I.clips.TryGetValue(name, out var c)) return;
+            if (I == null) return;
+            if (!I.clips.TryGetValue(name, out var c))
+            {
+                // recorded clips (voices) live in Resources/Sounds
+                c = Resources.Load<AudioClip>("Sounds/" + name);
+                I.clips[name] = c;
+            }
+            if (c == null) return;
             I.src.PlayOneShot(c, vol);
+        }
+
+        public static AudioClip Get(string name) => I != null && I.clips.TryGetValue(name, out var c) ? c : null;
+
+        AudioSource voice;
+        /// <summary>A recorded voice line, pitched up a bit (a cartoon voice).</summary>
+        public static void Voice(string name, float pitch = 1.3f, float vol = 1f)
+        {
+            if (I == null) return;
+            var c = Resources.Load<AudioClip>("Sounds/" + name);
+            if (c == null) return;
+            if (I.voice == null) I.voice = I.gameObject.AddComponent<AudioSource>();
+            I.voice.pitch = pitch; I.voice.volume = I.src.volume * vol;
+            I.voice.PlayOneShot(c);
         }
 
         /// <summary>World 67: the music stutters for a moment (a slice repeats) and goes on in rhythm.</summary>

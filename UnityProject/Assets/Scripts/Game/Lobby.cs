@@ -64,6 +64,8 @@ namespace Chubrik
             Clouds();
             Tokens();
             MakeSolid();
+            Eggs.SpawnLobby();
+            Bird.ForWorld(1);
             return root;
         }
 
@@ -298,6 +300,10 @@ namespace Chubrik
             return wallMats[(st, rep)] = m;
         }
 
+        static Material barrierM;
+        public const float BarrierH = 30f;
+        public static int Barriers;
+
         static void Wall(Vector3 a, Vector3 b, float h = 5.5f)
         {
             var d = b - a; d.y = 0;
@@ -311,6 +317,13 @@ namespace Chubrik
             float yaw = Quaternion.LookRotation(d).eulerAngles.y;
             if (R == L) Half(mid, 1f, R);
             else { Half(mid + right * 0.25f, 0.5f, R); Half(mid - right * 0.25f, 0.5f, L); }
+            // 17.11: the wall goes on up as a see-through barrier — no jumping over walls
+            if (barrierM == null) barrierM = Glass("D8F4FF", 0.07f);
+            var bar = Prim.Make(PrimitiveType.Cube, root, mid + Vector3.up * (h + BarrierH / 2), new Vector3(1.0f, BarrierH, len), barrierM, "Barrier", Layers.Barrier);
+            bar.transform.localEulerAngles = new Vector3(0, yaw, 0);
+            bar.AddComponent<BoxCollider>();
+            bar.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            Barriers++;
 
             void Half(Vector3 c, float thick, WallStyle st)
             {

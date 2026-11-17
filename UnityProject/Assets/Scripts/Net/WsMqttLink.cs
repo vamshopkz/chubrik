@@ -52,9 +52,13 @@ namespace Chubrik
         public void Send(string msg)
         {
             if (state != 1) return;
-            var body = new List<byte>(MqttLink.Str(pubTopic));
-            body.AddRange(Encoding.UTF8.GetBytes(msg));
-            Write(MqttLink.Packet(0x30, body));
+            Write(MqttLink.Pub(pubTopic, msg, false));
+        }
+
+        public void Publish(string topic, string msg, bool retain)
+        {
+            if (state != 1) return;
+            Write(MqttLink.Pub(topic, msg, retain));
         }
 
         public void Poll(List<NetIncoming> into)
@@ -84,10 +88,7 @@ namespace Chubrik
                 if (connAck > 0) { Close(); return; }
                 if (connAck == 0 && state == 0)
                 {
-                    var sub = new List<byte> { 0, 1 };
-                    sub.AddRange(MqttLink.Str(subTopic));
-                    sub.Add(0);
-                    Write(MqttLink.Packet(0x82, sub));
+                    Write(MqttLink.Subscribe(subTopic));
                     state = 1;
                 }
             }

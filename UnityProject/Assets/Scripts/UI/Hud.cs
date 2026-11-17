@@ -19,7 +19,7 @@ namespace Chubrik
         UIButton menuBtn, enterBtn, jumpBtn, hitBtn, emoteBtn;
         readonly List<Image> hearts = new List<Image>();
         float toastUntil, flashA, crackT, glitchT, heartT;
-        int shownCoins = -1, shownTokens = -1, shownKeys = -1, shownHearts = -1, shownFull = -1;
+        long shownCoins = -1, shownTokens = -1; int shownKeys = -1, shownHearts = -1, shownFull = -1;
         public static Sprite CoinSprite, TokenSprite, HeartSprite, KeySprite;
 
         public static void Create()
@@ -110,10 +110,10 @@ namespace Chubrik
             UIKit.Place(jk.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(110, 110));
             joyZone.gameObject.AddComponent<Joystick>().Init(jb.rectTransform, jk.rectTransform);
 
-            jumpBtn = UIKit.Round(touchRoot, "ПРЫЖОК", UIKit.Green, () => PlayerCtl.I.QueueJump(), 200, 30);
+            jumpBtn = UIKit.Round(touchRoot, "A", UIKit.Green, () => PlayerCtl.I.QueueJump(), 200, 84);
             jumpBtn.FireOnDown = true;
             UIKit.Place(jumpBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-170 - safe.z, 170 + safe.y), new Vector2(200, 200));
-            hitBtn = UIKit.Round(touchRoot, "УДАР", UIKit.Red, () => PlayerCtl.I.Attack(), 130, 26);
+            hitBtn = UIKit.Round(touchRoot, "B", UIKit.Red, () => PlayerCtl.I.Attack(), 130, 64);
             hitBtn.FireOnDown = true;
             UIKit.Place(hitBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-370 - safe.z, 120 + safe.y), new Vector2(130, 130));
             emoteBtn = UIKit.Round(touchRoot, "ЭМОЦИЯ", UIKit.Violet, () => PlayerCtl.I.Emote(), 120, 22);
@@ -184,7 +184,7 @@ namespace Chubrik
             Prank(Worlds.Current == 6);
             if (prankOn) { coins.text = "999999999999"; shownCoins = -1; }
             else if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
-            if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = P.tokens.ToString(); }
+            if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = UIKit.Num(P.tokens); }
             if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }
             string wp = "w" + Worlds.Current;
             friends.fontSize = Worlds.Current == World67.Id ? 30 : 26;

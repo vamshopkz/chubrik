@@ -8,7 +8,7 @@ namespace Chubrik
     public class Pickups : MonoBehaviour
     {
         public static Pickups I;
-        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key, crystal; public float back; public bool active = true; }
+        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key, crystal, egg; public float back; public bool active = true; }
         readonly List<P> items = new List<P>();
         GameObject arrow;
         public int CoinsAlive { get { int n = 0; foreach (var p in items) if (p.active && p.token == null) n++; return n; } }
@@ -85,8 +85,23 @@ namespace Chubrik
             items.Add(new P { go = go, pos = pos, token = id, crystal = true });
         }
 
+        /// <summary>A hidden golden egg (taken once forever).</summary>
+        public void Egg(string id, Vector3 pos)
+        {
+            if (Save.P.found.Contains(id)) return;
+            Parts.Layer = Layers.Pickup;
+            var go = new GameObject("Egg " + id) { layer = Layers.Pickup };
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+            Eggs.Model(go.transform);
+            go.AddComponent<Spin>().speed = 60;
+            items.Add(new P { go = go, pos = pos, token = id, egg = true });
+        }
+
+        public int EggsHere { get { int n = 0; foreach (var p in items) if (p.egg && p.active) n++; return n; } }
+
         public int KeysLeft { get { int n = 0; foreach (var p in items) if (p.key && p.active) n++; return n; } }
-        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && !p.crystal && p.active) n++; return n; } }
+        public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && !p.crystal && !p.egg && p.active) n++; return n; } }
         public Vector3? CrystalPos() { foreach (var p in items) if (p.crystal && p.active) return p.pos; return null; }
         public int KeysLeftIn(string prefix) { int n = 0; foreach (var p in items) if (p.key && p.active && p.token.StartsWith(prefix)) n++; return n; }
         public int CrystalsLeft { get { int n = 0; foreach (var p in items) if (p.crystal && p.active) n++; return n; } }
@@ -155,6 +170,15 @@ namespace Chubrik
                 AudioFx.Play("token");
                 Effects.Emit("gold", p.pos, 30, 0.5f);
                 Hud.Toast($"Золотой ключ! Открой им клетку с другом (ключей: {Save.P.keys})", UIKit.Gold);
+                return;
+            }
+            if (p.egg)
+            {
+                Save.P.found.Add(p.token);
+                AudioFx.Play("token"); AudioFx.Play("cluck", 0.8f);
+                Effects.Emit("gold", p.pos, 40, 0.6f);
+                PlayerCtl.I.PlayVictory();
+                Eggs.OnFound();
                 return;
             }
             if (p.crystal)

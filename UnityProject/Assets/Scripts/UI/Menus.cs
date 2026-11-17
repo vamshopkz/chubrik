@@ -42,7 +42,7 @@ namespace Chubrik
             UIKit.Place(sub.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -220), new Vector2(1200, 50));
 
             var col = UIKit.Rect("Buttons", dim.transform);
-            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -120), new Vector2(560, 560));
+            UIKit.Place(col, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -150), new Vector2(560, 640));
             var vl = col.gameObject.AddComponent<VerticalLayoutGroup>();
             vl.spacing = 16; vl.childControlHeight = false; vl.childControlWidth = true; vl.childForceExpandHeight = false;
             void Btn(string label, Color c, System.Action a, float h = 92, float font = 40)
@@ -52,6 +52,7 @@ namespace Chubrik
             }
             Btn("ИГРАТЬ", UIKit.Green, Play, 112, 52);
             Btn("ИГРОКИ ОНЛАЙН", UIKit.Violet, () => { CloseMain(); PlayersUI.Open(); });
+            Btn("ТАБЛИЦА РЕКОРДОВ", UIKit.Orange, () => { CloseMain(); RecordsUI.Open(); });
             Btn("НАСТРОЙКИ", UIKit.Blue, () => { CloseMain(); Settings(); });
             var tip = UIKit.Txt(col, "Гардероб, магазин и премиум-наборы — в лобби: подойди к ним", 24, Color.white);
             tip.rectTransform.sizeDelta = new Vector2(560, 70);
@@ -93,6 +94,8 @@ namespace Chubrik
                 if (Updater.HasUpdate) w.Row("Вышла новая версия " + Updater.I.LatestVersion + "!", "Скачай обновление — в нём новые штуки", Updater.I.ButtonText, UIKit.Orange, () => Updater.I.Press());
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
                 w.Row("Игроки онлайн", Online.I != null && Online.I.Peers.Count > 0 ? $"Сейчас играют: {Online.I.Peers.Count} — нажми и окажешься рядом" : "Кто сейчас играет — можно прийти к ним", "СМОТРЕТЬ", UIKit.Violet, PlayersUI.Open);
+                if (Online.I != null && Online.I.RoomWith != null) w.Row("Ты в комнате с другом", "Выйди, если хочешь играть один", "ВЫЙТИ", UIKit.Red, () => Online.I.LeaveRoom());
+                w.Row("Таблица рекордов", "Кто больше всех собрал монет, друзей, миров, жетонов и яиц", "СМОТРЕТЬ", UIKit.Orange, RecordsUI.Open);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
                 if (Worlds.Level)
                 {
@@ -118,7 +121,7 @@ namespace Chubrik
                 w.Row("История Чубрика", "Сюжет: прочитанные главы", "ЧИТАТЬ", UIKit.Pink, Story.Book);
                 w.Row("Главное меню", null, "ВЫЙТИ", UIKit.Red, Main);
                 w.Text("Гардероб, магазин примочек и премиум-наборы открываются, когда подходишь к ним в лобби.", 24, UIKit.Muted);
-                w.Footer.text = $"Ключей: {Save.P.keys} · спасено друзей: {Save.P.rescued.Count} · вещей: {OwnedCount()} из {Catalog.Items.Count}";
+                w.Footer.text = $"Ключей: {Save.P.keys} · спасено друзей: {Save.P.rescued.Count} · золотых яиц: {Eggs.Found} из {Eggs.Total} · вещей: {OwnedCount()} из {Catalog.Items.Count}";
             }, 1000, 800);
         }
 
@@ -136,6 +139,7 @@ namespace Chubrik
             Window.Show("НАСТРОЙКИ", w =>
             {
                 var P = Save.P;
+                NickRow(w);
                 w.Chips("Громкость", new (string, Color, bool, System.Action)[]
                 {
                     ("0%", UIKit.Blue, P.volume < 0.05f, () => SetVol(0)), ("25%", UIKit.Blue, Mathf.Abs(P.volume - 0.25f) < 0.05f, () => SetVol(0.25f)),
@@ -159,8 +163,30 @@ namespace Chubrik
                         ("ВЫКЛ", UIKit.Red, !P.navigatorOn, () => { P.navigatorOn = false; Save.Write(); Window.Refresh(); }),
                     });
                 w.Row("Версии игры", "Сейчас: " + Application.version + " · можно выбрать новую или старую", "ВЫБРАТЬ", UIKit.Blue, VersionsUI.Open);
-                w.Text("Управление на компьютере: WASD — бег, ПРОБЕЛ — прыжок и двойной прыжок (держи с крыльями — полёт), F или клик — удар, Q — эмоция, E — войти, мышь — камера, Esc — меню.", 24, UIKit.Muted);
+                w.Text("На телефоне: A — прыжок (нажми два раза — двойной прыжок), B — удар. Рывок вперёд «хэ-хэй»: беги, нажми B, а сразу за ним A. Не допрыгнул до края — чубрик сам зацепится и залезет.", 24, UIKit.Gold);
+                w.Text("Управление на компьютере: WASD — бег, ПРОБЕЛ — прыжок и двойной прыжок (держи с крыльями — полёт), F или клик — удар (рывок: беги, F, потом ПРОБЕЛ), Q — эмоция, E — войти, мышь — камера, Esc — меню.", 24, UIKit.Muted);
             }, 1000, 760);
+        }
+
+        /// <summary>The nickname: shown in the records table and to the friend you play with.</summary>
+        static void NickRow(Window w)
+        {
+            w.Text("Твой ник: " + Online.Nick, 28, UIKit.Gold);
+            var holder = UIKit.Rect("NickRow", w.Content);
+            holder.gameObject.AddComponent<LayoutElement>().minHeight = 92;
+            var input = UIKit.Input(holder, "Новый ник", 16, 32);
+            input.text = Save.P.nick;
+            UIKit.Place(input.GetComponent<RectTransform>(), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0), new Vector2(560, 82));
+            var ok = UIKit.Button(holder, "СОХРАНИТЬ", UIKit.Green, () =>
+            {
+                var n = Online.Clean(input.text);
+                if (n.Length > 16) n = n.Substring(0, 16);
+                Save.P.nick = n; Save.Write();
+                AudioFx.Play("buy");
+                Hud.Toast(n.Length > 0 ? "Ник сохранён: " + n : "Ник сброшен: " + Online.Nick, UIKit.Green);
+                Window.Refresh();
+            }, 28);
+            UIKit.Place(ok.Bg.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(0, 0), new Vector2(300, 82));
         }
 
         static void SetVol(float v) { Save.P.volume = v; AudioFx.SetVolume(v); Save.Write(); Window.Refresh(); }
@@ -172,7 +198,7 @@ namespace Chubrik
         {
             Window.Show("ПРОМОКОД", w =>
             {
-                w.Text("Введите промокод — он может открыть премиум-наборы бесплатно.", 28);
+                w.Text("Введите промокод — он может открыть премиум-наборы бесплатно (а может превратить тебя в курицу…).", 28);
                 var holder = UIKit.Rect("PromoRow", w.Content);
                 holder.gameObject.AddComponent<LayoutElement>().minHeight = 96;
                 var input = UIKit.Input(holder, "Промокод", 32, 34);
@@ -216,9 +242,60 @@ namespace Chubrik
             return sb.ToString();
         }
 
+        public const long TeapotSum = 300_000_000_000L;
+
         public static bool Apply(string code)
         {
-            if (Norm(code) != Norm(DevCode))
+            var n = Norm(code);
+            var P = Save.P;
+            // 17.11: fun codes from the player
+            if (n == Norm("Курица"))
+            {
+                Save.Give(Catalog.Chicken);
+                Save.Wear("suit", Catalog.Chicken);
+                PlayerCtl.I?.ApplyLook(Save.CurrentLook());
+                AudioFx.Play("cluck"); PlayerCtl.I?.PlayVictory();
+                Hud.Toast("Ко-ко-ко! Ты превратился в КУРИЦУ! Отменить — промокод «Курятник»", UIKit.Gold);
+                return true;
+            }
+            if (n == Norm("Курятник"))
+            {
+                if (ChubrikModel.IsChicken(Catalog.Index(Save.Worn("suit")))) Save.Wear("suit", "");
+                PlayerCtl.I?.ApplyLook(Save.CurrentLook());
+                AudioFx.Play("portal");
+                Hud.Toast("Курица ушла в курятник — ты снова чубрик!", UIKit.Cyan);
+                return true;
+            }
+            if (n == Norm("Чайник"))
+            {
+                if (P.teapot) { Hud.Toast("Чайник уже вскипел — 300 миллиардов у тебя!", UIKit.Gold); return true; }
+                P.teapot = true; P.coins += TeapotSum; P.tokens += TeapotSum; Save.Write();
+                AudioFx.Play("buy"); PlayerCtl.I?.PlayVictory();
+                Hud.Toast("ЧАЙНИК! +300 000 000 000 монет и жетонов! Отменить — «Чайник нет»", UIKit.Gold);
+                return true;
+            }
+            if (n == Norm("Чайник нет"))
+            {
+                if (!P.teapot) { Hud.Toast("Чайник и так выключен", UIKit.Muted); return true; }
+                P.teapot = false; P.coins = System.Math.Max(0, P.coins - TeapotSum); P.tokens = System.Math.Max(0, P.tokens - TeapotSum); Save.Write();
+                AudioFx.Play("error");
+                Hud.Toast("Чайник выключен — 300 миллиардов ушли обратно", UIKit.Orange);
+                return true;
+            }
+            if (n == Norm("BUTTER 22X"))
+            {
+                P.butter = false; Save.Write(); Butter.Set(false);
+                Hud.Toast("Масло растаяло — всё снова как было", UIKit.Cyan);
+                return true;
+            }
+            if (n == Norm("BUTTER"))
+            {
+                P.butter = true; Save.Write(); Butter.Set(true);
+                AudioFx.Play("magic");
+                Hud.Toast("BUTTER! Теперь всё из сливочного масла. Отменить — «BUTTER 22X»", Parts.Hex("FFE680"));
+                return true;
+            }
+            if (n != Norm(DevCode))
             {
                 AudioFx.Play("error");
                 Hud.Toast("Такого промокода нет", UIKit.Red);

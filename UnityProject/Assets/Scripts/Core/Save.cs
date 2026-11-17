@@ -9,7 +9,7 @@ namespace Chubrik
     public class Profile
     {
         public string id = "";
-        public int coins = 50, tokens = 0;
+        public long coins = 50, tokens = 0;                  // long: the «Чайник» promo gives 300 billion
         public int maxHearts = 3;
         public bool navigator, navigatorOn = true, promo;
         public List<string> owned = new List<string>();     // item ids
@@ -26,6 +26,8 @@ namespace Chubrik
         public bool music = true;
         public int quality = -1;
         public bool wolf;                                    // 15.11: the hero became a wolf (one-time look change done)
+        public string nick = "";                             // 17.11: nickname for the records table (Settings)
+        public bool teapot, butter;                          // promo codes «Чайник» (300 billion) and «BUTTER» (everything made of butter)
     }
 
     /// <summary>Local profile: coins, tokens, owned items, current look, settings (JSON in persistentDataPath).</summary>
@@ -109,7 +111,7 @@ namespace Chubrik
             Write();
         }
 
-        public static bool Spend(int coins)
+        public static bool Spend(long coins)
         {
             if (P.coins < coins) return false;
             P.coins -= coins;
@@ -117,7 +119,7 @@ namespace Chubrik
             return true;
         }
 
-        public static bool SpendTokens(int n)
+        public static bool SpendTokens(long n)
         {
             if (P.tokens < n) return false;
             P.tokens -= n;
@@ -125,7 +127,7 @@ namespace Chubrik
             return true;
         }
 
-        public static void AddCoins(int n) { P.coins += n; Write(); }
+        public static void AddCoins(long n) { P.coins += n; Write(); }
     }
 
     /// <summary>What the chubrik wears: department → item id.</summary>
