@@ -1168,10 +1168,29 @@ namespace Chubrik
                 Online.I.Records.Remove("zz998877");
 
                 // a room with a friend and «Выйти из комнаты»
+                // 18.11: nobody joins without an invitation; an invitation can be accepted or declined
                 Online.I.Inject($"H|room1peer|{Application.version}|1|color=color_1|Друг");
                 Online.I.Inject($"J|room1peer|{Online.I.Id}");
-                bool inRoom = Online.I.RoomWith == "room1peer";
+                Check("a player can't join you without an invitation", Online.I.RoomWith == null);
+                Online.I.Inject($"H|room2peer|{Application.version}|1|color=color_3|Соня");
+                Online.I.Inject($"I|room2peer|{Online.I.Id}|Соня");
+                yield return Wait(0.3f);
+                bool popup = InviteUI.IsOpen;
+                yield return Shot("92_invitation");
+                var dec = GameObject.Find("Decline")?.GetComponent<UIButton>();
+                dec?.OnClick?.Invoke();
+                Check("an invitation shows «Принять / Отказаться», declining keeps you alone", popup && !InviteUI.IsOpen && Online.I.RoomWith == null);
+                Online.I.Inject("B|room2peer");
                 PlayersUI.Open();
+                yield return Wait(0.5f);
+                bool inviteBtn = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ПРИГЛАСИТЬ") inviteBtn = true;
+                Check("every player in «Игроки онлайн» has «Пригласить»", inviteBtn);
+                Online.I.Invite(Online.I.Peers["room1peer"]);
+                Online.I.Inject($"A|room1peer|{Online.I.Id}");
+                Online.I.Inject($"J|room1peer|{Online.I.Id}");
+                bool inRoom = Online.I.RoomWith == "room1peer";
+                Window.Refresh();
                 yield return Wait(0.5f);
                 bool leaveBtn = false;
                 foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ВЫЙТИ ИЗ КОМНАТЫ") leaveBtn = true;
@@ -1206,7 +1225,15 @@ namespace Chubrik
                 StartCoroutine(FakeMoves());
                 yield return Wait(2.5f);
                 Online.I.Peers.TryGetValue(fid, out var fpeer);
-                Check("the other player's chubrik appears in our world", fpeer != null && fpeer.avatar != null);
+                Check("another player is not in our world without an invitation", fpeer != null && fpeer.avatar == null);
+                if (fpeer != null)
+                {
+                    // we invite them; their «yes» comes back through the real relay
+                    Online.I.Invite(fpeer);
+                    Online.I.Send($"A|{fid}|{Online.I.Id}");
+                    for (float t = 0; t < 6 && (fpeer.avatar == null); t += Time.unscaledDeltaTime) yield return null;
+                }
+                Check("after the invitation is accepted the other player's chubrik appears", fpeer != null && Online.I.RoomWith == fid && fpeer.avatar != null);
                 PlayersUI.Open();
                 yield return Wait(1f);
                 Check("«Игроки онлайн» shows skin pictures", UIRoot.Open != null && UIRoot.Open.Content.GetComponentInChildren<UnityEngine.UI.RawImage>() != null);

@@ -42,6 +42,10 @@ namespace Chubrik
         /// <summary>The player we are «in a room» with (we came to them or they came to us).</summary>
         public string RoomWith;
         public Peer RoomPeer => RoomWith != null && Peers.TryGetValue(RoomWith, out var p) ? p : null;
+        /// <summary>18.11: players are together only by invitation. Who we invited (and when), and who invites us.</summary>
+        public readonly Dictionary<string, float> Invited = new Dictionary<string, float>();
+        public string InviteFrom { get; private set; }
+        public bool Invitation(string id) => Invited.TryGetValue(id, out var t) && Time.unscaledTime - t < 60f;
         float recordT = 4f;
         string lastRecord = "";
         static readonly string[] Brokers = { "broker.emqx.io", "broker.hivemq.com" };
@@ -252,7 +256,7 @@ namespace Chubrik
             {
                 var peer = kv.Value;
                 if (now - peer.seen > 10f) { gone.Add(kv.Key); continue; }
-                bool show = playing && peer.SameVersion && peer.world == Worlds.Current && now - peer.stateSeen < 3f;
+                bool show = playing && peer.SameVersion && peer.id == RoomWith && peer.world == Worlds.Current && now - peer.stateSeen < 3f;
                 if (show && peer.avatar == null) peer.avatar = RemoteChubrik.Spawn(peer, avatarsRoot);
                 else if (!show && peer.avatar != null) { Destroy(peer.avatar.gameObject); peer.avatar = null; }
             }
@@ -262,7 +266,8 @@ namespace Chubrik
 
         bool AnyoneHere()
         {
-            foreach (var peer in Peers.Values) if (peer.SameVersion && peer.world == Worlds.Current) return true;
+            var rp = RoomPeer;   // our position goes only to the friend we are together with
+            if (rp != null && rp.SameVersion && rp.world == Worlds.Current) return true;
             return false;
         }
 
@@ -316,7 +321,23 @@ namespace Chubrik
                     break;
                 }
                 case "J" when f.Length >= 3:
-                    if (f[2] == Id && Peers.ContainsKey(id)) { RoomWith = id; Hud.Toast("К тебе пришёл друг! Он рядом с тобой", UIKit.Lime); }
+                    // 18.11: only someone we invited (or who accepted our invitation) may come
+                    if (f[2] == Id && Peers.ContainsKey(id) && (Invitation(id) || RoomWith == id)) { RoomWith = id; Invited.Remove(id); Hud.Toast("К тебе пришёл друг! Он рядом с тобой", UIKit.Lime); }
+                    break;
+                case "I" when f.Length >= 3:
+                    // an invitation for us
+                    if (f[2] == Id && Peers.ContainsKey(id) && RoomWith != id)
+                    {
+                        InviteFrom = id;
+                        var nick = f.Length >= 4 && f[3] != "" ? f[3] : (Peers[id].nick != "" ? Peers[id].nick : "Игрок");
+                        InviteUI.Show(id, nick);
+                    }
+                    break;
+                case "A" when f.Length >= 3:
+                    if (f[2] == Id && Invitation(id)) { RoomWith = id; Hud.Toast($"«{NickOf(id)}» принял приглашение — идёт к тебе!", UIKit.Lime); }
+                    break;
+                case "N" when f.Length >= 3:
+                    if (f[2] == Id && Invited.Remove(id)) Hud.Toast($"«{NickOf(id)}» сейчас не может играть вместе", UIKit.Orange);
                     break;
                 case "L" when f.Length >= 3:
                     if (f[2] == Id && RoomWith == id) { RoomWith = null; Hud.Toast("Друг вышел из комнаты", UIKit.Orange); }
@@ -336,6 +357,34 @@ namespace Chubrik
                     Remove(id);
                     break;
             }
+        }
+
+        string NickOf(string id) => Peers.TryGetValue(id, out var p) && p.nick != "" ? p.nick : "Игрок";
+
+        /// <summary>18.11: invite a player to play together; they choose «Принять» or «Отказаться».</summary>
+        public void Invite(Peer peer)
+        {
+            if (peer == null) return;
+            Invited[peer.id] = Time.unscaledTime;
+            Send($"I|{Id}|{peer.id}|{Clean(Nick)}");
+            AudioFx.Play("click");
+            Hud.Toast($"Приглашение отправлено «{NickOf(peer.id)}» — ждём ответа", UIKit.Cyan);
+        }
+
+        /// <summary>We accept an invitation: we leave our old room (if any) and go to the one who invited us.</summary>
+        public void Accept(string id)
+        {
+            InviteFrom = null;
+            if (!Peers.TryGetValue(id, out var peer)) { Hud.Toast("Игрок уже вышел из игры", UIKit.Orange); return; }
+            if (RoomWith != null && RoomWith != id) Send($"L|{Id}|{RoomWith}");
+            Send($"A|{Id}|{id}");
+            Join(peer);
+        }
+
+        public void Decline(string id)
+        {
+            InviteFrom = null;
+            Send($"N|{Id}|{id}");
         }
 
         /// <summary>Go to that player: into their world (even if it is still closed for us) and next to them.</summary>
