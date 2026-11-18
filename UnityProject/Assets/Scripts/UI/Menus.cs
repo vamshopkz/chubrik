@@ -98,6 +98,7 @@ namespace Chubrik
                 w.Row("Игроки онлайн", Online.I != null && Online.I.Peers.Count > 0 ? $"Сейчас играют: {Online.I.Peers.Count} — нажми и окажешься рядом" : "Кто сейчас играет — можно прийти к ним", "СМОТРЕТЬ", UIKit.Violet, PlayersUI.Open);
                 if (Online.I != null && Online.I.RoomWith != null) w.Row("Ты в комнате с другом", "Выйди, если хочешь играть один", "ВЫЙТИ", UIKit.Red, () => Online.I.LeaveRoom());
                 if (Worlds.Current == 1 && !Worlds.Level) w.Row("Футбол", Football.Inside(PlayerCtl.I.transform.position) ? "Ты на стадионе" : "Стадион: 10 уровней или матч с другом", Football.Inside(PlayerCtl.I.transform.position) ? "В ЛОББИ" : "ИГРАТЬ", UIKit.Green, () => { if (Football.Inside(PlayerCtl.I.transform.position)) { Window.Close(); Football.Leave(); } else Football.Menu(); });
+                if (Save.P.cheatAdmin) w.Row("Админ-панель", "Копируй вещи и ставь их куда хочешь", "ОТКРЫТЬ", UIKit.Red, () => { Window.Close(); AdminPanel.Open(); });
                 w.Row("Промокоды", "Напиши секретное слово — и случится что-то интересное", "ВВЕСТИ", UIKit.Pink, PromoWindow);
                 w.Row("Таблица рекордов", "Кто больше всех собрал монет, друзей, миров, жетонов и яиц", "СМОТРЕТЬ", UIKit.Orange, RecordsUI.Open);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);
@@ -166,6 +167,7 @@ namespace Chubrik
                         ("ВКЛ", UIKit.Green, P.navigatorOn, () => { P.navigatorOn = true; Save.Write(); Window.Refresh(); }),
                         ("ВЫКЛ", UIKit.Red, !P.navigatorOn, () => { P.navigatorOn = false; Save.Write(); Window.Refresh(); }),
                     });
+                w.Row("Читы", "Полёт, бесконечные монеты и админ-панель", "ЧИТЫ", UIKit.Red, Cheats.Open, true, UIKit.Red);
                 w.Row("Версии игры", "Сейчас: " + Application.version + " · можно выбрать новую или старую", "ВЫБРАТЬ", UIKit.Blue, VersionsUI.Open);
                 w.Text("На телефоне: A — прыжок (нажми два раза — двойной прыжок), B — удар. Рывок вперёд «хэ-хэй»: беги, нажми B, а сразу за ним A. Не допрыгнул до края — чубрик сам зацепится и залезет. Прыжок вниз: A, потом B — маленький; A или 2×A и держи B — летит вниз головой и смешно плюхается.", 24, UIKit.Gold);
                 w.Text("Управление на компьютере: WASD — бег, ПРОБЕЛ — прыжок и двойной прыжок (держи с крыльями — полёт), F или клик — удар (рывок: беги, F, потом ПРОБЕЛ), Q — эмоция, E — войти, мышь — камера, Esc — меню.", 24, UIKit.Muted);

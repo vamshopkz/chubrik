@@ -184,6 +184,7 @@ namespace Chubrik
             var P = Save.P;
             Prank(Worlds.Current == 6);
             if (prankOn) { coins.text = "999999999999"; shownCoins = -1; }
+            else if (Cheats.EndlessCoins) { if (shownCoins != -2) { shownCoins = -2; coins.text = "∞"; } }
             else if (P.coins != shownCoins) { shownCoins = P.coins; coins.text = UIKit.Num(P.coins); }
             if (P.tokens != shownTokens) { shownTokens = P.tokens; tokens.text = UIKit.Num(P.tokens); }
             if (P.keys != shownKeys) { shownKeys = P.keys; keys.text = P.keys.ToString(); }

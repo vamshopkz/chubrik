@@ -1022,6 +1022,9 @@ namespace Chubrik
                 pl.MoveInput = Vector2.zero;
                 float leapDist = Vector3.Distance(new Vector3(leapFrom.x, 0, leapFrom.z), new Vector3(pl.transform.position.x, 0, pl.transform.position.z));
                 Check("run + B + A = the leap «хэ-хэй» (flies far forward)", leaping && pl.Leaps == leaps0 + 1 && leapDist > 4f, $"leaps {pl.Leaps - leaps0}, flew {leapDist:0.0} m");
+                yield return Wait(0.6f);
+                pl.Teleport(Lobby.Spawn, 0);
+                yield return Wait(0.4f);
                 Window.Close();   // the leap may land on the football pad (its menu opens)
 
                 // ledge grab: jump at a ledge that is too high — he catches the edge and climbs up
@@ -1307,6 +1310,73 @@ namespace Chubrik
                 Online.I.Inject("B|ballpeer");
                 yield return Wait(1f);
                 Check("leaving the stadium takes you back to the lobby", !Football.Inside(pl.transform.position) && Football.Mode == 0);
+
+                // ---- 18.11 cheats: flying, endless coins, the admin panel ----
+                Menus.Settings();
+                yield return Wait(0.4f);
+                bool cheatRow = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ЧИТЫ") cheatRow = true;
+                Check("Settings has a «Читы» button", cheatRow);
+                long keepCoins = Save.P.coins;
+                Save.P.coins = 31_000_000_000L;
+                Cheats.Open();
+                yield return Wait(0.4f);
+                yield return Shot("102_cheats");
+                Cheats.BuyFly();
+                Check("the flying cheat costs 50 000 coins", Save.P.cheatFly && Save.P.flyOn && Save.P.coins == 31_000_000_000L - Cheats.FlyPrice);
+                Window.Close();
+                pl.Teleport(Lobby.Spawn, 0);
+                yield return Wait(0.5f);
+                float fy0 = pl.transform.position.y;
+                pl.HoldJump = true;
+                yield return Wait(1f);
+                pl.HoldJump = false;
+                float fy1 = pl.transform.position.y;
+                yield return Wait(0.6f);
+                float fy2 = pl.transform.position.y;
+                yield return Shot("103_flying");
+                pl.HoldAttack = true;
+                yield return Wait(0.5f);
+                pl.HoldAttack = false;
+                float fy3 = pl.transform.position.y;
+                Check("flying: A held goes up, nothing — hovers, B held goes down", fy1 > fy0 + 4 && Mathf.Abs(fy2 - fy1) < 0.4f && fy3 < fy2 - 2, $"{fy0:0.0} → {fy1:0.0} → {fy2:0.0} → {fy3:0.0}");
+                Save.P.flyOn = false;
+                yield return Wait(1.5f);
+                Cheats.BuyCoins();
+                long ec0 = Save.P.coins;
+                bool spent = Save.Spend(5000);
+                Check("endless coins: 100 000, then buying costs nothing", Save.P.cheatCoins && spent && Save.P.coins == ec0);
+                Save.P.coinsOn = false;
+                long ac0 = Save.P.coins;
+                Cheats.BuyAdmin();
+                Check("the admin panel costs 30 000 000 000 coins", Save.P.cheatAdmin && Save.P.coins == ac0 - Cheats.AdminPrice);
+                AdminPanel.Open();
+                AdminPanel.StartCopy();
+                var thing = GameObject.Find("TreeBranch");
+                AdminPanel.Pick(thing);
+                Check("«Скопировать вещь»: a tapped thing is copied into the panel", AdminPanel.Template != null && !string.IsNullOrEmpty(AdminPanel.TemplatePath));
+                pl.Teleport(Lobby.Spawn, 0); pl.yaw = 0; pl.pitch = 12;
+                yield return Wait(0.4f);
+                int pc0 = Save.P.placed.Count;
+                AdminPanel.StartPlace();
+                var placedT = AdminPanel.Selected;
+                var scale0 = placedT != null ? placedT.transform.localScale : Vector3.zero;
+                for (int k = 0; k < 4; k++) AdminPanel.Scale(new Vector3(1, 1, 1.15f));
+                AdminPanel.Scale(new Vector3(1.1f, 1.1f, 1.1f));
+                AdminPanel.Move(Vector3.up);
+                AdminPanel.Turn(45);
+                yield return Wait(0.5f);
+                yield return Shot("104_admin_placed");
+                Check("«Поставить вещь»: a copy stands in front, it can be stretched, made bigger, moved and turned", placedT != null && Save.P.placed.Count == pc0 + 1 && placedT.transform.localScale.z > scale0.z * 1.5f && Save.P.placed[Save.P.placed.Count - 1].Contains(placedT.id));
+                var screenPt = pl.Cam.WorldToScreenPoint(placedT.transform.GetComponentInChildren<Renderer>().bounds.center);
+                var tapped = AdminPanel.ThingAt(screenPt);
+                AdminPanel.Pick(tapped);
+                Check("tapping a placed copy selects it", AdminPanel.Selected == placedT, tapped != null ? tapped.name : "nothing");
+                AdminPanel.DeleteSelected();
+                yield return Wait(0.3f);
+                Check("a placed copy can be taken out of the game", Save.P.placed.Count == pc0 && placedT == null);
+                AdminPanel.Close();
+                Save.P.coins = keepCoins; Save.Write();
             }
 
             // ---- online: the real public relay, a made-up player whose messages go through it ----

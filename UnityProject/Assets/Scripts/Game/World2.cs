@@ -22,6 +22,7 @@ namespace Chubrik
             Bird.ForWorld(w);
             var wr = w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null;
             if (wr != null) TitanArena.Build(w, wr);   // 18.11: a big boss in every world
+            AdminPanel.Restore();
             if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
             AudioFx.Play("portal");

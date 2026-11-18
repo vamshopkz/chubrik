@@ -221,6 +221,7 @@ namespace Chubrik
             if (Skates) speed *= 1.2f;
             if (Snowmobile) speed *= 1.8f;
             if (Time.time < SlowUntil) speed *= 0.55f;
+            if (Cheats.Flying) speed *= 1.6f;
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
             float accel = Grounded ? (OnIce && !Skates && !Snowmobile ? 3.5f : 40f) : 16f;   // ice: hard to start, harder to stop
@@ -276,6 +277,12 @@ namespace Chubrik
             else vel.y += g * dt;
             if (plunge == 2) vel.y = Mathf.Min(vel.y, -24f);
             else if (plunge == 1) vel.y = Mathf.Min(vel.y, -11f);
+            if (Cheats.Flying && !Riding && !Frozen)
+            {
+                // 18.11 the flying cheat: A held — up, B held — down, nothing — hover
+                vel.y = (JumpHeld ? 8f : 0f) - (AttackHeld ? 8f : 0f);
+                if (vel.y > 0) Grounded = false;
+            }
             if (Grounded && vel.y < 0) vel.y = -3f;
             vel.x = hv.x; vel.z = hv.z;
 
@@ -581,6 +588,7 @@ namespace Chubrik
         public void Attack()
         {
             if (Frozen || plunge != 0) return;
+            if (Cheats.Flying && !Grounded) return;   // flying: B is «down», not a plunge
             if (dive == 1 && !Grounded) { attackDownT = Time.time; return; }   // holding B turns the dive into the plunge
             if (attackCd > 0 || dive != 0) return;
             if (!Grounded && !airJumped && !Riding && hang == 0 && !Snowmobile && !leaping)

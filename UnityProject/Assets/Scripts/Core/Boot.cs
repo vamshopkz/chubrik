@@ -101,7 +101,7 @@ namespace Chubrik
                 else if (!Menus.MainOpen) Menus.Pause();
             }
             else if (wasLocked && !locked && !Menus.AnyOpen) Menus.Pause();   // the browser released the mouse (Esc)
-            if (!Hud.Touch && !locked && !Menus.AnyOpen && Input.GetMouseButtonDown(0) && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
+            if (!Hud.Touch && !locked && !Menus.AnyOpen && !AdminPanel.IsOpen && Input.GetMouseButtonDown(0) && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
                 Menus.LockCursor();
             if (!Hud.Touch && Menus.AnyOpen && locked) Menus.Unlock();
             wasLocked = Cursor.lockState == CursorLockMode.Locked;

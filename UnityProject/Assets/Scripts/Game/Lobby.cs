@@ -70,6 +70,7 @@ namespace Chubrik
             Eggs.SpawnLobby();
             Bird.ForWorld(1);
             building = false;
+            AdminPanel.Restore();   // 18.11 the admin panel's copies
             return root;
         }
 

@@ -27,7 +27,9 @@ namespace Chubrik
         public int quality = -1;
         public bool wolf;                                    // 15.11: the hero became a wolf (one-time look change done)
         public string nick = "";                             // 17.11: nickname for the records table (Settings)
-        public int footLevel = 1;                            // 18.11 football: the first level not yet won
+        public int footLevel = 1;
+        public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;   // 18.11 cheats (Settings → «Читы»)
+        public List<string> placed = new List<string>();     // admin panel copies: id|path|pos|rot|scale|1                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)
     }
 
@@ -121,6 +123,7 @@ namespace Chubrik
 
         public static bool Spend(long coins)
         {
+            if (Cheats.EndlessCoins) return true;   // 18.11 the cheat: buying costs nothing
             if (P.coins < coins) return false;
             P.coins -= coins;
             Write();
