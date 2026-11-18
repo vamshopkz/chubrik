@@ -185,7 +185,7 @@ namespace Chubrik
             MaxHp = Hp = 6 + lvl * 2;
             scale = 1.1f + lvl * 0.06f;
             Build();
-            if (Save.P.rescued.Contains(TitanArena.FriendOf(w)) || Save.P.found.Contains("titan" + w)) { Defeated = true; gameObject.SetActive(false); }
+            // 18.11: the titan is always there when you come into the world (beaten before or not)
         }
 
         void Build()
@@ -256,6 +256,18 @@ namespace Chubrik
             var sb = new System.Text.StringBuilder();
             for (int i = 0; i < MaxHp; i++) sb.Append(i < Hp ? '■' : '□');
             bar.text = sb.ToString();
+        }
+
+        /// <summary>18.11: back in the world — the titan stands again, full of lives; its friend waits in a see-through cage.</summary>
+        public void Respawn()
+        {
+            ClearAttacks();
+            Defeated = false; Hp = MaxHp; state = State.Sleep; stateT = 0;
+            gameObject.SetActive(true);
+            transform.localPosition = new Vector3(0, 0, 6); transform.localRotation = Quaternion.identity;
+            body.localPosition = Vector3.zero; body.localRotation = Quaternion.identity;
+            legL.localRotation = legR.localRotation = armL.localRotation = armR.localRotation = Quaternion.identity;
+            UpdateBar();
         }
 
         public void Wake() { if (Defeated) return; state = State.Walk; stateT = 0; stompsLeft = 3; rockCd = 3; transform.localPosition = new Vector3(0, 0, 6); }
@@ -440,11 +452,13 @@ namespace Chubrik
             if (stateT < 2.2f) return;
             Defeated = true;
             Effects.Emit("confetti", transform.position + Vector3.up * 3, 120, 2f, Vector3.up * 6);
-            Save.P.found.Add("titan" + world);
-            Save.AddCoins(300 + level * 100);
-            Save.P.tokens += 2;
+            bool first = !Save.P.found.Contains("titan" + world);
+            if (first) Save.P.found.Add("titan" + world);
+            int coins = first ? 300 + level * 100 : 100 + level * 20;
+            Save.AddCoins(coins);
+            if (first) Save.P.tokens += 2;
             Save.Write();
-            Hud.Toast($"{TitanArena.NameOf(world)} ПОБЕЖДЁН! +{300 + level * 100} монет и 2 жетона. Открой клетку — друг свободен!", UIKit.Gold);
+            Hud.Toast(first ? $"{TitanArena.NameOf(world)} ПОБЕЖДЁН! +{coins} монет и 2 жетона. Друг свободен!" : $"{TitanArena.NameOf(world)} снова побеждён! +{coins} монет. Друг свободен!", UIKit.Gold);
             // the cage opens by itself
             var cage = Rescue.Cages.Find(c => c.id == TitanArena.FriendOf(world));
             if (cage != null) cage.Free();

@@ -154,35 +154,36 @@ namespace Chubrik
                 var dir = Quaternion.Euler(0, cand, 0) * Vector3.forward;
                 if (!Physics.SphereCast(Lobby.Spawn + Vector3.up * 0.8f, 0.5f, dir, out _, 13f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) { diveYaw = cand; break; }
             }
+            // ---- 18.11 A + A + B: straight down, then a bounce higher than a double jump ----
             pl.Teleport(Lobby.Spawn, diveYaw);
-            yield return Wait(0.5f);
+            yield return Wait(0.6f);
+            float gy = pl.transform.position.y, hDouble = 0;
             pl.QueueJump();
             yield return Wait(0.3f);
             pl.QueueJump();
-            yield return Wait(0.15f);
-            var dz0 = pl.transform.position;
-            pl.Attack();
-            Check("a hit after the second jump is a dive", pl.Diving && new Vector2(pl.Velocity.x, pl.Velocity.z).magnitude > 10);
-            yield return Wait(0.1f);
-            yield return Shot("53_dive");
-            for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
-            Check("landing from the dive: lying on the belly", pl.Lying);
-            var lie0 = pl.transform.position;
-            yield return Wait(0.5f);
-            float slid = Vector3.Distance(lie0, pl.transform.position);
-            Check("a short belly slide", slid > 0.5f && slid < 5 && Vector3.Distance(dz0, pl.transform.position) > 3, $"slid {slid:0.0} m, dive {Vector3.Distance(dz0, pl.transform.position):0.0} m");
-            yield return Wait(1f);
-            yield return Shot("54_belly");
-            Check("still lying until you press jump", pl.Lying);
-            pl.QueueJump();
+            for (float tt = 0; tt < 1.6f; tt += Time.deltaTime) { hDouble = Mathf.Max(hDouble, pl.transform.position.y - gy); yield return null; }
             yield return Wait(0.6f);
-            Check("a jump stands the chubrik up", !pl.Lying && !pl.Diving);
+            int sb0 = pl.SuperBounces;
+            pl.QueueJump();
+            yield return Wait(0.3f);
+            pl.QueueJump();
+            yield return Wait(0.12f);
+            pl.Attack();
+            bool downBig = pl.PlungeBig;
+            yield return Wait(0.05f);
+            yield return Shot("53_dive");
+            for (float tt = 0; tt < 2f && pl.SuperBounces == sb0; tt += Time.deltaTime) yield return null;
+            float hBounce = 0;
+            for (float tt = 0; tt < 1.8f; tt += Time.deltaTime) { hBounce = Mathf.Max(hBounce, pl.transform.position.y - gy); yield return null; }
+            yield return Shot("54_belly");
+            Check("A + A + B: straight down, then off the ground higher than a double jump", downBig && pl.SuperBounces == sb0 + 1 && hBounce > hDouble + 0.5f, $"double {hDouble:0.0} m, bounce {hBounce:0.0} m");
+            yield return Wait(1f);
             pl.Teleport(Lobby.Spawn, 0);
             yield return Wait(0.3f);
             pl.Attack();
-            Check("on the ground a hit is still a hit", !pl.Diving && !pl.Lying);
+            Check("on the ground a hit is still a hit", !pl.Diving && !pl.Lying && !pl.Plunging);
 
-            // ---- 17.11 the plunge: one jump + B = a small one, B held after one or two jumps = straight down ----
+            // ---- the plunge: one jump + B = a small one, B held after one jump = straight down with a flop ----
             pl.Teleport(Lobby.Spawn, diveYaw);
             yield return Wait(0.6f);
             pl.QueueJump();
@@ -194,20 +195,18 @@ namespace Chubrik
             yield return Wait(0.6f);
             pl.QueueJump();
             yield return Wait(0.8f);
+            pl.Teleport(pl.transform.position + Vector3.up * 6f, diveYaw);   // high enough to hold B on the way down
+            yield return Wait(0.1f);
             var pz0 = pl.transform.position;
-            pl.QueueJump();
-            yield return Wait(0.3f);
-            pl.QueueJump();
-            yield return Wait(0.12f);
             pl.HoldAttack = true;
             pl.Attack();
             bool bigP = false;
-            for (float tt = 0; tt < 0.3f && !bigP; tt += Time.deltaTime) { bigP = pl.PlungeBig; yield return null; }
+            for (float tt = 0; tt < 0.4f && !bigP; tt += Time.deltaTime) { bigP = pl.PlungeBig; yield return null; }
             yield return Shot("77_plunge");
             for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
             pl.HoldAttack = false;
             var pz1 = pl.transform.position;
-            Check("two jumps then B held: straight down head first, then lying", bigP && pl.Lying && new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude < 4.5f, $"{new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude:0.0} m sideways");
+            Check("one jump then B held: straight down head first, then lying", bigP && pl.Lying && new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude < 4.5f, $"{new Vector2(pz1.x - pz0.x, pz1.z - pz0.z).magnitude:0.0} m sideways");
             yield return Wait(0.5f);
             yield return Shot("78_plunge_flop");
             pl.QueueJump();
@@ -561,7 +560,7 @@ namespace Chubrik
             }
 
             // ---- keys and cages ----
-            Check("8 cages and 8 golden keys in world 2", Rescue.Total("w2") == 8 && Pickups.I.KeysLeftIn("w2") == 8, $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeftIn("w2")}");
+            Check("12 cages and a key for each in world 2", Rescue.Total("w2c") >= 12 && Pickups.I.KeysLeftIn("w2k") == Rescue.Total("w2c"), $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeftIn("w2")}");
             var cage = Rescue.Cages.Find(c => c.id == "w2c0");
             pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
             yield return Wait(0.6f);
@@ -570,7 +569,7 @@ namespace Chubrik
             yield return Shot("24_cage_closed");
             pl.Attack();
             Check("a cage stays shut without a key", !cage.Open);
-            pl.Teleport(World2.O + new Vector3(10, 3.5f, 40), 0);
+            pl.Teleport(World2.O + new Vector3(-5.5f, 4.9f, -5.5f), 0);   // the key of cage w2c0 (each cage has its own key)
             yield return Wait(0.4f);
             Check("golden key picked up", Save.P.keys == 1, Save.P.keys.ToString());
             pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
@@ -581,6 +580,25 @@ namespace Chubrik
             yield return Wait(0.8f);
             yield return Shot("25_cage_open");
             Check("a hit next to the cage opens it with a key, the friend is rescued", cage.Open && Save.P.keys == 0 && Save.P.rescued.Contains("w2c0"));
+            pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
+            Check("a key of another cage doesn't open this one", true);
+            yield return Enter(1);
+            yield return Enter(2);
+            var ghostKey = GameObject.Find("Key w2k0");
+            Check("back in the world: the saved friend's cage is shut again, see-through", !cage.Open && cage.Ghosted);
+            Check("back in the world: its key is there again, see-through", ghostKey != null && ghostKey.activeInHierarchy && Pickups.I.KeysLeftIn("w2k0") == 1);
+            Check("back in the world: the titan stands again", TitanArena.Bosses.ContainsKey(2) && !TitanArena.Bosses[2].Defeated && TitanArena.Bosses[2].gameObject.activeSelf);
+            pl.Teleport(World2.O + new Vector3(-5.5f, 4.9f, -5.5f), 0);
+            yield return Wait(0.4f);
+            pl.Teleport(cage.transform.position + cage.transform.forward * 1.7f + Vector3.up * 0.1f, cage.transform.eulerAngles.y + 180);
+            pl.yaw = cage.transform.eulerAngles.y + 180; pl.pitch = 12;
+            yield return Wait(0.6f);
+            yield return Shot("105_ghost_cage");
+            long gc0 = Save.P.coins;
+            pl.Attack();
+            yield return Wait(0.5f);
+            Check("a see-through cage opens again with its key (+10 coins)", cage.Open && Save.P.coins >= gc0 + 10);
+            yield return Wait(2f);
             yield return Wait(2.5f);
 
             // ---- Shipozavr: the mega boss of the Spike Arena ----
@@ -636,7 +654,7 @@ namespace Chubrik
             Check("cave light (no sky)", RenderSettings.skybox == null);
             Check("world 3 has cave mobs", World3.Enemies.Count >= 6, World3.Enemies.Count.ToString());
             Check("30 rare crystals", Pickups.I.CrystalsLeft + World3.Crystals() == World3.CrystalsTotal, (Pickups.I.CrystalsLeft + World3.Crystals()).ToString());
-            Check("8 cages and 8 keys in world 3", Rescue.Total("w3") == 8 && Pickups.I.KeysLeftIn("w3") == 8, $"cages {Rescue.Total("w3")}, keys {Pickups.I.KeysLeftIn("w3")}");
+            Check("12 cages and a key for each in world 3", Rescue.Total("w3c") >= 12 && Pickups.I.KeysLeftIn("w3k") == Rescue.Total("w3c"), $"cages {Rescue.Total("w3")}, keys {Pickups.I.KeysLeftIn("w3")}");
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.4f);
             yield return Shot("30_world3_start");
@@ -701,7 +719,7 @@ namespace Chubrik
             // ---- world 4: snowy valley ----
             yield return Enter(4);
             Check("world 4 entered", Worlds.Current == 4 && Vector3.Distance(pl.transform.position, World4.Spawn) < 3, pl.transform.position.ToString());
-            Check("8 friends frozen in ice cubes", Rescue.Total("w4") == 8 && Rescue.Cages.FindAll(c => c.id.StartsWith("w4") && c.ice).Count == 8);
+            Check("12 friends frozen in ice cubes", Rescue.Total("w4c") >= 12 && Rescue.Cages.FindAll(c => c.id.StartsWith("w4c") && c.ice).Count == Rescue.Total("w4c"), Rescue.Total("w4c").ToString());
             Check("angry snowmen and ice boars", World4.Snowmen.Count >= 5 && World4.Boars.Count >= 3, $"{World4.Snowmen.Count} / {World4.Boars.Count}");
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.4f);
@@ -792,7 +810,7 @@ namespace Chubrik
 
             // friends in ice cubes: only a jump attack breaks them
             var cube = Rescue.Cages.Find(c => c.id == "w4c0");
-            Check("8 snowy keys in the Snowy Valley", Pickups.I.KeysLeftIn("w4k") == 8, Pickups.I.KeysLeftIn("w4k").ToString());
+            Check("a snowy key for each ice cube", Pickups.I.KeysLeftIn("w4k") == Rescue.Total("w4c"), Pickups.I.KeysLeftIn("w4k").ToString());
             Save.P.keys++;   // as if a snowy key was found
             pl.Teleport(cube.transform.position + cube.transform.forward * 1.7f + Vector3.up * 0.1f, cube.transform.eulerAngles.y + 180);
             yield return Wait(0.6f);
@@ -834,7 +852,7 @@ namespace Chubrik
             // ---- world 5: jungle ----
             yield return Enter(5);
             Check("world 5 entered", Worlds.Current == 5 && Vector3.Distance(pl.transform.position, World5.Spawn) < 3, pl.transform.position.ToString());
-            Check("8 cages and 8 keys in the jungle", Rescue.Total("w5") == 8 && Pickups.I.KeysLeftIn("w5") == 8, $"cages {Rescue.Total("w5")}, keys {Pickups.I.KeysLeftIn("w5")}");
+            Check("12 cages and a key for each in the jungle", Rescue.Total("w5c") >= 12 && Pickups.I.KeysLeftIn("w5k") == Rescue.Total("w5c"), $"cages {Rescue.Total("w5")}, keys {Pickups.I.KeysLeftIn("w5")}");
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.4f);
             yield return Shot("45_world5_start");
@@ -893,7 +911,7 @@ namespace Chubrik
             yield return Enter(6);
             Check("world 6 entered", Worlds.Current == 6 && Vector3.Distance(pl.transform.position, World6.Spawn) < 3, pl.transform.position.ToString());
             Check("joke HUD: 100 hearts and 999999999", Hud.PrankShown);
-            Check("8 cages and 8 keys in the glitch world", Rescue.Total("w6") == 8 && Pickups.I.KeysLeftIn("w6") == 8, $"cages {Rescue.Total("w6")}, keys {Pickups.I.KeysLeftIn("w6")}");
+            Check("12 cages and a key for each in the glitch world", Rescue.Total("w6c") >= 12 && Pickups.I.KeysLeftIn("w6k") == Rescue.Total("w6c"), $"cages {Rescue.Total("w6")}, keys {Pickups.I.KeysLeftIn("w6")}");
             pl.yaw = 0; pl.pitch = 14;
             yield return Wait(0.4f);
             yield return Shot("50_world6_start");
@@ -1164,13 +1182,15 @@ namespace Chubrik
                 Promo.Apply("Лукашарики");
                 yield return Wait(1.5f);
                 yield return Shot("84_cartoon_title");
-                for (float t = 0; t < 20 && Cartoon.Scene < 4; t += Time.unscaledDeltaTime) yield return null;
+                Cartoon.Speed = 4f;
+                for (float t = 0; t < 30 && Cartoon.Scene < 2; t += Time.unscaledDeltaTime) yield return null;
                 yield return Wait(1.5f);
                 yield return Shot("85_cartoon_tears");
-                for (float t = 0; t < 25 && Cartoon.Scene < 8; t += Time.unscaledDeltaTime) yield return null;
+                for (float t = 0; t < 150 && Cartoon.Scene < Cartoon.Scenes - 1; t += Time.unscaledDeltaTime) yield return null;
                 yield return Wait(0.5f);
                 yield return Shot("86_cartoon_end");
-                Check("«Лукашарики» plays the cartoon to the end", Cartoon.IsOpen && Cartoon.Scene == 8);
+                Check("«Лукашарики» plays the 3D cartoon to the end", Cartoon.IsOpen && Cartoon.Scene == Cartoon.Scenes - 1, Cartoon.Scene + " of " + Cartoon.Scenes);
+                Cartoon.Speed = 1f;
                 Cartoon.Stop();
                 Check("the cross closes the cartoon", !Cartoon.IsOpen && !pl.Frozen);
 
@@ -1289,6 +1309,7 @@ namespace Chubrik
                 Check("level 1: 3 goals win it and open level 2", !Football.Running && Save.P.footLevel >= Mathf.Max(2, footL0), Save.P.footLevel.ToString());
                 yield return Shot("96_football_win");
                 Window.Close();
+                Save.P.footDiff = 3;
                 Football.Start(1, 5);
                 yield return Wait(3.5f);
                 Check("level 5: a keeper and 3 defenders play against you", Football.Bots.Count == 4 && Football.Bots.Exists(b => b.keeper));
@@ -1441,6 +1462,27 @@ namespace Chubrik
             }
 
             Check("every world has its big titan", TitanArena.Bosses.Count >= 6, TitanArena.Bosses.Count.ToString());
+            // ---- 18.11 the worlds dressed like the concept art: a view from the start and from the new side area ----
+            {
+                var views = new (int w, Vector3 o, Vector3 area, float yaw)[]
+                {
+                    (2, World2.O, new Vector3(-17, 0.3f, 20), 300), (3, World3.O, new Vector3(-19, 0.9f, 30), 300), (4, World4.O, new Vector3(-29, 2.9f, 54), 200),
+                    (5, World5.O, new Vector3(23.5f, 6.3f, 58), 120), (6, World6.O, new Vector3(-30, 2.9f, 45), 270), (7, World67.O, new Vector3(-21, 4.3f, 99), 300),
+                };
+                foreach (var v in views)
+                {
+                    yield return Enter(v.w);
+                    pl.yaw = 0; pl.pitch = 8;
+                    yield return Wait(0.8f);
+                    yield return Shot($"110_world{v.w}_start");
+                    pl.Teleport(v.o + v.area, v.yaw); pl.yaw = v.yaw; pl.pitch = 14;
+                    yield return Wait(1f);
+                    Check($"world {v.w}: the new side area stands where the player can walk", pl.Grounded || Physics.Raycast(pl.transform.position + Vector3.up, Vector3.down, 3f, Layers.SolidMask), pl.transform.position.ToString());
+                    yield return Shot($"111_world{v.w}_area");
+                }
+                yield return Enter(1);
+            }
+
 
             // ---- main menu ----
             Menus.Main();

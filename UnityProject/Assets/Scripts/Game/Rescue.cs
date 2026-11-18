@@ -57,6 +57,55 @@ namespace Chubrik
             return l;
         }
 
+        /// <summary>18.11: keys found in this visit (each key opens its own cage). Gone in the lobby.</summary>
+        public static readonly HashSet<string> Held = new HashSet<string>();
+
+        /// <summary>The key of a cage: «wNcI» ↔ «wNkI», the backrooms VIPs ↔ «brk0..2»; the titan's cage needs none.</summary>
+        public static string KeyFor(string cageId)
+        {
+            if (cageId == "vipArtemiy") return "brk0";
+            if (cageId == "vipArtem") return "brk1";
+            if (cageId == "vipAli") return "brk2";
+            int c = cageId.IndexOf('c');
+            if (cageId.Length > 2 && cageId[0] == 'w' && c > 1) return cageId.Substring(0, c) + "k" + cageId.Substring(c + 1);
+            return null;
+        }
+
+        /// <summary>A key for this cage in the pocket: its own key, or a spare one (a reward key that fits any cage).</summary>
+        public static bool HasKeyFor(string cageId) { var k = KeyFor(cageId); return (k != null && Held.Contains(k)) || Save.P.keys > Held.Count; }
+
+        static readonly Dictionary<Material, Material> ghosts = new Dictionary<Material, Material>();
+        /// <summary>Makes a thing see-through (cages and keys you already took once).</summary>
+        public static void Ghost(Transform t, float alpha = 0.4f)
+        {
+            foreach (var r in t.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer || r.GetComponent<TMPro.TMP_Text>()) continue;
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+                    if (!ghosts.TryGetValue(m, out var g))
+                    {
+                        var c = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.color;
+                        g = Parts.Glass(ColorUtility.ToHtmlStringRGB(c), alpha);
+                        ghosts[m] = g;
+                    }
+                    mats[i] = g;
+                }
+                r.sharedMaterials = mats;
+            }
+        }
+
+        /// <summary>18.11: coming back into a world — every cage is shut again (see-through if that friend was saved
+        /// before) and every key is back (see-through if taken before).</summary>
+        public static void ResetWorld(string cagePrefix, string keyPrefix)
+        {
+            foreach (var c in Cages) if (c != null && c.id.StartsWith(cagePrefix)) c.ResetGhost();
+            Pickups.I?.ResetKeys(keyPrefix);
+        }
+
         public static void SpawnCage(string id, Vector3 pos, float yaw, Transform parent, bool ice = false) => new GameObject("Cage " + id).AddComponent<Cage>().Build(id, pos, yaw, parent, ice);
 
         /// <summary>The player hit something: a closed cage within reach opens (if there's a key).</summary>
@@ -124,7 +173,7 @@ namespace Chubrik
             id = cageId; ice = iceCube;
             transform.SetParent(parent, false);
             transform.SetPositionAndRotation(pos, Quaternion.Euler(0, yaw, 0));
-            Open = Save.P.rescued.Contains(id);
+            Open = false;   // 18.11: always shut — a friend saved before waits in a see-through cage (you can save him again)
             Parts.Layer = Layers.World;
             var metal = M("5B6370", 0.7f, 0.7f);
             var gold = M("FFC83A", 0.9f, 0.85f);
@@ -174,11 +223,27 @@ namespace Chubrik
             anim = friend.gameObject.AddComponent<ChubrikAnim>();
             anim.model = friend; anim.Preview = true; anim.emote = 6; anim.PlayEmote();   // shrugging, waiting for help
             Rescue.Cages.Add(this);
-            if (Open) { bars.gameObject.SetActive(false); friend.gameObject.SetActive(false); tag.gameObject.SetActive(false); col.enabled = false; }
+            if (Save.P.rescued.Contains(id)) { Rescue.Ghost(bars); ghosted = true; }
         }
 
         public const float Reach = 2.6f;
         float hintT;
+        bool ghosted;
+        public bool Ghosted => ghosted;
+
+        /// <summary>Back in the world: shut again, see-through (the friend was saved before).</summary>
+        public void ResetGhost()
+        {
+            if (!Open && (ghosted || !Save.P.rescued.Contains(id))) return;
+            Open = false; openT = -1;
+            bars.localPosition = Vector3.zero; bars.gameObject.SetActive(true);
+            if (!ghosted && Save.P.rescued.Contains(id)) { Rescue.Ghost(bars); ghosted = true; }
+            friend.gameObject.SetActive(true);
+            friend.transform.localPosition = new Vector3(0, 0.2f, 0); friend.transform.localRotation = Quaternion.identity;
+            anim.emote = 6; anim.PlayEmote();
+            GetComponent<Collider>().enabled = true;
+            transform.Find("Help")?.gameObject.SetActive(true);
+        }
 
         /// <summary>18.11: opened by beating the titan — no key needed.</summary>
         public void Free()
@@ -196,20 +261,22 @@ namespace Chubrik
             if (ice)
             {
                 // 15.11: the ice needs a snowy key too — then a jump attack breaks it
-                if (Save.P.keys <= 0) { AudioFx.Play("error"); Hud.Toast("Нужен снежный ключ! Найди его в Снежной долине", UIKit.Cyan); return; }
+                if (!Rescue.HasKeyFor(id)) { AudioFx.Play("error"); Hud.Toast("Нужен снежный ключ от этого льда! У каждого друга свой ключ", UIKit.Cyan); return; }
                 var pl = PlayerCtl.I;
                 if (pl != null && pl.Grounded) { AudioFx.Play("bonk"); Hud.Toast("Лёд крепкий! Прыгни и ударь в прыжке", UIKit.Cyan); return; }
             }
-            else if (Save.P.keys <= 0)
+            else if (!Rescue.HasKeyFor(id))
             {
                 AudioFx.Play("error");
-                Hud.Toast("Нужен золотой ключ! Ищи ключи на островах", UIKit.Orange);
+                Hud.Toast("Нужен ключ от этой клетки! У каждого друга свой ключ — ищи его", UIKit.Orange);
                 return;
             }
-            Save.P.keys--;
+            var kid = Rescue.KeyFor(id);
+            if (kid == null || !Rescue.Held.Remove(kid)) { }   // a spare key
+            Save.P.keys = Mathf.Max(0, Save.P.keys - 1);
             if (ice) { AudioFx.Play("crate"); Effects.Emit("ice", transform.position + Vector3.up * 1.2f, 60, 1f, Vector3.up * 3); }
-            Save.P.rescued.Add(id);
-            Save.P.coins += 50;
+            bool again = Save.P.rescued.Contains(id);
+            if (!again) { Save.P.rescued.Add(id); Save.P.coins += 50; } else Save.P.coins += 10;
             Save.Write();
             Open = true;
             openT = 0;
@@ -218,9 +285,9 @@ namespace Chubrik
             AudioFx.Play("open");
             AudioFx.Play("token");
             var nm = Rescue.NameOf(id);
-            Hud.Toast($"Ты спас друга {nm}! +50 монет. Он ждёт тебя в лобби", UIKit.Lime);
+            Hud.Toast(again ? $"Ты снова спас друга {nm}! +10 монет" : $"Ты спас друга {nm}! +50 монет. Он ждёт тебя в лобби", UIKit.Lime);
             Effects.Emit("confetti", transform.position + Vector3.up * 2.5f, 90, 0.4f, Vector3.up * 4);
-            Rescue.AddLobbyFriend(id);
+            if (!again) Rescue.AddLobbyFriend(id);
         }
 
         void Update()
@@ -232,8 +299,9 @@ namespace Chubrik
                 hintT -= Time.deltaTime;
                 if (d.magnitude < Reach + 0.6f && hintT <= 0)
                 {
-                    if (ice) Hud.Toast(Save.P.keys > 0 ? "Друг вмёрз в лёд! Прыгни и ударь в прыжке — лёд разобьётся" : "Друг вмёрз в лёд! Нужен снежный ключ", UIKit.Cyan);
-                    else Hud.Toast(Save.P.keys > 0 ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен золотой ключ! Ищи ключи на островах", Save.P.keys > 0 ? UIKit.Lime : UIKit.Orange);
+                    bool has = Rescue.HasKeyFor(id);
+                    if (ice) Hud.Toast(has ? "Друг вмёрз в лёд! Прыгни и ударь в прыжке — лёд разобьётся" : "Друг вмёрз в лёд! Нужен его снежный ключ", UIKit.Cyan);
+                    else Hud.Toast(has ? (Hud.Touch ? "Нажми «УДАР» — клетка откроется!" : "Ударь (F) — клетка откроется!") : "Нужен ключ от этой клетки! У каждого друга свой ключ", has ? UIKit.Lime : UIKit.Orange);
                     hintT = 6;
                 }
                 else if (d.magnitude > Reach + 2) hintT = 0;

@@ -73,7 +73,7 @@ namespace Chubrik
                 PlayerCtl.I.WaterY = -0.9f;
                 PlayerCtl.I.Hearts = Save.P.maxHearts;
                 PlayerCtl.I.Teleport(Lobby.Spawn, 0);
-                Save.P.keys = 0; Save.Write();   // 18.11: you start in the lobby without keys
+                Save.P.keys = 0; Rescue.Held.Clear(); Save.Write();   // 18.11: you start in the lobby without keys
             }
         }
 

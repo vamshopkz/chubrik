@@ -40,6 +40,8 @@ namespace Chubrik
         public bool Plunging => plunge != 0;
         public bool PlungeBig => plunge == 2;
         public int Plunges { get; private set; }
+        bool superBounce;
+        public int SuperBounces { get; private set; }
         public bool HoldAttack;   // tests: B held from code
         public bool AttackHeld { get; private set; }
         /// <summary>Ledge grab: a jump that falls short catches the edge by itself and climbs up.</summary>
@@ -435,6 +437,7 @@ namespace Chubrik
         void StartPlunge(bool big)
         {
             if (big && plunge == 2) return;
+            superBounce = false;
             bool was = plunge != 0;
             SetDive(0);
             EndLeap();
@@ -452,6 +455,22 @@ namespace Chubrik
         {
             bool big = plunge == 2;
             plunge = 0; Anim.plunge = false;
+            if (big && superBounce)
+            {
+                // the super bounce: higher than a double jump
+                superBounce = false;
+                SuperBounces++;
+                SetDive(0);
+                vel = new Vector3(0, 18.5f, 0); Grounded = false; coyote = 0; airJumps = 0; airJumped = true;
+                AudioFx.Play("boing", 1f); AudioFx.Play("land4", 0.8f);
+                Effects.Emit("dust", transform.position, 26, 0.8f);
+                Effects.Emit("stardust", transform.position + Vector3.up * 0.5f, 18, 0.6f);
+                Hit(transform.position + Vector3.up * 0.3f, 1.8f);
+                World4.HitNear(transform.position, true);
+                Rescue.HitNear(transform.position);
+                Anim.Flip();
+                return;
+            }
             SetDive(2);
             vel = new Vector3(0, big ? 4.5f : 2.5f, 0); Grounded = false;   // boing!
             AudioFx.Play("land4", big ? 1f : 0.6f); AudioFx.Play("punch", big ? 0.9f : 0.5f);
@@ -603,17 +622,12 @@ namespace Chubrik
                 Hit(transform.position + Vector3.up * 0.6f + transform.forward * 0.6f, 1.0f);
                 return;
             }
-            if (!Grounded && airJumped && !Riding)
+            if (!Grounded && airJumped && !Riding && hang == 0 && !Snowmobile)
             {
-                attackDownT = Time.time;
-                // the dive: forward and down on the belly
-                var f = transform.forward; f.y = 0; f.Normalize();
-                vel = f * 12.5f + Vector3.up * Mathf.Max(vel.y * 0.3f, 3.5f);
-                SetDive(1);
-                Dives++;
+                // 18.11: A + A + B — straight down, and off the ground you bounce up higher than a double jump
+                StartPlunge(true);
+                superBounce = true;
                 attackCd = 0.4f;
-                AudioFx.Play("swing"); AudioFx.Play("jump5", 0.5f);
-                Effects.Emit("stardust", transform.position + Vector3.up * 0.6f, 10, 0.3f);
                 return;
             }
             attackCd = 0.4f;

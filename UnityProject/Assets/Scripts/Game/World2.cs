@@ -12,6 +12,7 @@ namespace Chubrik
         public static void Enter(int w)
         {
             var p = PlayerCtl.I;
+            bool wasBuilt = (w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null) != null;
             if (w == 2 && World2.Root == null) World2.Build();
             if (w == 3 && World3.Root == null) World3.Build();
             if (w == 4 && World4.Root == null) World4.Build();
@@ -21,7 +22,14 @@ namespace Chubrik
             Eggs.SpawnWorld(w);
             Bird.ForWorld(w);
             var wr = w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null;
+            if (wr != null && !wasBuilt) Scenery.Build(w);   // 18.11: the worlds dressed like the concept art
             if (wr != null) TitanArena.Build(w, wr);   // 18.11: a big boss in every world
+            if (wr != null && wasBuilt)
+            {
+                // 18.11: coming back — every cage and key is there again (see-through if done before), the boss is back
+                Rescue.ResetWorld("w" + w + "c", "w" + w + "k");
+                if (TitanArena.Bosses.TryGetValue(w, out var tb)) tb.Respawn();
+            }
             AdminPanel.Restore();
             if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
@@ -37,8 +45,8 @@ namespace Chubrik
                     p.Checkpoint = w == 7 ? World67.Spawn : w == 6 ? World6.Spawn : w == 5 ? World5.Spawn : w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
                     p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast(w == 7 ? "МИР 67 — ГЛЮЧНЫЙ СИКС-СЕВЕН. Спаси 67 друзей… ну, сколько найдёшь!" : w == 6 ? "МИР 6 — ГЛЮК-МИР. Что-то пошло не так… и это прекрасно!" : w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 8 друзей изо льда" :
-                              w == 3 ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 8 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. Найди 8 ключей и спаси 8 друзей из клеток!",
+                    Hud.Toast(w == 7 ? "МИР 67 — ГЛЮЧНЫЙ СИКС-СЕВЕН. Спаси 67 друзей… ну, сколько найдёшь!" : w == 6 ? "МИР 6 — ГЛЮК-МИР. Что-то пошло не так… и это прекрасно!" : w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 12 друзей изо льда" :
+                              w == 3 ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 12 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. У каждой клетки свой ключ — спаси 12 друзей! Где-то ждёт босс",
                               w == 4 ? UIKit.Cyan : w == 3 ? UIKit.Cyan : UIKit.Lime);
                 }
                 else
@@ -49,7 +57,7 @@ namespace Chubrik
                     p.Hearts = Save.P.maxHearts;
                     // 18.11: keys are for the world they were found in — back at the start they are gone
                     bool hadKeys = Save.P.keys > 0;
-                    Save.P.keys = 0; Save.Write();
+                    Save.P.keys = 0; Rescue.Held.Clear(); Save.Write();
                     Hud.Toast(hadKeys ? "С возвращением в лобби! Ключи остались в том мире" : "С возвращением в лобби!", UIKit.Gold);
                 }
                 p.SafePos = p.transform.position + Vector3.up * 0.2f;

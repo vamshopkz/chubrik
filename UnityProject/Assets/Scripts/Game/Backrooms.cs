@@ -81,7 +81,9 @@ namespace Chubrik
 
         public static void Enter()
         {
-            if (Root == null) Build();
+            bool fresh = Root == null;
+            if (fresh) Build();
+            else Rescue.ResetWorld("vip", "brk");   // 18.11: cages and keys again (see-through if done before)
             Entered++;
             var pl = PlayerCtl.I;
             Hud.Glitch();

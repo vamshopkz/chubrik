@@ -8,7 +8,7 @@ namespace Chubrik
     public class Pickups : MonoBehaviour
     {
         public static Pickups I;
-        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key, crystal, egg; public float back; public bool active = true; }
+        class P { public GameObject go; public Vector3 pos; public int value; public string token; public bool key, crystal, egg, ghost; public float back; public bool active = true; }
         readonly List<P> items = new List<P>();
         GameObject arrow;
         public int CoinsAlive { get { int n = 0; foreach (var p in items) if (p.active && p.token == null) n++; return n; } }
@@ -57,7 +57,7 @@ namespace Chubrik
         /// <summary>Golden key: opens one cage with a captured friend (taken once forever).</summary>
         public void Key(string id, Vector3 pos, bool snowy = false)
         {
-            if (Save.P.found.Contains(id)) return;
+            // 18.11: a key taken before comes back see-through (its friend can be saved again)
             Parts.Layer = Layers.Pickup;
             var go = new GameObject("Key " + id) { layer = Layers.Pickup };
             go.transform.SetParent(transform, false);
@@ -65,7 +65,9 @@ namespace Chubrik
             if (snowy) KeyModel.BuildSnow(go.transform); else KeyModel.Build(go.transform);
             go.AddComponent<Spin>().speed = 120;
             go.AddComponent<Bob>().amp = 0.15f;
-            items.Add(new P { go = go, pos = pos, token = id, key = true });
+            bool ghost = Save.P.found.Contains(id);
+            if (ghost) Rescue.Ghost(go.transform);
+            items.Add(new P { go = go, pos = pos, token = id, key = true, ghost = ghost });
         }
 
         /// <summary>Rare crystal of World 3 (taken once forever): powers the Guardian's gate.</summary>
@@ -103,6 +105,18 @@ namespace Chubrik
         public int KeysLeft { get { int n = 0; foreach (var p in items) if (p.key && p.active) n++; return n; } }
         public int TokensLeft { get { int n = 0; foreach (var p in items) if (p.token != null && !p.key && !p.crystal && !p.egg && p.active) n++; return n; } }
         public Vector3? CrystalPos() { foreach (var p in items) if (p.crystal && p.active) return p.pos; return null; }
+        /// <summary>18.11: back into a world — its keys are all there again (see-through if taken before).</summary>
+        public void ResetKeys(string prefix)
+        {
+            foreach (var p in items)
+            {
+                if (!p.key || !p.token.StartsWith(prefix)) continue;
+                if (!p.ghost && Save.P.found.Contains(p.token)) { Rescue.Ghost(p.go.transform); p.ghost = true; }
+                if (p.active) continue;
+                p.active = true; p.go.SetActive(true);
+            }
+        }
+
         public int KeysLeftIn(string prefix) { int n = 0; foreach (var p in items) if (p.key && p.active && p.token.StartsWith(prefix)) n++; return n; }
         public int CrystalsLeft { get { int n = 0; foreach (var p in items) if (p.crystal && p.active) n++; return n; } }
         public IEnumerable<Vector3> TokenSpots() { foreach (var p in items) if (p.token != null && p.active) yield return p.pos; }
@@ -164,7 +178,8 @@ namespace Chubrik
             p.go.SetActive(false);
             if (p.key)
             {
-                Save.P.found.Add(p.token);
+                if (!Save.P.found.Contains(p.token)) Save.P.found.Add(p.token);
+                Rescue.Held.Add(p.token);
                 Save.P.keys++;
                 Save.Write();
                 AudioFx.Play("token");

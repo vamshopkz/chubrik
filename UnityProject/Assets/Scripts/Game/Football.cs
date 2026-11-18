@@ -15,7 +15,7 @@ namespace Chubrik
     public static class Football
     {
         public static readonly Vector3 O = new Vector3(-3000, 30, 0);
-        public const float HalfL = 21f, HalfW = 13f, GoalW = 3.6f, GoalH = 2.7f, BallR = 0.38f;
+        public const float HalfL = 21f, HalfW = 13f, GoalW = 4.2f, GoalH = 2.9f, BallR = 0.38f;   // 18.11: wider goals
         public const int Levels = 10;
         public static Rigidbody Ball;
         public static Transform Root;
@@ -26,6 +26,12 @@ namespace Chubrik
         public static bool Running, Host = true;
         public static string Friend;
         public static readonly List<FootBot> Bots = new List<FootBot>();
+        /// <summary>18.11 difficulty: 0 super easy, 1 easy, 2 medium, 3 hard.</summary>
+        public static readonly string[] DiffNames = { "СУПЕРЛЁГКАЯ", "ЛЁГКАЯ", "СРЕДНЯЯ", "СЛОЖНАЯ" };
+        public static int Diff => Mathf.Clamp(Save.P.footDiff, 0, 3);
+        public static float BotSpeedK => Diff switch { 0 => 0.4f, 1 => 0.6f, 2 => 0.82f, _ => 1.05f };
+        public static float BotKickK => Diff switch { 0 => 0.55f, 1 => 0.7f, 2 => 0.88f, _ => 1f };
+        static int MaxDefenders => Diff switch { 0 => 1, 1 => 2, 2 => 3, _ => 4 };
         public static int Goals;           // autotest: goals counted
         public static Vector3 NetPos => netPos;
         static float startedAt;
@@ -41,14 +47,16 @@ namespace Chubrik
         public static void BuildPad(Transform lobby)
         {
             Physics.SyncTransforms();
-            PadPos = Lobby.Spawn + new Vector3(6, -0.3f, 0);
-            for (int ring = 0; ring < 4; ring++)
+            // 18.11: next to the portal of World 67 (in the park), not by the water
+            var p67 = Lobby.Portal67;
+            PadPos = p67 + new Vector3(6, 0, 3);
+            for (int ring = 0; ring < 5; ring++)
             {
                 bool found = false;
                 for (int k = 0; k < 16 && !found; k++)
                 {
-                    float a = k * Mathf.PI * 2 / 16 + ring * 0.2f, r = 15f + ring * 2.5f;   // away from the start (tests and players run about there)
-                    var c = new Vector3(Lobby.Spawn.x + Mathf.Cos(a) * r, 0, Lobby.Spawn.z + Mathf.Sin(a) * r);
+                    float a = k * Mathf.PI * 2 / 16 + ring * 0.2f, r = 5f + ring * 1.5f;
+                    var c = new Vector3(p67.x + Mathf.Cos(a) * r, 0, p67.z + Mathf.Sin(a) * r);
                     if (!Physics.Raycast(c + Vector3.up * 5, Vector3.down, out var hit, 8, Layers.SolidMask, QueryTriggerInteraction.Ignore) || Mathf.Abs(hit.point.y) > 0.2f) continue;
                     if (Physics.CheckBox(c + Vector3.up * 1.5f, new Vector3(1.8f, 1.3f, 1.8f), Quaternion.identity, ~0, QueryTriggerInteraction.Ignore)) continue;
                     bool near = false;
@@ -197,6 +205,9 @@ namespace Chubrik
             Window.Show("ФУТБОЛ", w =>
             {
                 w.Text("Беги в мяч — ведёшь его. Нажми B (удар) рядом с мячом — сильный удар. Забивай в ворота справа!", 24, UIKit.Muted);
+                var chips = new List<(string, Color, bool, System.Action)>();
+                for (int d = 0; d < 4; d++) { int dd = d; chips.Add((DiffNames[d], d == 0 ? UIKit.Lime : d == 1 ? UIKit.Green : d == 2 ? UIKit.Orange : UIKit.Red, Diff == d, () => { Save.P.footDiff = dd; Save.Write(); Window.Refresh(); })); }
+                w.Chips("Сложность (боты, вратарь, время)", chips);
                 var on = Online.I;
                 bool friend = on != null && on.RoomPeer != null;
                 w.Row("Играть с другом", friend ? "Один мяч на двоих, 3 минуты. Друг тоже окажется на стадионе" : "Сначала пригласи друга в «Игроки онлайн» — и вы будете в одной комнате",
@@ -223,12 +234,12 @@ namespace Chubrik
             Window.Close();
             ClearBots();
             Mode = mode; Level = level; Me = Them = 0; Host = true; Friend = null; startedAt = Time.time;
-            TimeLeft = mode == 1 ? (level == 1 ? 90 : 120) : mode == 2 ? 180 : 0;
+            TimeLeft = mode == 1 ? (level == 1 ? 90 : 120) + (3 - Diff) * 30 : mode == 2 ? 180 : 0;
             Running = mode != 3;
             if (mode == 1 && level >= 2)
             {
                 Bots.Add(FootBot.Spawn(true, 0, level));
-                for (int i = 0; i < Mathf.Min(level - 2, 4); i++) Bots.Add(FootBot.Spawn(false, i, level));
+                for (int i = 0; i < Mathf.Min(level - 2, MaxDefenders); i++) Bots.Add(FootBot.Spawn(false, i, level));
             }
             ResetBall();
             Board(true);
@@ -477,7 +488,7 @@ namespace Chubrik
         ChubrikAnim anim;
         float kickCd;
         Vector3 Home => Football.O + (keeper ? new Vector3(Football.HalfL - 1.2f, 0, 0) : new Vector3(6 + index * 3, 0, (index - 1.5f) * 4));
-        float Speed => (keeper ? 3.6f : 3.4f) + level * 0.32f;
+        float Speed => ((keeper ? 3.0f : 2.8f) + level * 0.22f) * Football.BotSpeedK;   // 18.11: easier, and by difficulty
 
         public static FootBot Spawn(bool keeper, int index, int level)
         {
@@ -534,12 +545,12 @@ namespace Chubrik
             if (anim) { anim.speed01 = Mathf.Clamp01(sp / 6.8f); anim.grounded = true; }
             // kick when the ball is at the feet
             var d = bp - transform.position;
-            if (kickCd <= 0 && new Vector2(d.x, d.z).magnitude < (keeper ? 1.5f : 1.1f) && d.y < 1.6f)
+            if (kickCd <= 0 && new Vector2(d.x, d.z).magnitude < (keeper ? 0.9f + Football.Diff * 0.2f : 1.0f) && d.y < 1.6f)
             {
-                kickCd = 0.6f;
+                kickCd = 0.9f + (3 - Football.Diff) * 0.3f;
                 var aim = O + new Vector3(-Football.HalfL - 1, 0, Random.Range(-Football.GoalW + 0.8f, Football.GoalW - 0.8f));
                 var dir = aim - bp; dir.y = 0; dir.Normalize();
-                float power = keeper ? 15f : 8.5f + level * 0.7f;
+                float power = (keeper ? 13f : 7.5f + level * 0.5f) * Football.BotKickK;
                 Football.BotKick(dir * power + Vector3.up * (keeper ? 5f : 1.8f));
                 if (anim) anim.Attack();
                 AudioFx.Play("punch", 0.5f);
