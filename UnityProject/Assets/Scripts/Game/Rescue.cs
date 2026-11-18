@@ -180,6 +180,16 @@ namespace Chubrik
         public const float Reach = 2.6f;
         float hintT;
 
+        /// <summary>18.11: opened by beating the titan — no key needed.</summary>
+        public void Free()
+        {
+            if (Open) return;
+            bool wasIce = ice; ice = false;
+            Save.P.keys++;
+            TryOpen();
+            ice = wasIce;
+        }
+
         public void TryOpen()
         {
             if (Open) return;

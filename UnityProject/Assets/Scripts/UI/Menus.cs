@@ -73,6 +73,7 @@ namespace Chubrik
                 PlayerCtl.I.WaterY = -0.9f;
                 PlayerCtl.I.Hearts = Save.P.maxHearts;
                 PlayerCtl.I.Teleport(Lobby.Spawn, 0);
+                Save.P.keys = 0; Save.Write();   // 18.11: you start in the lobby without keys
             }
         }
 
@@ -96,6 +97,7 @@ namespace Chubrik
                 w.Row("Продолжить", null, "ИГРАТЬ", UIKit.Green, () => { Window.Close(); LockCursor(); });
                 w.Row("Игроки онлайн", Online.I != null && Online.I.Peers.Count > 0 ? $"Сейчас играют: {Online.I.Peers.Count} — нажми и окажешься рядом" : "Кто сейчас играет — можно прийти к ним", "СМОТРЕТЬ", UIKit.Violet, PlayersUI.Open);
                 if (Online.I != null && Online.I.RoomWith != null) w.Row("Ты в комнате с другом", "Выйди, если хочешь играть один", "ВЫЙТИ", UIKit.Red, () => Online.I.LeaveRoom());
+                if (Worlds.Current == 1 && !Worlds.Level) w.Row("Футбол", Football.Inside(PlayerCtl.I.transform.position) ? "Ты на стадионе" : "Стадион: 10 уровней или матч с другом", Football.Inside(PlayerCtl.I.transform.position) ? "В ЛОББИ" : "ИГРАТЬ", UIKit.Green, () => { if (Football.Inside(PlayerCtl.I.transform.position)) { Window.Close(); Football.Leave(); } else Football.Menu(); });
                 w.Row("Промокоды", "Напиши секретное слово — и случится что-то интересное", "ВВЕСТИ", UIKit.Pink, PromoWindow);
                 w.Row("Таблица рекордов", "Кто больше всех собрал монет, друзей, миров, жетонов и яиц", "СМОТРЕТЬ", UIKit.Orange, RecordsUI.Open);
                 w.Row("Настройки", null, "ОТКРЫТЬ", UIKit.Blue, Settings);

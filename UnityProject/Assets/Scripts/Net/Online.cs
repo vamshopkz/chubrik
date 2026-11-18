@@ -339,6 +339,9 @@ namespace Chubrik
                 case "N" when f.Length >= 3:
                     if (f[2] == Id && Invited.Remove(id)) Hud.Toast($"«{NickOf(id)}» сейчас не может играть вместе", UIKit.Orange);
                     break;
+                case "FS": case "FB": case "FK": case "FE":
+                    Football.OnNet(f, id);
+                    break;
                 case "L" when f.Length >= 3:
                     if (f[2] == Id && RoomWith == id) { RoomWith = null; Hud.Toast("Друг вышел из комнаты", UIKit.Orange); }
                     break;

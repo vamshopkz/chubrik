@@ -27,6 +27,7 @@ namespace Chubrik
         public int quality = -1;
         public bool wolf;                                    // 15.11: the hero became a wolf (one-time look change done)
         public string nick = "";                             // 17.11: nickname for the records table (Settings)
+        public int footLevel = 1;                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)
     }
 

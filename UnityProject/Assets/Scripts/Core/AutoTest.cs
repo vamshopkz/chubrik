@@ -525,6 +525,41 @@ namespace Chubrik
             yield return Shot("21_secret_lootbox");
             ShopUI.CloseBox();
 
+            // ---- 18.11: the big boss of the world — a titan in its own arena, then a friend is free ----
+            {
+                Check("world 2 has a titan arena with a pad near the start", TitanArena.Bosses.ContainsKey(2) && TitanArena.Pads.ContainsKey(2) && Vector3.Distance(TitanArena.Pads[2], World2.Spawn) < 12);
+                var boss = TitanArena.Bosses[2];
+                Save.P.rescued.Remove(TitanArena.FriendOf(2));
+                TitanArena.Go(2);
+                yield return Wait(2.5f);
+                pl.yaw = 0; pl.pitch = 18;
+                yield return Shot("98_titan");
+                int stomp0 = boss.Stomps;
+                pl.Teleport(boss.transform.position + boss.transform.forward * 7f + Vector3.up * 0.3f, boss.transform.eulerAngles.y + 180);
+                for (float t = 0; t < 8 && boss.Stomps == stomp0; t += Time.deltaTime) yield return null;
+                yield return Wait(0.3f);
+                yield return Shot("99_titan_wave");
+                Check("the titan wakes up, walks and stomps (a shock wave)", boss.Awake && boss.Stomps > stomp0, boss.Stomps.ToString());
+                pl.Hearts = Save.P.maxHearts;
+                boss.TestTire();
+                yield return Wait(0.6f);
+                int bossHp0 = boss.Hp;
+                pl.Teleport(boss.transform.position + boss.transform.forward * 2.3f + Vector3.up * 0.3f, boss.transform.eulerAngles.y + 180);
+                pl.yaw = boss.transform.eulerAngles.y + 180;
+                yield return Wait(0.5f);
+                yield return Shot("100_titan_kneels");
+                for (int k = 0; k < 3; k++) { pl.Attack(); yield return Wait(0.5f); }
+                Check("a tired titan kneels — hits on its heart hurt it", boss.Hp < bossHp0, $"{bossHp0} → {boss.Hp}");
+                boss.Damage(boss.Hp);
+                for (float t = 0; t < 5 && !boss.Defeated; t += Time.deltaTime) yield return null;
+                yield return Wait(1.5f);
+                yield return Shot("101_titan_defeated");
+                Check("the titan beaten: the friend in the arena cage is free", boss.Defeated && Save.P.rescued.Contains(TitanArena.FriendOf(2)));
+                TitanArena.Leave(2);
+                yield return Wait(1.5f);
+                Check("back from the arena to the world's start", Vector3.Distance(pl.transform.position, World2.Spawn) < 3, pl.transform.position.ToString());
+            }
+
             // ---- keys and cages ----
             Check("8 cages and 8 golden keys in world 2", Rescue.Total("w2") == 8 && Pickups.I.KeysLeftIn("w2") == 8, $"cages {Rescue.Total("w2")}, keys {Pickups.I.KeysLeftIn("w2")}");
             var cage = Rescue.Cages.Find(c => c.id == "w2c0");
@@ -987,6 +1022,7 @@ namespace Chubrik
                 pl.MoveInput = Vector2.zero;
                 float leapDist = Vector3.Distance(new Vector3(leapFrom.x, 0, leapFrom.z), new Vector3(pl.transform.position.x, 0, pl.transform.position.z));
                 Check("run + B + A = the leap «хэ-хэй» (flies far forward)", leaping && pl.Leaps == leaps0 + 1 && leapDist > 4f, $"leaps {pl.Leaps - leaps0}, flew {leapDist:0.0} m");
+                Window.Close();   // the leap may land on the football pad (its menu opens)
 
                 // ledge grab: jump at a ledge that is too high — he catches the edge and climbs up
                 var lt = new GameObject("LedgeTest").transform;
@@ -1200,6 +1236,77 @@ namespace Chubrik
                 Check("joined players get «Выйти из комнаты» and can leave", inRoom && leaveBtn && Online.I.RoomWith == null);
                 Online.I.Inject("B|room1peer");
                 yield return Enter(1);
+
+                // ---- 18.11: wall joints, a tree into the backrooms, keys burn in the lobby, football ----
+                Check("every wall joint has one round post (no flickering overlaps)", Lobby.Posts >= 30, Lobby.Posts.ToString());
+                pl.Teleport(new Vector3(23.2f, 0.3f, -49.6f), 135); pl.yaw = 135; pl.pitch = 10;
+                yield return Wait(0.6f);
+                yield return Shot("93_wall_corner");
+
+                var tops = new List<TreeTop>(FindObjectsByType<TreeTop>(FindObjectsSortMode.None)).FindAll(t => t.name == "TreeTop");
+                Check("lobby trees can be climbed (branches up to a leafy top)", tops.Count >= 10 && GameObject.Find("TreeBranch") != null, tops.Count + " trees");
+                if (tops.Count > 0)
+                {
+                    var treeT = tops[0].transform;
+                    pl.Teleport(treeT.position + Vector3.up * 0.6f, 0);
+                    for (float t = 0; t < 1.5f && !pl.Grounded; t += Time.deltaTime) yield return null;
+                    yield return Wait(0.2f);
+                    pl.yaw = 30; pl.pitch = 25;
+                    yield return Shot("94_tree_top");
+                    pl.QueueJump();
+                    yield return Wait(0.35f);
+                    pl.QueueJump();
+                    for (float t = 0; t < 2f && !Backrooms.Inside; t += Time.deltaTime) yield return null;
+                    Check("from a tree top two jumps take you into the backrooms", Backrooms.Inside && Backrooms.FromTree > 0, $"{Backrooms.FromTree} lastTop {pl.LastTreeTop:0.0} now {Time.time:0.0} open {Menus.AnyOpen}");
+                    if (Backrooms.Inside) { yield return Wait(0.5f); Backrooms.Exit(); yield return Wait(1.5f); }
+                }
+
+                Save.P.keys = 3;
+                yield return Enter(1);
+                Check("back in the starting world the keys are gone", Save.P.keys == 0, Save.P.keys.ToString());
+
+                Football.Start(1, 1);
+                yield return Wait(2.2f);
+                Check("the football pad and the stadium", Football.Root != null && Football.Ball != null && Football.Inside(pl.transform.position) && Football.PadPos != Vector3.zero);
+                int fg0 = Football.Me;
+                Football.Ball.position = Football.O + new Vector3(Football.HalfL - 2f, 0.6f, 0.5f); Football.Ball.linearVelocity = new Vector3(14, 0, 0);
+                yield return Wait(1f);
+                Check("a ball in the goal is a goal", Football.Me == fg0 + 1, Football.Me.ToString());
+                yield return Wait(0.3f);
+                pl.Teleport(Football.O + new Vector3(-3, 0.3f, 0), 90); pl.yaw = 90;
+                yield return Wait(0.5f);
+                Football.Ball.position = Football.O + new Vector3(-1.9f, Football.BallR + 0.05f, 0); Football.Ball.linearVelocity = Vector3.zero;
+                yield return Wait(0.6f);
+                pl.Attack();
+                yield return null;
+                Check("B next to the ball kicks it hard", Football.Ball.linearVelocity.magnitude > 8, Football.Ball.linearVelocity.magnitude.ToString("0.0"));
+                yield return Shot("95_football_kick");
+                int footL0 = Save.P.footLevel;
+                for (int k = 0; k < 2; k++) { Football.Ball.position = Football.O + new Vector3(Football.HalfL - 2f, 0.6f, 0); Football.Ball.linearVelocity = new Vector3(14, 0, 0); yield return Wait(1.2f); }
+                Check("level 1: 3 goals win it and open level 2", !Football.Running && Save.P.footLevel >= Mathf.Max(2, footL0), Save.P.footLevel.ToString());
+                yield return Shot("96_football_win");
+                Window.Close();
+                Football.Start(1, 5);
+                yield return Wait(3.5f);
+                Check("level 5: a keeper and 3 defenders play against you", Football.Bots.Count == 4 && Football.Bots.Exists(b => b.keeper));
+                pl.yaw = 90; pl.pitch = 20;
+                yield return Shot("97_football_bots");
+                // a match with a friend (their messages come as if over the internet)
+                Online.I.Inject($"H|ballpeer|{Application.version}|1|color=color_2|Друг");
+                Online.I.Invite(Online.I.Peers["ballpeer"]);
+                Online.I.Inject($"A|ballpeer|{Online.I.Id}");
+                Online.I.Inject($"FS|ballpeer|{Online.I.Id}");
+                yield return Wait(1.5f);
+                Online.I.Inject($"FB|ballpeer|0.00|1.00|5.00|0|0|0|2|1|170.0");
+                yield return Wait(0.8f);
+                Check("football with a friend: the friend's ball and score come over the network", Football.Mode == 2 && !Football.Host && (Football.Ball.position - (Football.O + new Vector3(0, 1, 5))).magnitude < 1.5f && Football.Them == 2 && Football.Me == 1,
+                    $"mode {Football.Mode} host {Football.Host} room {Online.I.RoomWith} ball {Football.Ball.position - Football.O} net {Football.NetPos - Football.O} kin {Football.Ball.isKinematic} {Football.Me}:{Football.Them}");
+                Football.Leave();
+                yield return Wait(1.5f);
+                Online.I.LeaveRoom();
+                Online.I.Inject("B|ballpeer");
+                yield return Wait(1f);
+                Check("leaving the stadium takes you back to the lobby", !Football.Inside(pl.transform.position) && Football.Mode == 0);
             }
 
             // ---- online: the real public relay, a made-up player whose messages go through it ----
@@ -1262,6 +1369,8 @@ namespace Chubrik
                 for (float t = 0; t < 6 && Online.I.Peers.ContainsKey(fid); t += Time.unscaledDeltaTime) yield return null;
                 Check("a player who leaves disappears from the list", !Online.I.Peers.ContainsKey(fid));
             }
+
+            Check("every world has its big titan", TitanArena.Bosses.Count >= 6, TitanArena.Bosses.Count.ToString());
 
             // ---- main menu ----
             Menus.Main();

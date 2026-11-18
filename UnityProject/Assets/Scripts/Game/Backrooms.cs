@@ -39,6 +39,8 @@ namespace Chubrik
         public static Vector3 SeamPos => Anchor + Vector3.up * 3.1f;
 
         /// <summary>Every frame from the player: the way in (lobby), the way out, the lamp buzz.</summary>
+        public static int FromTree;   // autotest
+
         public static void Tick(PlayerCtl pl)
         {
             bool inside = Inside;
@@ -61,7 +63,9 @@ namespace Chubrik
             seam.transform.position = s;
             var p = pl.transform.position;
             var h = p - s; h.y = 0;
-            if (!pl.Grounded && pl.AirJumped && h.magnitude < 1.7f && p.y > s.y - 1.6f && p.y < s.y + 1.5f) Enter();
+            if (!pl.Grounded && pl.AirJumped && h.magnitude < 1.7f && p.y > s.y - 1.6f && p.y < s.y + 1.5f) { Enter(); return; }
+            // 18.11: or climb a tree and jump off it with two jumps
+            if (!pl.Grounded && pl.AirJumped && pl.LastTreeTop > 0 && Time.time - pl.LastTreeTop < 3f) { pl.LastTreeTop = 0; FromTree++; Enter(); }
         }
 
         static void MakeSeam()
@@ -307,4 +311,7 @@ namespace Chubrik
             transform.localScale = Vector3.one * Random.Range(0.85f, 1.15f);
         }
     }
+
+    /// <summary>18.11: the top of a tree (or the tree house) — jump off it with two jumps to fall into the backrooms.</summary>
+    public class TreeTop : MonoBehaviour { }
 }

@@ -47,6 +47,8 @@ namespace Chubrik
         float hangT, grabCd;
         Vector3 hangPos, hangTop;
         public bool Hanging => hang != 0;
+        /// <summary>18.11: when we last stood on a tree top (two jumps off it lead into the backrooms).</summary>
+        public float LastTreeTop;
         public int Grabs { get; private set; }
         /// <summary>The jet snowmobile from the frozen mailbox: fast, climbs steep slopes, knocks snowmen over.</summary>
         public bool Snowmobile;
@@ -284,6 +286,7 @@ namespace Chubrik
             var flags = CC.Move(vel * dt);
             Grounded = (flags & CollisionFlags.Below) != 0;
             OnIce = Grounded && ground != null && ground.GetComponentInParent<Ice>() != null;
+            if (Grounded && ground != null && ground.GetComponent<TreeTop>() != null) LastTreeTop = Time.time;
             if ((flags & CollisionFlags.Above) != 0 && vel.y > 0) vel.y = 0;
             if (Grounded && ground != null) { groundLocal = ground.InverseTransformPoint(transform.position); groundRot = ground.rotation; }
             if (plunge != 0 && Grounded) PlungeLand();
@@ -480,6 +483,7 @@ namespace Chubrik
                 var tile = hit.collider.GetComponent<NoteTile>();
                 if (tile != null) tile.Press();
             }
+            if (hit.rigidbody != null && !hit.rigidbody.isKinematic && hit.rigidbody == Football.Ball) Football.Touch(hit.moveDirection, new Vector3(vel.x, 0, vel.z).magnitude);
             var hurt = hit.collider.GetComponentInParent<Hurter>();
             if (hurt != null) hurt.Touch(this);
         }
@@ -606,6 +610,7 @@ namespace Chubrik
             }
             attackCd = 0.4f;
             Anim.Attack();
+            if (Football.TryKick(this)) return;   // 18.11: B next to the football kicks it
             if (Grounded && new Vector3(vel.x, 0, vel.z).magnitude > RunSpeed * 0.35f) leapReady = Time.time + 0.6f;   // B then A on the run = the leap
             if (Grounded && Zones.HitEnter()) { AudioFx.Play("punch"); return; }   // a hit next to a shop goes in
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)

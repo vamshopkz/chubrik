@@ -41,6 +41,8 @@ namespace Chubrik
             grass = Tiled(Tex.Grass(), 10); snowM = Tiled(Tex.Snow(), 8);
             checker = Mats.Tex(World6.MissingTex(), Color.white, 0.2f); checker.mainTextureScale = new Vector2(6, 4);
             waterM = Mats.Emissive(Tex.Water(), new Color(0.6f, 0.85f, 1f), Hex("1E6FB0") * 0.25f, null, 0.9f);
+            posts.Clear();
+            building = true;
             Sky();
             Sea();
             Regions();
@@ -64,8 +66,10 @@ namespace Chubrik
             Clouds();
             Tokens();
             MakeSolid();
+            Football.BuildPad(root);   // 18.11
             Eggs.SpawnLobby();
             Bird.ForWorld(1);
+            building = false;
             return root;
         }
 
@@ -300,6 +304,21 @@ namespace Chubrik
             return wallMats[(st, rep)] = m;
         }
 
+        static bool building;
+        static readonly HashSet<Vector2Int> posts = new HashSet<Vector2Int>();
+        public static int Posts => posts.Count;
+
+        /// <summary>A round post at a wall joint (one per joint, never two in the same place).</summary>
+        static void Post(Vector3 p, float h)
+        {
+            if (!posts.Add(new Vector2Int(Mathf.RoundToInt(p.x * 10), Mathf.RoundToInt(p.z * 10)))) return;
+            var st = StyleAt(p + new Vector3(0.9f, 0, 0.9f)) ?? StyleAt(p - new Vector3(0.9f, 0, 0.9f)) ?? style;
+            var go = Solid(PrimitiveType.Cylinder, new Vector3(p.x, h / 2, p.z), new Vector3(1.04f, h / 2, 1.04f), WallMat(st, 3.2f, h));
+            go.name = "WallPost";
+            string cap = st switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
+            Cy(root, new Vector3(p.x, h + 0.02f, p.z), new Vector3(1.16f, 0.17f, 1.16f), M(cap, 0.3f));   // a little higher than the wall caps: no flicker
+        }
+
         static Material barrierM;
         public const float BarrierH = 30f;
         public static int Barriers;
@@ -308,7 +327,9 @@ namespace Chubrik
         {
             var d = b - a; d.y = 0;
             if (d.magnitude < 0.1f) return;
-            float len = d.magnitude + 1;
+            // 18.11: wall pieces end exactly at their corners and a round post covers each joint — overlapping
+            // pieces at the rounded corners used to flicker (two faces in the same place)
+            float len = d.magnitude;
             var right = new Vector3(d.z, 0, -d.x).normalized;
             var mid = (a + b) / 2;
             // each face of a wall looks like the area it faces (outside the map: like the inside)
@@ -319,7 +340,8 @@ namespace Chubrik
             else { Half(mid + right * 0.25f, 0.5f, R); Half(mid - right * 0.25f, 0.5f, L); }
             // 17.11: the wall goes on up as an invisible barrier — no jumping over walls
             if (barrierM == null) barrierM = Glass("D8F4FF", 0.07f);
-            var bar = Prim.Make(PrimitiveType.Cube, root, mid + Vector3.up * (h + BarrierH / 2), new Vector3(1.0f, BarrierH, len), barrierM, "Barrier", Layers.Barrier);
+            Post(a, h); Post(b, h);
+            var bar = Prim.Make(PrimitiveType.Cube, root, mid + Vector3.up * (h + BarrierH / 2), new Vector3(1.0f, BarrierH, len + 1), barrierM, "Barrier", Layers.Barrier);
             bar.transform.localEulerAngles = new Vector3(0, yaw, 0);
             bar.AddComponent<BoxCollider>();
             bar.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
@@ -689,7 +711,7 @@ namespace Chubrik
             foreach (var o in new[] { new Vector3(0, 9.2f, 0), new Vector3(1.6f, 8.4f, 0.6f), new Vector3(-1.4f, 8.6f, -0.8f), new Vector3(0.2f, 8.3f, -1.7f) })
                 S(root, c + o, 3.6f, M("43A047", 0.15f));
             var wood = Tiled(Tex.Planks("A0642F"), 1);
-            Disc(c + Vector3.up * 4.6f, 2.6f, 0.3f, wood);
+            Disc(c + Vector3.up * 4.6f, 2.6f, 0.3f, wood).AddComponent<TreeTop>();
             for (int k = 0; k < 5; k++)
             {
                 float a = (k * 50 + 200) * Mathf.Deg2Rad;
@@ -878,6 +900,21 @@ namespace Chubrik
                 S(root, p + o, r.F(2f, 2.8f) * s, M(greens[r.I(greens.Length)], 0.15f));
             }
             if (r.Chance(0.4f)) for (int k = 0; k < 4; k++) S(root, p + new Vector3(r.F(-1.2f, 1.2f), r.F(3.6f, 4.8f), r.F(-1.2f, 1.2f)) * s, 0.25f * s, M("FF5252", 0.5f));
+            if (!building) return;   // only the lobby trees (other worlds borrow this tree)
+            // 18.11: you can climb every tree: branches round the trunk like steps, a leafy nest on top.
+            // Jump off the top with two jumps — and you fall into the backrooms
+            var bark = Mats.Tex(Tex.Bark(), Color.white, 0.1f);
+            float a0 = r.F(0, 360);
+            for (int k = 0; k < 6; k++)
+            {
+                float a = (a0 + k * 68) * Mathf.Deg2Rad, y = (0.75f + k * 0.85f) * s;
+                var br = Solid(PrimitiveType.Cube, p + new Vector3(Mathf.Cos(a) * 0.85f * s, y, Mathf.Sin(a) * 0.85f * s), new Vector3(1.1f * s, 0.2f, 0.55f), bark, new Vector3(0, -(a0 + k * 68), 0));
+                br.name = "TreeBranch";
+                S(root, br.transform.position + new Vector3(Mathf.Cos(a) * 0.55f * s, 0.15f, Mathf.Sin(a) * 0.55f * s), 0.45f * s, M(greens[k % greens.Length], 0.15f));
+            }
+            var top = Solid(PrimitiveType.Cylinder, p + Vector3.up * 5.95f * s, new Vector3(2.4f * s, 0.12f, 2.4f * s), M("43A047", 0.15f));
+            top.name = "TreeTop";
+            top.AddComponent<TreeTop>();
         }
 
         internal static void Pine(Vector3 p, float s)

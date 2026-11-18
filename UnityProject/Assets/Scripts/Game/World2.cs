@@ -20,6 +20,8 @@ namespace Chubrik
             if (w == World67.Id && World67.Root == null) World67.Build();
             Eggs.SpawnWorld(w);
             Bird.ForWorld(w);
+            var wr = w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null;
+            if (wr != null) TitanArena.Build(w, wr);   // 18.11: a big boss in every world
             if (w != 4) { if (World4.Board != null && World4.Board.Riding) World4.Board.EndRide(); World4.DropSnowmobile(); }
             Window.Close();
             AudioFx.Play("portal");
@@ -44,7 +46,10 @@ namespace Chubrik
                     p.Checkpoint = Lobby.Spawn;
                     p.Teleport(Lobby.Spawn, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast("С возвращением в лобби!", UIKit.Gold);
+                    // 18.11: keys are for the world they were found in — back at the start they are gone
+                    bool hadKeys = Save.P.keys > 0;
+                    Save.P.keys = 0; Save.Write();
+                    Hud.Toast(hadKeys ? "С возвращением в лобби! Ключи остались в том мире" : "С возвращением в лобби!", UIKit.Gold);
                 }
                 p.SafePos = p.transform.position + Vector3.up * 0.2f;
                 p.Frozen = UIRoot.Open != null;
@@ -433,12 +438,14 @@ namespace Chubrik
     {
         public EnemyKind kind;
         public int world = 2;
-        Vector3 center; float radius, angle, speed = 0.32f;
+        Vector3 center; float radius, angle, speed = 0.55f;   // 18.11: harder worlds — faster mobs (were 0.32)
         Transform body, armL, armR, key, wingL, wingR;
         public bool Dead { get; private set; }
         float deadT, back, hitCd;
         public float Height => kind == EnemyKind.Slime || kind == EnemyKind.Magma ? 1.0f : kind == EnemyKind.Bee || kind == EnemyKind.Bat ? 1.6f : kind == EnemyKind.Beetle ? 1.1f : 1.5f;
         float R => kind == EnemyKind.Slime || kind == EnemyKind.Magma || kind == EnemyKind.Beetle ? 0.7f : 0.6f;
+
+        static bool twinning;
 
         public static Enemy Spawn(EnemyKind k, Vector3 center, float radius, float phase = 0, int world = 2)
         {
@@ -451,6 +458,8 @@ namespace Chubrik
             col.isTrigger = true; col.center = new Vector3(0, e.Height * 0.5f, 0); col.radius = 0.7f;
             (world == 3 ? World3.Enemies : World2.Enemies).Add(e);
             e.Place();
+            // 18.11: harder worlds — a second mob of the same kind walks the same circle from the other side
+            if (!twinning && radius >= 2.3f) { twinning = true; try { Spawn(k, center, radius, phase + 0.5f, world); } finally { twinning = false; } }
             return e;
         }
 
@@ -577,7 +586,11 @@ namespace Chubrik
                 if (Time.time > back) { Dead = false; deadT = 0; body.gameObject.SetActive(true); body.localScale = Vector3.one; Effects.Emit("smoke", transform.position + Vector3.up * 0.5f, 10, 0.5f); }
                 return;
             }
-            angle += speed / Mathf.Max(1, radius) * Time.deltaTime;
+            // 18.11: a mob speeds up when you come close (it charges at you)
+            float near = 1f;
+            var pp = PlayerCtl.I;
+            if (pp != null && Worlds.Current == world) { var dd = pp.transform.position - transform.position; if (Mathf.Abs(dd.y) < 2f && new Vector2(dd.x, dd.z).magnitude < 5f) near = 2.2f; }
+            angle += speed * near / Mathf.Max(1, radius) * Time.deltaTime;
             Place();
             switch (kind)
             {
@@ -634,7 +647,7 @@ namespace Chubrik
         public void Die()
         {
             if (Dead) return;
-            Dead = true; deadT = 0; back = Time.time + 45f;
+            Dead = true; deadT = 0; back = Time.time + 30f;
             AudioFx.Play("bonk");
             var c = transform.position + Vector3.up * Height * 0.6f;
             Effects.Emit("star", c, 16, 0.4f);
