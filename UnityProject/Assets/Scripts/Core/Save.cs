@@ -104,6 +104,13 @@ namespace Chubrik
             return l;
         }
 
+        /// <summary>18.11 «Снять все скины»: every department back to its starting item (or nothing).</summary>
+        public static void TakeOffAll()
+        {
+            P.look.Clear();
+            Write();
+        }
+
         public static void Wear(string dept, string id)
         {
             P.look.RemoveAll(e => e.StartsWith(dept + "="));

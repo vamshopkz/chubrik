@@ -258,6 +258,36 @@ namespace Chubrik
                 Hud.Toast(P.butter ? "BUTTER! Теперь всё из сливочного масла. Ещё раз «BUTTER» — растопить" : "Масло растаяло — всё снова как было", Parts.Hex("FFE680"));
                 return true;
             }
+            if (n == Norm("iPhone"))
+            {
+                // 18.11: every skin in the game at once
+                foreach (var it in Catalog.Items.Values) Save.Give(it.id);
+                foreach (var st in Catalog.Sets) UnlockSet(st, false);
+                Save.Write();
+                AudioFx.Play("token"); PlayerCtl.I?.PlayVictory();
+                Hud.Toast($"iPhone! Все скины твои: {Catalog.Items.Count} вещей в гардеробе", UIKit.Gold);
+                WardrobeUI.Changed();
+                return true;
+            }
+            if (n == Norm("Тайфун"))
+            {
+                // 18.11: the typhoon blows every skin off the account (the starting look stays)
+                P.owned.Clear(); P.sets.Clear(); P.look.Clear(); P.promo = false;
+                Save.Fix(); Save.Write();
+                PlayerCtl.I?.ApplyLook(Save.CurrentLook());
+                AudioFx.Play("portal");
+                Hud.Toast("ТАЙФУН! Все скины унесло ветром — ты снова обычный чубрик", UIKit.Cyan);
+                WardrobeUI.Changed();
+                return true;
+            }
+            if (n == Norm("Бомж"))
+            {
+                P.coins = 0; P.tokens = 0; P.teapot = false; Save.Write();
+                AudioFx.Play("error");
+                Hud.Toast("Все монеты и жетоны пропали — карманы пустые!", UIKit.Orange);
+                WardrobeUI.Changed();
+                return true;
+            }
             if (n == Norm("Миллиард"))
             {
                 P.coins += BillionSum; P.tokens += BillionSum; Save.Write();

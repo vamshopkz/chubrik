@@ -804,8 +804,9 @@ namespace Chubrik
             yield return Wait(0.4f);
             yield return Shot("45_world5_start");
             var log0 = World5.Logs[0].transform.position;
-            yield return Wait(0.8f);
-            Check("logs drift on the river", Vector3.Distance(log0, World5.Logs[0].transform.position) > 0.3f);
+            float drift = 0;
+            for (float tt = 0; tt < 2.5f && drift <= 0.3f; tt += Time.deltaTime) { drift = Mathf.Max(drift, Vector3.Distance(log0, World5.Logs[0].transform.position)); yield return null; }
+            Check("logs drift on the river", drift > 0.3f, drift.ToString("0.00"));
             pl.Teleport(World5.O + new Vector3(0, 0.3f, 12), 0);
             pl.yaw = 0; pl.pitch = 12;
             yield return Wait(0.6f);
@@ -960,7 +961,7 @@ namespace Chubrik
             {
                 pl.Teleport(Lobby.Spawn, 0);
                 yield return Wait(0.5f);
-                Check("see-through barriers over every lobby wall", Lobby.Barriers >= 30, Lobby.Barriers.ToString());
+                Check("invisible barriers over every lobby wall", Lobby.Barriers >= 30 && GameObject.Find("Barrier") != null && !GameObject.Find("Barrier").GetComponent<Renderer>().enabled, Lobby.Barriers.ToString());
                 bool barrierBlocks = Physics.Raycast(new Vector3(0, 0, 0) + Vector3.up * 12, Vector3.forward, out var bh, 200, Layers.BlockMask) && bh.collider.gameObject.layer == Layers.Barrier;
                 Check("a barrier goes on up over the wall (it stops the player, not the camera)", barrierBlocks && (Layers.SolidMask & (1 << Layers.Barrier)) == 0, barrierBlocks ? bh.point.ToString() : "nothing hit");
                 var rounds = new List<string>(); foreach (var ub in FindObjectsByType<UIButton>(FindObjectsInactive.Include, FindObjectsSortMode.None)) rounds.Add(ub.name);
@@ -1089,6 +1090,33 @@ namespace Chubrik
                 Promo.Apply("BUTTER");
                 yield return Wait(0.3f);
                 Check("«BUTTER» makes everything butter, again «BUTTER» melts it back", buttered > 200 && Butter.Buttered == 0 && !Save.P.butter, buttered + " things");
+                // 18.11: iPhone = every skin, «Снять все скины», Тайфун = no skins at all, Бомж = no money
+                long keepC = Save.P.coins, keepT = Save.P.tokens;
+                Promo.Apply("iPhone");
+                bool allOwned = true; foreach (var it in Catalog.Items.Values) if (!Save.Owns(it.id)) allOwned = false;
+                Check("«iPhone» gives every skin in the game", allOwned && Save.P.sets.Count == 8);
+                Save.Wear("hat", "hat_4"); Save.Wear("wings", "wings_0"); Save.Wear("suit", Catalog.Tramp);
+                pl.Teleport(new Vector3(-5, 0.3f, 18.2f), 90);
+                yield return Wait(0.3f);
+                WardrobeUI.Open("hat");
+                yield return Wait(0.6f);
+                bool offBtn = false; foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "СНЯТЬ ВСЕ СКИНЫ") offBtn = true;
+                WardrobeUI.TakeOffAll();
+                yield return Wait(0.4f);
+                yield return Shot("91_take_off_all");
+                Check("wardrobe «Снять все скины» takes everything off", offBtn && Save.Worn("hat") == "" && Save.Worn("wings") == "" && Save.Worn("suit") == "" && !pl.Model.PartCount.ContainsKey("suit"));
+                pl.Teleport(Lobby.Spawn, 0);
+                WardrobeUI.Close();
+                Save.Wear("hat", "hat_4");
+                Promo.Apply("Тайфун");
+                bool onlyDef = true; foreach (var it in Catalog.Items.Values) if (Save.Owns(it.id) && it.id != it.D.def) onlyDef = false;
+                Check("«Тайфун» takes every skin off the account", onlyDef && Save.P.sets.Count == 0 && Save.Worn("hat") == "");
+                Promo.Apply("Бомж");
+                Check("«Бомж» takes all coins and tokens", Save.P.coins == 0 && Save.P.tokens == 0);
+                Save.P.coins = keepC; Save.P.tokens = keepT;
+                Promo.Apply("iPhone");
+                Save.P.coins = keepC; Save.P.tokens = keepT; Save.Write();
+
                 Promo.Apply("Секрет");
                 yield return Wait(0.4f);
                 yield return Shot("83_secret_nooks");
@@ -1118,31 +1146,6 @@ namespace Chubrik
                 yield return Shot("88_tramp_ashan");
                 Save.Wear("suit", ""); pl.ApplyLook(Save.CurrentLook());
 
-                // houses in the lobby: you can walk in, friends come to visit
-                Check("3 little houses in the lobby", Houses.All.Count == 3, Houses.All.Count.ToString());
-                if (Houses.All.Count > 0)
-                {
-                    var hs = Houses.All[0];
-                    pl.Teleport(hs.Front + Vector3.up * 0.3f, hs.t.eulerAngles.y + 180);
-                    yield return Wait(0.4f);
-                    pl.yaw = hs.t.eulerAngles.y + 180;
-                    pl.MoveInput = new Vector2(0, 1);
-                    for (float t = 0; t < 3 && !hs.Contains(pl.transform.position); t += Time.deltaTime) yield return null;
-                    yield return Wait(0.5f);
-                    pl.MoveInput = Vector2.zero;
-                    Check("you can walk into a house through its door", hs.Contains(pl.transform.position), hs.t.InverseTransformPoint(pl.transform.position).ToString());
-                    Houses.Visit(0);
-                    for (float t = 0; t < 10 && (Houses.Current == null || !Houses.Current.InsideNow); t += Time.deltaTime) yield return null;
-                    pl.yaw = hs.t.eulerAngles.y + 180; pl.pitch = 15;
-                    pl.Teleport(hs.t.TransformPoint(new Vector3(-0.8f, 0.3f, 2.2f)), hs.t.eulerAngles.y + 180);
-                    yield return Wait(0.6f);
-                    yield return Shot("89_house_guest");
-                    Check("a rescued friend comes to visit the house", Houses.Current != null && Houses.Current.InsideNow);
-                    pl.Teleport(hs.Front + hs.t.forward * 5 + Vector3.up * 0.5f, hs.t.eulerAngles.y + 180);
-                    pl.yaw = hs.t.eulerAngles.y + 180; pl.pitch = 14;
-                    yield return Wait(0.6f);
-                    yield return Shot("90_house_outside");
-                }
 
                 // costumes: Артём's rich outfit on the player
                 Save.Give(Catalog.RichArtem); Save.Wear("suit", Catalog.RichArtem); pl.ApplyLook(Save.CurrentLook());

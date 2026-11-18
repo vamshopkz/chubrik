@@ -96,8 +96,11 @@ namespace Chubrik
             takeOff = UIKit.Button(R, "СНЯТЬ", UIKit.Red, OnTakeOff, 26);
             UIKit.Place(takeOff.Bg.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-12, 14), new Vector2(150, 84));
 
+            var offAll = UIKit.Button(P, "СНЯТЬ ВСЕ СКИНЫ", UIKit.Red, TakeOffAll, 22, "TakeOffAll");
+            UIKit.Place(offAll.Bg.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(322 + safe.x, 14 + safe.y), new Vector2(250, 86));
+
             var hintT = UIKit.Txt(P, "крути чубрика пальцем", 22, new Color(1, 1, 1, 0.85f), TextAlignmentOptions.Bottom);
-            UIKit.Place(hintT.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 14 + safe.y), new Vector2(400, 30));
+            UIKit.Place(hintT.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 112 + safe.y), new Vector2(400, 30));
             root.AddComponent<CenterKeeper>().hint = hintT.rectTransform;
 
             SelectDept(dept);
@@ -286,6 +289,15 @@ namespace Chubrik
             Save.Wear(sel.dept, sel.id);
             TryOn(Save.CurrentLook());
             Refresh();
+        }
+
+        /// <summary>18.11: every skin off at once (things stay in the wardrobe).</summary>
+        public static void TakeOffAll()
+        {
+            Save.TakeOffAll();
+            TryOn(Save.CurrentLook());
+            AudioFx.Play("click");
+            SelectDept(dept);
         }
 
         static void OnTakeOff()
