@@ -48,6 +48,8 @@ namespace Chubrik
             AudioFx.Create();
             Updater.Create();
             Online.Create();
+            Voice.Create();
+            RoomChat.Create();
             Effects.Create();
             PlayerCtl.Create();
             PostFx(mobile);

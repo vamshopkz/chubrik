@@ -28,6 +28,25 @@ printf '{"version": "%s"}' "$VER" > $DIR/version.json
 # this version also gets its own folder, so it can still be played after the next release
 mkdir -p $DIR/v/$VER
 ( cd $SRC && cp -R . $DIR/v/$VER/ ); cp $DIR/version.json $DIR/v/$VER/
+# v0.27: every older version on the site gets a «Вернуться обратно» button back to the newest one (no GitHub pages)
+python3 - "$DIR" "$VER" <<'PY'
+import os, sys
+d, cur = sys.argv[1], sys.argv[2]
+btn = ('<a id="chubrik-back" href="../../" style="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;'
+       'background:#2BB673;color:#fff;font:bold 18px sans-serif;padding:10px 18px;border-radius:14px;text-decoration:none;'
+       'box-shadow:0 3px 10px rgba(0,0,0,.3)">&#8617; Вернуться обратно в новую версию</a>')
+vdir = os.path.join(d, 'v')
+for v in os.listdir(vdir) if os.path.isdir(vdir) else []:
+    if v == cur: continue
+    f = os.path.join(vdir, v, 'index.html')
+    if not os.path.isfile(f): continue
+    html = open(f, encoding='utf-8').read()
+    if 'chubrik-back' in html: continue
+    html = html.replace('<body', '<body', 1)
+    i = html.find('>', html.find('<body'))
+    if i < 0: continue
+    open(f, 'w', encoding='utf-8').write(html[:i + 1] + btn + html[i + 1:])
+PY
 cd $DIR
 git init -q -b gh-pages
 git add -A

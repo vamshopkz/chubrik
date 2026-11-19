@@ -13,6 +13,11 @@ namespace Chubrik
         public static bool Touch => Application.isMobilePlatform || Boot.Has("-touch");
         public static bool JumpButtonHeld => I != null && I.jumpBtn != null && I.jumpBtn.Held;
         public static bool AttackButtonHeld => I != null && I.hitBtn != null && I.hitBtn.Held;
+        /// <summary>v0.27: hold «ГОЛОС» to talk to the friend in your room.</summary>
+        public static bool VoiceButtonHeld => I != null && I.voiceBtn != null && I.voiceBtn.Held;
+        UIButton voiceBtn;
+        RectTransform topBar; float chatShift;
+        TextMeshProUGUI voiceTxt;
         RectTransform root, touchRoot, heartsRow;
         TextMeshProUGUI coins, tokens, keys, friends, toast, hint, navTxt;
         Image flash, crack;
@@ -64,6 +69,7 @@ namespace Chubrik
 
             // coins / tokens / hearts (top left)
             var bar = UIKit.Img(root, UIKit.Pill, new Color(0.05f, 0.15f, 0.35f, 0.55f), "TopBar");
+            topBar = bar.rectTransform;
             UIKit.Place(bar.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16 + safe.x, -14 - safe.w), new Vector2(560, 64));
             var ci = UIKit.Img(bar.transform, CoinSprite, UIKit.Gold, "Coin");
             UIKit.Place(ci.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(12, 0), new Vector2(46, 46));
@@ -116,6 +122,12 @@ namespace Chubrik
             UIKit.Place(jumpBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-170 - safe.z, 170 + safe.y), new Vector2(200, 200));
             hitBtn = UIKit.Round(touchRoot, "B", UIKit.Red, () => PlayerCtl.I.Attack(), 130, 64);
             hitBtn.FireOnDown = true;
+            // v0.27 the voice button (shown only in a room with a friend)
+            voiceBtn = UIKit.Round(root, "ГОЛОС", UIKit.Violet, () => { if (!Voice.CanTalk) Toast("Говорить можно в игре на телефоне или компьютере — в браузере только слушать", UIKit.Orange); }, 120, 22);
+            voiceBtn.FireOnDown = true;
+            UIKit.Place(voiceBtn.Bg.rectTransform, new Vector2(1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-90 - safe.z, 60), new Vector2(120, 120));
+            voiceBtn.gameObject.SetActive(false);
+            voiceTxt = T("", 26, UIKit.Violet, TextAlignmentOptions.Right, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-20 - safe.z, -20), new Vector2(420, 40));
             UIKit.Place(hitBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-370 - safe.z, 120 + safe.y), new Vector2(130, 130));
             emoteBtn = UIKit.Round(touchRoot, "ЭМОЦИЯ", UIKit.Violet, () => PlayerCtl.I.Emote(), 120, 22);
             UIKit.Place(emoteBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-300 - safe.z, 300 + safe.y), new Vector2(120, 120));
@@ -203,9 +215,20 @@ namespace Chubrik
             if (heartT > 0)
             {
                 heartT -= Time.deltaTime;
-                heartsRow.anchoredPosition = new Vector2(22 + UIRoot.Safe().x + Mathf.Sin(heartT * 60) * 6 * heartT, heartsRow.anchoredPosition.y);
+                heartsRow.anchoredPosition = new Vector2(22 + chatShift + UIRoot.Safe().x + Mathf.Sin(heartT * 60) * 6 * heartT, heartsRow.anchoredPosition.y);
             }
             bool menus = Menus.AnyOpen;
+            bool room = Online.I != null && Online.I.RoomPeer != null;
+            // v0.27: the chat sits in the top left corner — coins, hearts and the texts move to its right
+            float want = RoomChat.Visible ? RoomChat.W + 14 : 0;
+            if (!Mathf.Approximately(want, chatShift))
+            {
+                float d = want - chatShift; chatShift = want;
+                foreach (var rt in new[] { topBar, heartsRow, friends ? friends.rectTransform : null, navTxt ? navTxt.rectTransform : null })
+                    if (rt) rt.anchoredPosition += new Vector2(d, 0);
+            }
+            if (voiceBtn) voiceBtn.gameObject.SetActive(room && !menus);
+            if (voiceTxt) voiceTxt.text = !room ? "" : Voice.I != null && Voice.I.Talking ? "Ты говоришь…" : Voice.I != null && Time.unscaledTime - Voice.I.HeardAt < 0.4f ? "Друг говорит…" : (Hud.Touch ? "" : "V — голос");
             root.gameObject.SetActive(!Menus.MainOpen);
             touchRoot.gameObject.SetActive((Touch || ForceTouch) && !menus);
             hint.gameObject.SetActive(!menus && Time.time < 60f);

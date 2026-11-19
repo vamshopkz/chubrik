@@ -29,7 +29,8 @@ namespace Chubrik
         public string nick = "";                             // 17.11: nickname for the records table (Settings)
         public int footLevel = 1;
         public int footDiff = 1;
-        public long roomLockUntil;                           // 19.11 «Заблокировать комнату» until (unix seconds)                             // 18.11 football difficulty: 0 super easy … 3 hard
+        public long roomLockUntil;
+        public string updateSeen = "";                       // v0.27: the «Вышло обновление» message was shown for this version                           // 19.11 «Заблокировать комнату» until (unix seconds)                             // 18.11 football difficulty: 0 super easy … 3 hard
         public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;   // 18.11 cheats (Settings → «Читы»)
         public List<string> placed = new List<string>();     // admin panel copies: id|path|pos|rot|scale|1                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)

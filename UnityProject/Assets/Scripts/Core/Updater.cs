@@ -24,6 +24,9 @@ namespace Chubrik
 
         public State Status { get; private set; } = State.Idle;
         public string LatestVersion { get; private set; } = "";
+        /// <summary>v0.27: what is new in the latest version (shown in the «Вышло обновление» message).</summary>
+        public string LatestNotes { get; private set; } = "";
+        bool messagePending;
         /// <summary>The menu shows the button only while there is something newer to get.</summary>
         public static bool HasUpdate => I != null && I.Status >= State.Available && !string.IsNullOrEmpty(I.LatestVersion);
 
@@ -61,15 +64,25 @@ namespace Chubrik
 
         void Update()
         {
+            // v0.27: «Вышло обновление 0.27!» with what is new — once per version, when nothing else is open
+            if (messagePending && HasUpdate && PlayerCtl.I != null && !PlayerCtl.I.MenuOrbit && !Menus.AnyOpen && !Boot.Testing)
+            {
+                messagePending = false;
+                if (Save.P.updateSeen != LatestVersion) { Save.P.updateSeen = LatestVersion; Save.Write(); PhoneNotify(); ShowMessage(); }
+            }
+            if (Status == State.UpToDate && Time.unscaledTime - checkedAt > 600f) Status = State.Idle;   // v0.27: look again every 10 minutes
             if (Status == State.Off || Status == State.Checking || HasUpdate) return;
             if (Time.unscaledTime < nextCheck) return;
             nextCheck = Time.unscaledTime + 600f;
             StartCoroutine(Check());
         }
 
+        float checkedAt;
+
         IEnumerator Check()
         {
             Status = State.Checking;
+            checkedAt = Time.unscaledTime;
             // cache-buster: the CDN may hand back a stale version.json for a while
             using var req = UnityWebRequest.Get(baseUrl + "version.json?t=" + DateTime.UtcNow.Ticks);
             req.timeout = 15;
@@ -80,6 +93,8 @@ namespace Chubrik
             if (info == null || string.IsNullOrEmpty(info.version)) { Status = State.Idle; yield break; }   // no internet: try later
             if (Compare(info.version, Application.version) <= 0) { Status = State.UpToDate; yield break; }
             LatestVersion = info.version;
+            LatestNotes = info.notes ?? "";
+            messagePending = true;
             if (!string.IsNullOrEmpty(info.apk)) apkName = info.apk;
             Status = State.Available;
             Debug.Log($"[Update] {Application.version} → {LatestVersion} available");
@@ -119,9 +134,61 @@ namespace Chubrik
             ? baseUrl.Substring(0, baseUrl.Length - "latest/download/".Length) + $"download/v{LatestVersion}/{apkName}"   // exactly the version we checked
             : baseUrl + apkName;
 
-        /// <summary>Tests: pretend a newer version came out (or not).</summary>
-        public void Fake(string version)
+        /// <summary>v0.27: a real notification on the phone («Вышло обновление 0.27») and two little notes.</summary>
+        public void PhoneNotify()
         {
+            StartCoroutine(TwoNotes());
+#if UNITY_ANDROID && !UNITY_EDITOR
+            StartCoroutine(Notify());
+#endif
+        }
+
+        System.Collections.IEnumerator TwoNotes()
+        {
+            AudioFx.Play("note2", 0.9f);
+            yield return new WaitForSecondsRealtime(0.16f);
+            AudioFx.Play("note6", 0.9f);
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        System.Collections.IEnumerator Notify()
+        {
+            var req = new Unity.Notifications.Android.PermissionRequest();
+            while (req.Status == Unity.Notifications.Android.PermissionStatus.RequestPending) yield return null;
+            if (req.Status != Unity.Notifications.Android.PermissionStatus.Allowed) yield break;
+            Unity.Notifications.Android.AndroidNotificationCenter.RegisterNotificationChannel(new Unity.Notifications.Android.AndroidNotificationChannel
+            {
+                Id = "updates", Name = "Обновления Чубрика", Description = "Когда выходит новая версия игры",
+                Importance = Unity.Notifications.Android.Importance.Default,
+            });
+            var notes = string.IsNullOrEmpty(LatestNotes) ? "Исправления и улучшения" : LatestNotes;
+            Unity.Notifications.Android.AndroidNotificationCenter.SendNotification(new Unity.Notifications.Android.AndroidNotification
+            {
+                Title = "Вышло обновление " + LatestVersion + "!",
+                Text = notes.Length > 240 ? notes.Substring(0, 237) + "…" : notes,
+                FireTime = DateTime.Now,
+            }, "updates");
+        }
+#endif
+
+        /// <summary>The message: «Вышло обновление X!» and what is new in it, with «ОБНОВИТЬ».</summary>
+        public void ShowMessage()
+        {
+            Menus.Unlock();
+            Window.Show("ВЫШЛО ОБНОВЛЕНИЕ " + LatestVersion + "!", w =>
+            {
+                w.Text("Что нового:", 30, UIKit.Gold);
+                foreach (var part in (string.IsNullOrEmpty(LatestNotes) ? "Исправления и улучшения" : LatestNotes).Split(new[] { ". " }, StringSplitOptions.RemoveEmptyEntries))
+                    w.Text("• " + part.Trim().TrimEnd('.') , 26);
+                w.Row("Обновить сейчас", WebBridge.IsWeb ? "Страница перезагрузится — всё сохранится" : "Скачается новая версия игры", "ОБНОВИТЬ", UIKit.Green, Press, true, UIKit.Lime);
+                w.Row("Потом", "Кнопка «ОБНОВИТЬ» будет в меню", "ПОТОМ", UIKit.Blue, Window.Close);
+            }, 1100, 760);
+        }
+
+        /// <summary>Tests: pretend a newer version came out (or not).</summary>
+        public void Fake(string version, string notes = "")
+        {
+            LatestNotes = notes ?? "";
             LatestVersion = version ?? "";
             Status = string.IsNullOrEmpty(version) ? State.UpToDate : State.Available;
         }

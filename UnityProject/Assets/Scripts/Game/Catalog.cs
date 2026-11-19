@@ -9,6 +9,8 @@ namespace Chubrik
         public string id, dept, name;
         public int price;          // coins (secret items: tokens)
         public int set = -1;       // premium set index, -1 = regular
+        public int finish = -1;    // v0.27: a finish variant (SkinFinish) of the regular item number baseIndex
+        public int baseIndex = -1;
         public bool tokens;        // price is in tokens
         public bool promoOnly;     // only the developer promo code unlocks it
         public string reward;      // won in the game (boss, lucky box), never sold: where to get it
@@ -105,6 +107,7 @@ namespace Chubrik
                 }
             }
             RegularCount = Items.Count;
+            Variants();
 
             S(1000, "Огненный дракон", "Корона, крылья феникса, лавовый хвост и аура «Инферно»", "FF5A1F",
                 ("hat", "Драконья корона"), ("wings", "Крылья феникса"), ("tail", "Лавовый хвост"), ("aura", "Аура «Инферно»"));
@@ -129,6 +132,33 @@ namespace Chubrik
             R("shoes", "Ледяные коньки", "Морозный лаки-бокс в Мире 4. На льду не скользишь и бегаешь на 20% быстрее");
             R("skin", "Алмазный Ледяной Чубрик", "Морозный лаки-бокс в Мире 4. Переливается голубым и оставляет морозный след");
             R("suit", "Золотая курица", "Найди все 10 золотых яиц — они спрятаны лучше всего в игре");
+        }
+
+        /// <summary>v0.27: the departments that get finish variants and how many (1000 in all).</summary>
+        public static readonly string[] VariantDepts = { "hat", "hair", "ears", "eyes", "mask", "neck", "top", "wings", "hands", "back", "tail", "pants", "belt", "shoes", "weapon", "suit", "wrist" };
+        public static int VariantCount { get; private set; }
+
+        /// <summary>v0.27: 1000 more skins — the regular things of 18 departments in 10 finishes («Кепка оранжевая (золото)»).</summary>
+        static void Variants()
+        {
+            int left = 1000;
+            for (int di = 0; di < VariantDepts.Length; di++)
+            {
+                var d = Dept(VariantDepts[di]);
+                var baseItems = d.items.FindAll(i => !i.Premium && !i.Reward && i.finish < 0 && i.id != d.def);
+                int n = left / (VariantDepts.Length - di);
+                for (int v = 0; v < n; v++)
+                {
+                    var b = baseItems[v % baseItems.Count];
+                    int f = (v / baseItems.Count + (v % baseItems.Count)) % SkinFinish.Count;
+                    if (v / baseItems.Count >= SkinFinish.Count) break;
+                    var it = new Item { id = d.id + "_v" + v, dept = d.id, name = b.name + " (" + SkinFinish.Names[f] + ")", finish = f, baseIndex = Index(b.id), price = Mathf.RoundToInt(b.price * (1.3f + f * 0.1f) / 5f) * 5 };
+                    d.items.Add(it);
+                    Items[it.id] = it;
+                    VariantCount++;
+                    left--;
+                }
+            }
         }
 
         /// <summary>Reward items ("dept_rK"): won, not bought. Their builders use index 200 + K.</summary>
@@ -184,6 +214,7 @@ namespace Chubrik
         public static int Index(string id)
         {
             if (string.IsNullOrEmpty(id)) return -1;
+            if (id.Contains("_v") && Items.TryGetValue(id, out var vi) && vi.finish >= 0) return vi.baseIndex;   // a finish variant builds as its base
             int u = id.LastIndexOf('_');
             if (u < 0) return -1;
             if (u + 1 < id.Length && id[u + 1] == 'r' && int.TryParse(id.Substring(u + 2), out var r)) return 200 + r;   // reward item
@@ -191,6 +222,8 @@ namespace Chubrik
         }
 
         /// <summary>Premium set index of "dept_pK", else -1.</summary>
+        public static int FinishOf(string id) => id != null && id.Contains("_v") && Items.TryGetValue(id, out var vi) ? vi.finish : -1;
+
         public static int SetOf(string id)
         {
             if (string.IsNullOrEmpty(id)) return -1;

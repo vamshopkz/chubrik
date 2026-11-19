@@ -134,7 +134,14 @@ namespace Chubrik
             return r;
         }
 
-        static string Subs => Topic + "\n" + StatsTopic + "/#";
+        /// <summary>v0.27: voice pieces go to the friend's own topic (nobody else gets them).</summary>
+        public const string VoiceTopic = "chubrik/v1/voice";
+        string Subs => Topic + "\n" + StatsTopic + "/#" + "\n" + VoiceTopic + "/" + Id;
+
+        public void SendTo(string topic, string m)
+        {
+            foreach (var r in relays) if (r.link != null && r.link.Ready) r.link.Publish(topic, m, false);
+        }
 
         public static long NowUnix => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         /// <summary>19.11 «Заблокировать комнату»: nobody can send us invitations until this time.</summary>
@@ -361,6 +368,12 @@ namespace Chubrik
                     break;
                 case "N" when f.Length >= 3:
                     if (f[2] == Id && Invited.Remove(id)) Hud.Toast($"«{NickOf(id)}» сейчас не может играть вместе", UIKit.Orange);
+                    break;
+                case "V":
+                    Voice.I?.OnVoice(f);
+                    break;
+                case "C":
+                    RoomChat.I?.OnChat(f);
                     break;
                 case "FW":
                     FootballFans.OnWatch(f, id);

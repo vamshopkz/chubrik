@@ -87,10 +87,10 @@ namespace Chubrik
                     if (web)
                     {
                         bool kept = rels[0] == rel || Updater.Compare(v, FirstWebVersion) >= 0;
-                        w.Row(title, kept ? notes : "Эта версия есть только для телефона", "ИГРАТЬ", UIKit.Blue, () => PlayWeb(rel, v), kept);
+                        w.Row(title, kept ? notes : "Эта версия есть только для телефона", "ИГРАТЬ", UIKit.Blue, () => Agree(rel, v), kept);
                     }
                     else
-                        w.Row(title, notes, cmp > 0 ? "ОБНОВИТЬ" : "СКАЧАТЬ", cmp > 0 ? UIKit.Lime : UIKit.Blue, () => { if (cmp > 0) Download(rel); else AskOlder(rel, v); });
+                        w.Row(title, notes, cmp > 0 ? (rels[0] == rel ? "ВЕРНУТЬСЯ" : "ОБНОВИТЬ") : "ВЫБРАТЬ", cmp > 0 ? UIKit.Lime : UIKit.Blue, () => { if (cmp > 0) Agree(rel, v); else AskOlder(rel, v); });
                 }
                 w.Footer.text = $"Всего версий: {rels.Count}";
             }, 1060, 780);
@@ -122,10 +122,25 @@ namespace Chubrik
                     w.Text("Телефон не ставит старую версию поверх новой.", 30);
                     w.Text("Сначала удали игру, потом установи скачанный файл. Прогресс, монеты и покупки пропадут!", 30, UIKit.Gold);
                 }
-                w.Row("Скачать версию " + v, null, "СКАЧАТЬ", UIKit.Blue, () => { Window.Close(); Download(r); });
+                w.Row("Скачать версию " + v, null, "СОГЛАСИТЬСЯ", UIKit.Blue, () => { Window.Close(); Download(r); });
                 w.Row("Не надо", null, "НАЗАД", UIKit.Green, Show);
             }, 900, 560);
         }
+
+        /// <summary>v0.27: «Перейти на версию X?» — «СОГЛАСИТЬСЯ» and it opens right here (no GitHub pages).</summary>
+        static void Agree(Rel r, string v)
+        {
+            bool web = WebBridge.IsWeb;
+            Window.Show("ВЕРСИЯ " + v, w =>
+            {
+                w.Text(web ? $"Перейти на версию {v}? Игра перезапустится в этой версии. Вернуться можно кнопкой «Вернуться обратно» вверху страницы." :
+                             $"Поставить версию {v}? Телефон скачает её файл — открой его и нажми «Установить».", 28);
+                w.Row("Перейти на версию " + v, null, "СОГЛАСИТЬСЯ", UIKit.Green, () => { Window.Close(); if (web) PlayWeb(r, v); else Download(r); }, true, UIKit.Lime);
+                w.Row("Не надо", null, "НАЗАД", UIKit.Blue, Show);
+            }, 960, 520);
+        }
+
+        public static string LastGo;
 
         static void PlayWeb(Rel r, string v)
         {
@@ -135,7 +150,8 @@ namespace Chubrik
             if (q >= 0) u = u.Substring(0, q);
             int vi = u.IndexOf("/v/");
             string root = vi >= 0 ? u.Substring(0, vi + 1) : u.Substring(0, u.LastIndexOf('/') + 1);
-            Application.OpenURL(rels[0] == r ? root : root + "v/" + v + "/");
+            LastGo = rels[0] == r ? root : root + "v/" + v + "/";
+            WebBridge.Go(LastGo);   // the same tab, not a new one
         }
     }
 }

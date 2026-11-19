@@ -218,7 +218,10 @@ namespace Chubrik
             }
             if (chickenOn && dept == "ears") return;
             int made = Parts.Made;
-            b(Catalog.Index(id), Catalog.SetOf(id));
+            var fin = SkinFinish.For(Catalog.FinishOf(id));
+            Parts.Finish = fin;
+            try { b(Catalog.Index(id), Catalog.SetOf(id)); }
+            finally { Parts.Finish = null; }
             if (!string.IsNullOrEmpty(id)) PartCount[dept] = Parts.Made - made;
         }
 

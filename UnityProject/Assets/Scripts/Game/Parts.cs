@@ -65,10 +65,13 @@ namespace Chubrik
 
         /// <summary>Parts made so far (every primitive / mesh call adds one): the wardrobe counts the parts of each item.</summary>
         public static int Made;
+        /// <summary>v0.27: while set, every material of the thing being built gets this «finish» (gold, neon, ice…).</summary>
+        public static System.Func<Material, Material> Finish;
 
         static GameObject P(PrimitiveType type, Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler)
         {
             Made++;
+            if (Finish != null) m = Finish(m);
             var go = Prim.Make(type, p, pos, sc, m, type.ToString(), Layer);
             go.transform.localEulerAngles = euler;
             return go;
@@ -84,6 +87,7 @@ namespace Chubrik
         public static GameObject Msh(Mesh mesh, Transform p, Vector3 pos, Vector3 sc, Material m, Vector3 euler = default)
         {
             Made++;
+            if (Finish != null) m = Finish(m);
             var go = Prim.MeshGO(mesh, p, m, mesh.name);
             go.layer = Layer;
             go.transform.localPosition = pos;

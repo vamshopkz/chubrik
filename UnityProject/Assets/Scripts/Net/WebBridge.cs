@@ -9,6 +9,9 @@ namespace Chubrik
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")] static extern void GadSyncFs();
         [DllImport("__Internal")] static extern void GadReload();
+        [DllImport("__Internal")] static extern void GadGo(string url);
+        /// <summary>v0.27: go to another page in the same tab (another version of the game).</summary>
+        public static void Go(string url) => GadGo(url);
         [DllImport("__Internal")] static extern int GadWsOpen(string url);
         [DllImport("__Internal")] static extern int GadWsState(int id);
         [DllImport("__Internal")] static extern int GadWsSend(int id, byte[] data, int length);
@@ -31,6 +34,7 @@ namespace Chubrik
         public static void WsClose(int id) { }
         public static void SyncFiles() { }
         public static void Reload() { }
+        public static void Go(string url) => Application.OpenURL(url);
 #endif
         public static bool IsWeb => Application.platform == RuntimePlatform.WebGLPlayer;
     }

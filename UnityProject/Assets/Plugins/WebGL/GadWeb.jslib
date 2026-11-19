@@ -53,4 +53,7 @@ mergeInto(LibraryManager.library, {
   GadReload: function () {
     window.location.reload();
   },
+  GadGo: function (urlPtr) {
+    window.location.href = UTF8ToString(urlPtr);
+  },
 });

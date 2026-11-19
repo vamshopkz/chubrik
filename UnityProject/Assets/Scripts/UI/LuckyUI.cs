@@ -32,6 +32,7 @@ namespace Chubrik
         /// <summary>0 ordinary, 1 rare, 2 epic, 3 legendary.</summary>
         public static int Rarity(Item it)
         {
+            if (it.finish >= 0) return SkinFinish.Rarity(it.finish);   // v0.27 finishes: gold and galaxy are legendary
             int i = Catalog.Index(it.id);
             if (it.dept == "secret") return 3;
             if (it.dept == "suit") return i == 1 || i == 2 || i == 26 ? 3 : 2;

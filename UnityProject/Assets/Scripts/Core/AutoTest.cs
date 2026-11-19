@@ -58,7 +58,17 @@ namespace Chubrik
             // ---- catalogue ----
             Check("32 departments (with «Костюмы»)", Catalog.Depts.Count == 32, Catalog.Depts.Count.ToString());
             bool eight = true;
-            foreach (var d in Catalog.Depts) if (d.id != "suit" && d.items.FindAll(i => !i.Premium && !i.Reward).Count != 8) eight = false;
+            foreach (var d in Catalog.Depts) if (d.id != "suit" && d.items.FindAll(i => !i.Premium && !i.Reward && i.finish < 0).Count != 8) eight = false;
+            Updater.I.Fake("9.99", "Новый мир. Тысяча скинов. Футбол с друзьями.");
+            Updater.I.ShowMessage();
+            yield return Wait(0.4f);
+            bool updMsg = false, updNote = false;
+            foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) { if (tx.text.Contains("ВЫШЛО ОБНОВЛЕНИЕ 9.99")) updMsg = true; if (tx.text.Contains("Тысяча скинов")) updNote = true; }
+            yield return Shot("120_update_message");
+            Window.Close();
+            Updater.I.Fake(null);
+            Check("«Вышло обновление 9.99!» with what is new in it", updMsg && updNote);
+            Check("v0.27: 1000 more skins (things in 10 finishes)", Catalog.VariantCount == 1000 && Catalog.Get("hat_v0") != null && Catalog.Get("hat_v0").name.Contains("("), Catalog.VariantCount.ToString());
             Check("25+ costumes: chicken, rich Артём and Али, footballers, sport, robots, phones, computers", Catalog.Dept("suit").items.Count >= 26, Catalog.Dept("suit").items.Count.ToString());
             Check("8 named items in every department", eight);
             Check("200+ items in total", Catalog.Items.Count >= 200, Catalog.Items.Count + " (regular " + Catalog.RegularCount + ")");
@@ -389,6 +399,25 @@ namespace Chubrik
             Check("every costume and skin is in the lucky blocks (except premium and rewards)", Lucky.InPool(Catalog.Get(Catalog.RichArtemiy)) && Lucky.InPool(Catalog.Get(Catalog.Tramp)) && Lucky.InPool(Catalog.Get("hat_3")) && !Lucky.InPool(Catalog.Get("hat_p0")));
             WardrobeUI.Close();
             Check("closing the wardrobe gives the normal camera back", !pl.WardrobeView && !pl.Frozen);
+
+            // v0.27: a sheet of finish variants (gold, chrome, neon, rainbow, galaxy, ice, lava, shadow, candy, emerald)
+            {
+                var fin = new List<Item>();
+                foreach (var it in Catalog.Items.Values) if (it.finish >= 0 && (it.dept == "wings" || it.dept == "top" || it.dept == "suit") && fin.Count < 20) fin.Add(it);
+                const int fc = 220;
+                var sheet = new Texture2D(5 * fc, 4 * fc, TextureFormat.RGB24, false);
+                for (int k = 0; k < fin.Count; k++)
+                {
+                    var tx = Preview.I.Big(fin[k], fc - 4);
+                    sheet.SetPixels((k % 5) * fc + 2, (3 - k / 5) * fc + 2, fc - 4, fc - 4, tx.GetPixels());
+                    Destroy(tx);
+                    if (k % 4 == 3) yield return null;
+                }
+                sheet.Apply();
+                File.WriteAllBytes(Path.Combine(dir, "119_finishes.png"), sheet.EncodeToPNG());
+                Destroy(sheet);
+                Check("finish variants look different from their base (gold, neon…)", fin.Count == 20);
+            }
 
             // hats sit on top of every head shape
             {
@@ -1251,6 +1280,25 @@ namespace Chubrik
                 Online.I.Inject($"A|room1peer|{Online.I.Id}");
                 Online.I.Inject($"J|room1peer|{Online.I.Id}");
                 bool inRoom = Online.I.RoomWith == "room1peer";
+                // v0.27 voice: the codec keeps the sound, a piece from the friend gets into the speaker
+                Window.Close();
+                var tone = new float[Voice.Chunk]; for (int k = 0; k < tone.Length; k++) tone[k] = Mathf.Sin(k * 0.3f) * 0.5f;
+                float err = 0; foreach (var x in tone) err = Mathf.Max(err, Mathf.Abs(Voice.UnMuLaw(Voice.MuLaw(x)) - x));
+                var bytes = new byte[tone.Length]; for (int k = 0; k < tone.Length; k++) bytes[k] = Voice.MuLaw(tone[k]);
+                int heard0 = Voice.I.Heard;
+                Online.I.Inject($"V|room1peer|1|{System.Convert.ToBase64String(bytes)}");
+                Online.I.Inject($"V|room1peer|1|{System.Convert.ToBase64String(bytes)}");   // the copy from the second relay
+                yield return Wait(0.3f);
+                bool voiceBtn = false; foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ГОЛОС" && tx.isActiveAndEnabled) voiceBtn = true;
+                Check("voice with the friend: «ГОЛОС» shows in a room, the friend's voice plays once, clear sound", voiceBtn && Voice.I.Heard == heard0 + 1 && err < 0.03f, $"err {err:0.000}, heard {Voice.I.Heard - heard0}");
+                RoomChat.I.Send("Привет! Пошли в мир 8");
+                Online.I.Inject("C|room1peer|1|Пошли!");
+                Online.I.Inject("C|room1peer|1|Пошли!");   // the copy from the second relay
+                yield return Wait(0.5f);
+                Check("the chat with the friend: top left, my and the friend's messages (once), coins moved aside", RoomChat.Visible && RoomChat.I.Lines.Count >= 2 && RoomChat.I.Lines.FindAll(l => l.Contains("Пошли!")).Count == 1,
+                    string.Join(" / ", RoomChat.I.Lines));
+                yield return Shot("121_voice_button");
+                PlayersUI.Open();
                 Window.Refresh();
                 yield return Wait(0.5f);
                 bool leaveBtn = false;
