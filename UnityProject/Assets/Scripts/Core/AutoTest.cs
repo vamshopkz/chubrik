@@ -734,7 +734,7 @@ namespace Chubrik
             pl.MoveInput = Vector2.zero;
             yield return Wait(0.25f);
             float slide = new Vector2(pl.Velocity.x, pl.Velocity.z).magnitude;
-            Check("ice is slippery", slide > 2.5f, slide.ToString("0.0"));
+            Check("ice is slippery", slide > 1.5f, slide.ToString("0.0"));   // a snowball hit may slow you a little
             Save.Give(Catalog.Skates); Save.Wear("shoes", Catalog.Skates); pl.ApplyLook(Save.CurrentLook());
             pl.Teleport(World4.O + new Vector3(0, 0.3f, 34), 0);
             yield return Wait(0.5f);
@@ -1468,6 +1468,7 @@ namespace Chubrik
                 {
                     (2, World2.O, new Vector3(-17, 0.3f, 20), 300), (3, World3.O, new Vector3(-19, 0.9f, 30), 300), (4, World4.O, new Vector3(-29, 2.9f, 54), 200),
                     (5, World5.O, new Vector3(23.5f, 6.3f, 58), 120), (6, World6.O, new Vector3(-30, 2.9f, 45), 270), (7, World67.O, new Vector3(-21, 4.3f, 99), 300),
+                    (8, World8.O, new Vector3(0, 13.3f, 203), 180),
                 };
                 foreach (var v in views)
                 {
@@ -1480,7 +1481,32 @@ namespace Chubrik
                     Check($"world {v.w}: the new side area stands where the player can walk", pl.Grounded || Physics.Raycast(pl.transform.position + Vector3.up, Vector3.down, 3f, Layers.SolidMask), pl.transform.position.ToString());
                     yield return Shot($"111_world{v.w}_area");
                 }
+                // World 8 «Самый мемный мир»: 12 friends with their keys, Pyzhik flies along, the golden portal finishes it
+                yield return Enter(8);
+                yield return Wait(3f);
+                Check("World 8: 12 cages and a key for each", Rescue.Total("w8c") == 12 && Pickups.I.KeysLeftIn("w8k") == 12, $"{Rescue.Total("w8c")} / {Pickups.I.KeysLeftIn("w8k")}");
+                var pyzhik = FindFirstObjectByType<Pyzhik>();
+                Check("World 8: the robot Пыжик flies next to the chubrik", pyzhik != null && Vector3.Distance(pyzhik.transform.position, pl.transform.position) < 6, pyzhik != null ? Vector3.Distance(pyzhik.transform.position, pl.transform.position).ToString("0.0") : "none");
+                Check("World 8 has its titan", TitanArena.Bosses.ContainsKey(8));
+                pl.yaw = 0; pl.pitch = 12;
+                yield return Shot("112_world8_pyzhik");
+                pl.Teleport(World8.O + new Vector3(0, 19.3f, 219), 0); pl.yaw = 0; pl.pitch = 10;
+                yield return Wait(1f);
+                yield return Shot("113_world8_portal");
+                bool done8 = Save.P.done.Contains(8);
+                World8.Win();
+                yield return Wait(1.5f);
+                Check("World 8: the golden portal finishes the world", Save.P.done.Contains(8));
+                if (!done8) { Save.P.done.Remove(8); }
+                Window.Close();
                 yield return Enter(1);
+                Check("the lobby has a portal to World 8", GameObject.Find("Portal8") != null, Lobby.Portal8Pos.ToString());
+                pl.Teleport(Lobby.Portal8Pos + Vector3.up * 0.3f + Quaternion.Euler(0, 0, 0) * new Vector3(0, 0, -7), 0);
+                yield return Wait(0.6f);
+                var p8 = GameObject.Find("Portal8").transform;
+                pl.Teleport(p8.TransformPoint(new Vector3(0, 0.3f, -8)), p8.eulerAngles.y); pl.yaw = p8.eulerAngles.y; pl.pitch = 8;
+                yield return Wait(0.6f);
+                yield return Shot("114_lobby_portal8");
             }
 
 

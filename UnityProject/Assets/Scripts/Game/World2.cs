@@ -12,16 +12,17 @@ namespace Chubrik
         public static void Enter(int w)
         {
             var p = PlayerCtl.I;
-            bool wasBuilt = (w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null) != null;
+            bool wasBuilt = (w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : w == World8.Id ? World8.Root : null) != null;
             if (w == 2 && World2.Root == null) World2.Build();
             if (w == 3 && World3.Root == null) World3.Build();
             if (w == 4 && World4.Root == null) World4.Build();
             if (w == 5 && World5.Root == null) World5.Build();
             if (w == 6 && World6.Root == null) World6.Build();
             if (w == World67.Id && World67.Root == null) World67.Build();
+            if (w == World8.Id && World8.Root == null) World8.Build();   // 19.11 «Самый мемный мир»
             Eggs.SpawnWorld(w);
             Bird.ForWorld(w);
-            var wr = w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : null;
+            var wr = w == 2 ? World2.Root : w == 3 ? World3.Root : w == 4 ? World4.Root : w == 5 ? World5.Root : w == 6 ? World6.Root : w == World67.Id ? World67.Root : w == World8.Id ? World8.Root : null;
             if (wr != null && !wasBuilt) Scenery.Build(w);   // 18.11: the worlds dressed like the concept art
             if (wr != null) TitanArena.Build(w, wr);   // 18.11: a big boss in every world
             if (wr != null && wasBuilt)
@@ -39,15 +40,15 @@ namespace Chubrik
             {
                 Current = w;
                 World3.Env(w);
-                if (w >= 2 && w <= 7)
+                if (w >= 2 && w <= 8)
                 {
-                    p.WaterY = w == 7 ? World67.FallY : w == 6 ? World6.FallY : w == 5 ? World5.FallY + 0.5f : w == 4 ? World4.WaterY : w == 3 ? World3.LavaY + 0.5f : World2.O.y - 18f;
-                    p.Checkpoint = w == 7 ? World67.Spawn : w == 6 ? World6.Spawn : w == 5 ? World5.Spawn : w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
+                    p.WaterY = w == World8.Id ? World8.FallY : w == 7 ? World67.FallY : w == 6 ? World6.FallY : w == 5 ? World5.FallY + 0.5f : w == 4 ? World4.WaterY : w == 3 ? World3.LavaY + 0.5f : World2.O.y - 18f;
+                    p.Checkpoint = w == World8.Id ? World8.Spawn : w == 7 ? World67.Spawn : w == 6 ? World6.Spawn : w == 5 ? World5.Spawn : w == 4 ? World4.Spawn : w == 3 ? World3.Spawn : World2.Spawn;
                     p.Teleport(p.Checkpoint, 0);
                     p.Hearts = Save.P.maxHearts;
-                    Hud.Toast(w == 7 ? "МИР 67 — ГЛЮЧНЫЙ СИКС-СЕВЕН. Спаси 67 друзей… ну, сколько найдёшь!" : w == 6 ? "МИР 6 — ГЛЮК-МИР. Что-то пошло не так… и это прекрасно!" : w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 12 друзей изо льда" :
+                    Hud.Toast(w == World8.Id ? "МИР 8 — САМЫЙ МЕМНЫЙ МИР! Спаси 12 друзей, найди их ключи и доберись до золотого портала" : w == 7 ? "МИР 67 — ГЛЮЧНЫЙ СИКС-СЕВЕН. Спаси 67 друзей… ну, сколько найдёшь!" : w == 6 ? "МИР 6 — ГЛЮК-МИР. Что-то пошло не так… и это прекрасно!" : w == 5 ? "МИР 5 — ДЖУНГЛИ. Не падай в ядовитое болото! Наверху пирамиды ждёт Голем" : w == 4 ? "МИР 4 — СНЕЖНАЯ ДОЛИНА. Осторожно, лёд скользкий! Спаси 12 друзей изо льда" :
                               w == 3 ? "МИР 3 — КРИСТАЛЬНЫЕ ПЕЩЕРЫ. Собирай кристаллы, спаси 12 друзей!" : "МИР 2 — ПАРЯЩИЕ РУИНЫ. У каждой клетки свой ключ — спаси 12 друзей! Где-то ждёт босс",
-                              w == 4 ? UIKit.Cyan : w == 3 ? UIKit.Cyan : UIKit.Lime);
+                              w == World8.Id ? UIKit.Pink : w == 4 ? UIKit.Cyan : w == 3 ? UIKit.Cyan : UIKit.Lime);
                 }
                 else
                 {

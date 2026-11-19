@@ -27,7 +27,7 @@ namespace Chubrik
         public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(19, 0.07f, -5), PadTo = new Vector3(-20, 4.9f, 12), CactusPos = new Vector3(-22, 0, 0);
         /// <summary>Rescued friends needed to open the way to each world.</summary>
         public static readonly Vector3 Portal67 = new Vector3(-47.5f, 0, -3.2f);
-        public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, _ => 0 };
+        public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, 8 => 30, _ => 0 };
         public static bool Open(int world) => Save.P.rescued.Count >= NeedFor(world);
 
         static Material wallM, grass, snowM, checker, waterM;
@@ -67,6 +67,7 @@ namespace Chubrik
             Tokens();
             MakeSolid();
             Football.BuildPad(root);   // 18.11
+            Portal8();                 // 19.11 the portal to World 8
             Eggs.SpawnLobby();
             Bird.ForWorld(1);
             building = false;
@@ -545,8 +546,27 @@ namespace Chubrik
                 case "crystal":
                     foreach (var sd in new[] { -1, 1 }) Spike(t, new Vector3(sd * 3, 6, 0), new Vector3(sd * 3.6f, 8.4f, 0), 0.7f, G("A66BFF", 1.6f));
                     break;
+                case "meme":
+                    // 19.11: a laughing smiley, neon «LOL» and spinning golden smiley coins on top
+                    var smile = Node("Smiley", t, new Vector3(0, 8.6f, 0));
+                    S(smile, Vector3.zero, new Vector3(2.2f, 2.2f, 0.6f), G("FFE14D", 1.2f));
+                    foreach (var sd in new[] { -1, 1 }) S(smile, new Vector3(sd * 0.4f, 0.3f, -0.3f), new Vector3(0.3f, 0.45f, 0.1f), M("1A1A1A", 0.5f));
+                    for (int k = 0; k < 7; k++) { float a = (k / 6f - 0.5f) * 2.2f; S(smile, new Vector3(Mathf.Sin(a) * 0.62f, -0.25f - Mathf.Cos(a) * 0.3f, -0.3f), 0.16f, M("1A1A1A", 0.5f)); }
+                    smile.gameObject.AddComponent<Bob>().amp = 0.2f;
+                    foreach (var sd in new[] { -1, 1 })
+                    {
+                        var coin = Node("SmileyCoin", t, new Vector3(sd * 3, 7.6f, 0));
+                        Cy(coin, Vector3.zero, new Vector3(1.1f, 0.06f, 1.1f), M("FFC83A", 0.9f, 0.85f), new Vector3(90, 0, 0));
+                        coin.gameObject.AddComponent<Spin>().speed = 120;
+                    }
+                    break;
             }
-            Zones.Add(t.TransformPoint(new Vector3(0, 0, -1.2f)), 2.6f, $"МИР {(world == World67.Id ? 67 : world)}: {title}", () => Worlds.Enter(world), () => Worlds.Current == 1);
+            Zones.Add(t.TransformPoint(new Vector3(0, 0, -1.2f)), 2.6f, $"МИР {(world == World67.Id ? 67 : world)}: {title}", () =>
+            {
+                // 19.11: a portal of a world that needs more saved friends says so (World 8 stands in the open hub)
+                if (!Open(world)) { AudioFx.Play("error"); Hud.Toast($"Чтобы войти, спаси ещё друзей: нужно {NeedFor(world)}, спасено {Save.P.rescued.Count}", UIKit.Orange); return; }
+                Worlds.Enter(world);
+            }, () => Worlds.Current == 1);
         }
 
         // ---------------- areas ----------------
@@ -587,6 +607,35 @@ namespace Chubrik
                 d.gameObject.AddComponent<Breakable>().dummy = true;
                 d.GetComponent<Breakable>().coins = 0;
             }
+        }
+
+        public static Vector3 Portal8Pos;
+
+        /// <summary>19.11: the portal to World 8 «Самый мемный мир» — on free flat ground in the hub or the park.</summary>
+        static void Portal8()
+        {
+            Physics.SyncTransforms();
+            Portal8Pos = new Vector3(20, 0, -2);
+            float yaw = 270;
+            bool found = false;
+            foreach (var (c, y) in new[] { (new Vector3(20, 0, -2), 270f), (new Vector3(-18, 0, 15.5f), 180f), (new Vector3(-34, 0, -3.5f), 0f), (new Vector3(-14, 0, 2), 90f), (new Vector3(16, 0, 12), 200f), (new Vector3(-40, 0, 14), 180f), (new Vector3(-2, 0, -18), 0f), (new Vector3(23, 0, -18), 0f) })
+            {
+                for (int k = 0; k < 9 && !found; k++)
+                {
+                    var p = c + new Vector3((k % 3 - 1) * 2.5f, 0, (k / 3 - 1) * 2.5f);
+                    if (!Physics.Raycast(p + Vector3.up * 6, Vector3.down, out var hit, 9, Layers.SolidMask, QueryTriggerInteraction.Ignore) || Mathf.Abs(hit.point.y) > 0.25f) continue;
+                    var rot = Quaternion.Euler(0, y, 0);
+                    if (Physics.CheckBox(p + Vector3.up * 3.5f, new Vector3(4.6f, 3.2f, 1.6f), rot, ~0, QueryTriggerInteraction.Ignore)) continue;
+                    if (Physics.CheckBox(p + rot * new Vector3(0, 1.5f, -3f), new Vector3(2f, 1.2f, 1.6f), rot, ~0, QueryTriggerInteraction.Ignore)) continue;
+                    bool near = false;
+                    foreach (var z in Zones.All) if ((z.pos - p).magnitude < 6) near = true;
+                    foreach (var t in TokenSpots) if (new Vector2(t.x - p.x, t.z - p.z).magnitude < 3) near = true;
+                    if (near) continue;
+                    Portal8Pos = new Vector3(p.x, 0, p.z); yaw = y; found = true;
+                }
+                if (found) break;
+            }
+            PortalArch(Portal8Pos, yaw, World8.Id, "САМЫЙ МЕМНЫЙ МИР", "FF7AD9", M("7A3CFF", 0.3f), "meme");
         }
 
         static void Glitch()

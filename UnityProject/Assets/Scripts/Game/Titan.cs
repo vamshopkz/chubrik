@@ -18,12 +18,12 @@ namespace Chubrik
         public static string FriendOf(int w) => "titan" + w;   // not wN...: the 8 cages of a world are counted by that prefix
         public const float R = 24f;
 
-        static Vector3 SpawnOf(int w) => w == 2 ? World2.Spawn : w == 3 ? World3.Spawn : w == 4 ? World4.Spawn : w == 5 ? World5.Spawn : w == 6 ? World6.Spawn : World67.Spawn;
-        public static int Level(int w) => w == 2 ? 1 : w == 4 ? 2 : w == 5 ? 3 : w == 3 ? 4 : w == 6 ? 5 : 6;   // the order the worlds open in
+        static Vector3 SpawnOf(int w) => w == 2 ? World2.Spawn : w == 3 ? World3.Spawn : w == 4 ? World4.Spawn : w == 5 ? World5.Spawn : w == 6 ? World6.Spawn : w == World8.Id ? World8.Spawn : World67.Spawn;
+        public static int Level(int w) => w == 2 ? 1 : w == 4 ? 2 : w == 5 ? 3 : w == 3 ? 4 : w == 6 ? 5 : w == World8.Id ? 7 : 6;   // the order the worlds open in
 
         public static string NameOf(int w) => w switch
         {
-            2 => "КАМЕННЫЙ ТИТАН", 3 => "КРИСТАЛЬНЫЙ КОЛОСС", 4 => "ЛЕДЯНОЙ ВЕЛИКАН", 5 => "ДРЕВНИЙ ЛЕСНОЙ ИСПОЛИН", 6 => "ГЛЮК-ГИГАНТ", _ => "ТИТАН-67",
+            2 => "КАМЕННЫЙ ТИТАН", 3 => "КРИСТАЛЬНЫЙ КОЛОСС", 4 => "ЛЕДЯНОЙ ВЕЛИКАН", 5 => "ДРЕВНИЙ ЛЕСНОЙ ИСПОЛИН", 6 => "ГЛЮК-ГИГАНТ", 8 => "МЕМ-ТИТАН", _ => "ТИТАН-67",
         };
 
         /// <summary>Built together with the world: the arena far to the side, the pad next to the start.</summary>
@@ -95,6 +95,7 @@ namespace Chubrik
             4 => ("DDEFFF", "9CC8E8", "6FD8FF"),
             5 => ("6D8B4A", "4E6B35", "9BE35A"),
             6 => ("FF5FA2", "2B2B2B", "39FF14"),
+            8 => ("FF7AD9", "7A3CFF", "FFE14D"),
             _ => ("2E2E3A", "1A1A24", "FFE14D"),
         };
 
@@ -202,6 +203,7 @@ namespace Chubrik
                 case 4: skin = Glass("BFEAFF", 0.85f); dark = M("E8F6FF", 0.5f); eye = G("6FD8FF", 3f); break;
                 case 5: skin = Mats.Tex(Tex.Bark(), Color.white, 0.1f); dark = M("33691E", 0.2f); eye = G("9BE35A", 3f); break;
                 case 6: skin = Mats.Tex(World6.MissingTex(), Color.white, 0.2f); dark = M("2B2B2B", 0.4f); eye = G("39FF14", 3f); break;
+                case 8: skin = M("FF7AD9", 0.5f); dark = M("7A3CFF", 0.5f); eye = G("FFE14D", 3f); break;   // a pink-violet meme titan
                 default: skin = M("1A1A24", 0.6f, 0.4f); dark = M("FFC83A", 0.9f, 0.8f); eye = G("FFE14D", 3f); break;
             }
             coreM = G("FF5252", 1.2f);
