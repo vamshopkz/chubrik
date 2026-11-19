@@ -1174,6 +1174,8 @@ namespace Chubrik
                 Promo.Apply("iPhone");
                 Save.P.coins = keepC; Save.P.tokens = keepT; Save.Write();
 
+                Check("«Фиксай» and «Домер» open their songs in YouTube Music", Promo.Apply("Фиксай") && Promo.LastSongUrl.Contains("music.youtube.com") && Promo.LastSongUrl.Contains(System.Uri.EscapeDataString("Жизнь в розовых очках"))
+                    && Promo.Apply("Домер") && Promo.LastSongUrl.Contains(System.Uri.EscapeDataString("Семицвет")), Promo.LastSongUrl);
                 Promo.Apply("Секрет");
                 yield return Wait(0.4f);
                 yield return Shot("83_secret_nooks");

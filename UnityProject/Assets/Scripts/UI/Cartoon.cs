@@ -18,8 +18,9 @@ namespace Chubrik
     /// The set is built from code far away from the game (<see cref="Origin"/>) and filmed by its own camera;
     /// the player camera, lights, fog and music are put back after <see cref="Stop"/>.
     /// Voices: Resources/Sounds/cartoon/lNN.wav (macOS «say», Milena), pitch per character.
+    /// 19.11: the film look (textures, sky, fog, meadow, trees, house, cartoon-only post FX) lives in CartoonLook.cs.
     /// </summary>
-    public static class Cartoon
+    public static partial class Cartoon
     {
         static GameObject root;
         public static bool IsOpen => root != null;
@@ -59,6 +60,9 @@ namespace Chubrik
         static bool oldFog;
         static AmbientMode oldAmb;
         static Color ambSky, ambEq, ambGr;
+        static FogMode oldFogMode;
+        static Color oldFogCol;
+        static float oldFogA, oldFogB, oldShadowDist = -1;
 
         static void Grab(GameObject newSet, Light sun)
         {
@@ -77,12 +81,23 @@ namespace Chubrik
                 if (l.enabled && l.type == LightType.Directional && l != sun) { l.enabled = false; offLights.Add(l); }
             oldSun = RenderSettings.sun; oldFog = RenderSettings.fog; oldAmb = RenderSettings.ambientMode;
             ambSky = RenderSettings.ambientSkyColor; ambEq = RenderSettings.ambientEquatorColor; ambGr = RenderSettings.ambientGroundColor;
+            oldFogMode = RenderSettings.fogMode; oldFogCol = RenderSettings.fogColor;
+            oldFogA = RenderSettings.fogStartDistance; oldFogB = RenderSettings.fogEndDistance;
             RenderSettings.sun = sun;
-            RenderSettings.fog = false;
+            // atmospheric perspective: the far hills and trees melt into the sky's horizon colour
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = Hex("C4DCEA");
+            RenderSettings.fogStartDistance = 45; RenderSettings.fogEndDistance = 420;
+            // ambient = the sky gradient: cool from above, warm green bounce from the meadow
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = Hex("CFE9FF");
-            RenderSettings.ambientEquatorColor = Hex("D8F0D0");
-            RenderSettings.ambientGroundColor = Hex("8FA86A");
+            RenderSettings.ambientSkyColor = Hex("A3C6EC");
+            RenderSettings.ambientEquatorColor = Hex("C6D5C2");
+            RenderSettings.ambientGroundColor = Hex("6F8452");
+            // shadows tuned to the set: sharper (the shadow map covers only what the cartoon camera sees)
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            oldShadowDist = -1;
+            if (urp != null && urp.shadowDistance > 0) { oldShadowDist = urp.shadowDistance; urp.shadowDistance = 42; }
             AudioFx.SetMusic(false);
         }
 
@@ -90,8 +105,14 @@ namespace Chubrik
         {
             if (set) UnityEngine.Object.Destroy(set);
             set = null;
+            FreeLook();
             if (!saved) return;
             saved = false;
+            RenderSettings.fogMode = oldFogMode; RenderSettings.fogColor = oldFogCol;
+            RenderSettings.fogStartDistance = oldFogA; RenderSettings.fogEndDistance = oldFogB;
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            if (urp != null && oldShadowDist > 0) urp.shadowDistance = oldShadowDist;
+            oldShadowDist = -1;
             if (gameCam)
             {
                 gameCam.cullingMask = gameMask;
@@ -178,18 +199,23 @@ namespace Chubrik
                 sq = Node("Squash", root, Vector3.zero);
                 roll = Node("Roll", sq, new Vector3(0, r, 0));
                 var c = Hex(hex);
-                var col = M(hex, kind == "onion" ? 0.55f : 0.45f);
-                var dark = M(ColorUtility.ToHtmlStringRGB(c * 0.72f), 0.3f);
+                // 19.11 film look: a soft, slightly glossy textured skin instead of flat colour
+                var col = kind == "onion" ? Look.Onion() : Look.Body(hex, kind == "bird" ? 0.5f : 0.58f);
+                var dark = Look.Body(ColorUtility.ToHtmlStringRGB(c * 0.72f), 0.42f);
                 S(roll, Vector3.zero, 2 * r, col);
                 bool bird = kind == "bird", onion = kind == "onion";
                 float es = onion ? 0.8f : bird ? 1.15f : 1f;
+                string iris = kind switch { "sprout" => "4F8A2E", "bow" => "8A4FB0", "glasses" => "3D6BB0", "onion" => "5C8A35", "bird" => "2A1E14", _ => "7A4A26" };
                 for (int sd = -1; sd <= 1; sd += 2)
                 {
                     var dir = new Vector3(sd * 0.36f, 0.24f, 0.9f).normalized;
-                    var e = S(roll, dir * r * 0.9f, new Vector3(0.36f, 0.44f, 0.26f) * r * es, M("FFFFFF", 0.6f)).transform;
+                    var e = S(roll, dir * r * 0.9f, new Vector3(0.36f, 0.44f, 0.26f) * r * es, Look.Sclera).transform;
                     e.localRotation = Quaternion.LookRotation(dir);
-                    var p = S(e, new Vector3(0, 0, 0.36f), new Vector3(0.55f, 0.58f, 0.5f), M("1A1A2A", 0.7f)).transform;
-                    S(p, new Vector3(0.22f, 0.25f, 0.42f), new Vector3(0.3f, 0.3f, 0.3f), M("FFFFFF", 0.8f));
+                    // glossy eye: coloured iris, a black pupil, a big and a small catchlight
+                    var p = S(e, new Vector3(0, 0, 0.36f), new Vector3(0.55f, 0.58f, 0.5f), Look.Iris(iris)).transform;
+                    S(p, new Vector3(0, 0, 0.32f), new Vector3(0.56f, 0.56f, 0.5f), Look.Pupil);
+                    NoShadowGo(S(p, new Vector3(0.22f, 0.25f, 0.42f), new Vector3(0.3f, 0.3f, 0.3f), Look.Catch));
+                    NoShadowGo(S(p, new Vector3(-0.2f, -0.24f, 0.44f), new Vector3(0.13f, 0.13f, 0.13f), Look.Catch));
                     if (sd < 0) { eyeL = e; pupL = p; } else { eyeR = e; pupR = p; }
                 }
                 eyeBase = eyeL.localScale;
@@ -261,11 +287,11 @@ namespace Chubrik
                         Ring(roll, new Vector3(0, 1.08f, 0) * r, 0.18f * r, 0.045f * r, dark, new Vector3(90, 0, 0));
                         break;
                     case "onion":    // the giant onion: layers, a neck, green feathers and roots
-                        for (int k = 0; k < 4; k++) Ring(roll, Vector3.zero, r * 1.0f, r * 0.022f, M("D9B98A", 0.4f), new Vector3(90, k * 45, 0));
-                        Cone(roll, new Vector3(0, 0.82f * r, 0), new Vector3(0.55f, 0.75f, 0.55f) * r, M("EAD7AE", 0.5f));
+                        for (int k = 0; k < 4; k++) Ring(roll, Vector3.zero, r * 1.0f, r * 0.012f, M("E2C08A", 0.55f), new Vector3(90, k * 45, 0));
+                        Cone(roll, new Vector3(0, 0.82f * r, 0), new Vector3(0.55f, 0.75f, 0.55f) * r, M("D9B47A", 0.45f));
                         top = Node("Leaves", roll, new Vector3(0, 1.45f * r, 0));
                         for (int k = -1; k <= 1; k++)
-                            Ca(top, new Vector3(k * 0.15f * r, 0.4f * r, 0), new Vector3(0.12f, 0.5f, 0.12f) * r, M("3FAE3A", 0.4f), new Vector3(0, 0, -k * 18));
+                            Ca(top, new Vector3(k * 0.15f * r, 0.4f * r, 0), new Vector3(0.12f, 0.5f, 0.12f) * r, M("4CB848", 0.55f), new Vector3(0, 0, -k * 18));
                         for (int k = 0; k < 6; k++)
                         {
                             float a = k * 60 * Mathf.Deg2Rad;
@@ -361,7 +387,7 @@ namespace Chubrik
             public Transform t; public Vector3 v, rot; public float life, max, grav, s0, grow; public bool bill, keep;
         }
 
-        class Show : MonoBehaviour
+        partial class Show : MonoBehaviour
         {
             Transform W;            // the set (local coordinates everywhere)
             Camera cam;
@@ -468,18 +494,6 @@ namespace Chubrik
                 foreach (var r in go.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off;
             }
 
-            Transform Tree(Vector3 p, float s, string leaf)
-            {
-                var t = Node("Tree", W, p);
-                Cy(t, new Vector3(0, 1.1f * s, 0), new Vector3(0.45f, 1.1f, 0.45f) * s, M("8B5A2B", 0.2f));
-                var lm = M(leaf, 0.2f);
-                S(t, new Vector3(0, 3.0f * s, 0), 2.4f * s, lm);
-                S(t, new Vector3(0.8f, 2.5f, 0.3f) * s, 1.6f * s, lm);
-                S(t, new Vector3(-0.7f, 2.6f, -0.2f) * s, 1.7f * s, lm);
-                S(t, new Vector3(0.1f, 3.9f, 0.1f) * s, 1.4f * s, lm);
-                return t;
-            }
-
             void BuildSet()
             {
                 setGo = new GameObject("CartoonSet") { layer = Layers.Preview };
@@ -491,7 +505,7 @@ namespace Chubrik
                 cg.transform.SetParent(W, false);
                 cam = cg.AddComponent<Camera>();
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = Hex("8FD3FF");
+                cam.backgroundColor = Hex("A9D3F2");
                 cam.cullingMask = 1 << Layers.Preview;
                 cam.fieldOfView = 50; cam.nearClipPlane = 0.1f; cam.farClipPlane = 600;
                 var gc = PlayerCtl.I ? PlayerCtl.I.Cam : null;
@@ -505,136 +519,101 @@ namespace Chubrik
                     cd.renderPostProcessing = gd.renderPostProcessing;
                     cd.antialiasing = gd.antialiasing;
                 }
-                var lg = new GameObject("CartoonSun");
+                var lg = new GameObject("CartoonSun") { layer = Layers.Preview };
                 lg.transform.SetParent(W, false);
-                lg.transform.rotation = Quaternion.Euler(50, -30, 0);
                 var sun = lg.AddComponent<Light>();
-                sun.type = LightType.Directional; sun.color = Hex("FFF4DE"); sun.intensity = 1.25f;
-                sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.55f;
+                sun.type = LightType.Directional;
                 Grab(setGo, sun);
+                // 19.11 film look (CartoonLook.cs): warm key + cool rim fill, sky, fog, post FX, textured set
+                Lights(sun);
+                SkyAndFx(cd);
+                var rng = new Rng(19);
+                Ground(rng);
+                Clouds(rng);
+                PathsAndMeadow(rng);
 
-                // ground, hills, sun, clouds
-                Cy(W, new Vector3(25, -0.5f, 0), new Vector3(260, 0.5f, 260), M("7ED957", 0.12f));
-                S(W, new Vector3(-40, -20, 80), new Vector3(110, 60, 70), M("6CC94A", 0.1f));
-                S(W, new Vector3(30, -25, 95), new Vector3(130, 70, 70), M("5DBB45", 0.1f));
-                S(W, new Vector3(95, -22, 70), new Vector3(100, 55, 60), M("79D35A", 0.1f));
-                S(W, new Vector3(-95, -15, 40), new Vector3(80, 45, 80), M("66C24C", 0.1f));
-                S(W, new Vector3(60, -18, -110), new Vector3(140, 50, 60), M("6CC94A", 0.1f));
-                NoShadow(S(W, new Vector3(-80, 95, 230), 26, G("FFE14D", 1.4f)));
-                var rnd = new System.Random(5);
-                float Rf(float a, float b) => a + (float)rnd.NextDouble() * (b - a);
-                for (int k = 0; k < 9; k++)
-                {
-                    var c = Node("Cloud", W, new Vector3(-70 + k * 22 + Rf(-5, 5), Rf(26, 40), Rf(60, 120)));
-                    for (int j = 0; j < 4; j++) S(c, new Vector3(j * 3.2f - 4.8f, (j % 2) * 1.4f, Rf(-1, 1)), new Vector3(6, 4, 4) * Rf(0.8f, 1.3f), M("FFFFFF", 0.05f));
-                    NoShadow(c.gameObject);
-                    clouds.Add(c);
-                }
+                // the little house (planks, a tiled roof, glass, a smoking chimney)
+                House(Node("House", W, new Vector3(-8, 0, 7), new Vector3(0, 15, 0)));
 
-                // the little house
-                var h = Node("House", W, new Vector3(-8, 0, 7), new Vector3(0, 15, 0));
-                B(h, new Vector3(0, 1.25f, 0), new Vector3(3.2f, 2.5f, 3f), M("FFD27A", 0.2f));
-                Cone(h, new Vector3(0, 2.45f, 0), new Vector3(4.8f, 2.4f, 4.8f), M("E5484D", 0.3f));
-                B(h, new Vector3(0.55f, 0.8f, -1.52f), new Vector3(0.9f, 1.6f, 0.08f), M("8A5A2B", 0.2f));
-                S(h, new Vector3(0.85f, 0.8f, -1.58f), 0.12f, M("FFC83A", 0.6f, 0.5f));
-                B(h, new Vector3(-0.8f, 1.5f, -1.52f), new Vector3(0.75f, 0.75f, 0.06f), M("BDE9FF", 0.9f));
-                B(h, new Vector3(-0.8f, 1.5f, -1.56f), new Vector3(0.82f, 0.08f, 0.04f), M("FFFFFF", 0.3f));
-                B(h, new Vector3(-0.8f, 1.5f, -1.56f), new Vector3(0.08f, 0.82f, 0.04f), M("FFFFFF", 0.3f));
-                B(h, new Vector3(0.9f, 3.6f, 0.5f), new Vector3(0.5f, 1.2f, 0.5f), M("B5523B", 0.2f));
-
-                // trees: the bird tree (a long branch), the tree Бублик bumps into and a few more
-                tree1 = Tree(new Vector3(-3.5f, 0, 9), 1.2f, "4CAF50");
-                Rod(tree1, new Vector3(0.3f, 1.8f, 0), new Vector3(2.6f, 2.0f, -0.3f), 0.16f, M("8B5A2B", 0.2f));
-                S(tree1, new Vector3(2.75f, 2.15f, -0.3f), 0.5f, M("57B85A", 0.2f));
-                Tree(T2, 1f, "43A047");
+                // trees: the bird tree (a long branch), the tree Бублик bumps into and a few more; bushes
+                tree1 = Node("Tree", W, new Vector3(-3.5f, 0, 9));
+                var trees = new List<(Vector3, float)> { (new Vector3(-3.5f, 0, 9), 1.2f), (T2, 1f) };
                 foreach (var p in new[] { new Vector3(-16, 0, 14), new Vector3(-21, 0, 4), new Vector3(-14, 0, 22), new Vector3(13, 0, 18), new Vector3(19, 0, 12),
                                           new Vector3(27, 0, 15), new Vector3(41, 0, 10), new Vector3(47, 0, 17), new Vector3(58, 0, 15), new Vector3(71, 0, 8),
                                           new Vector3(73, 0, -12), new Vector3(5, 0, -24), new Vector3(30, 0, -27), new Vector3(62, 0, -25), new Vector3(-12, 0, -16) })
-                    Tree(p, Rf(0.85f, 1.25f), rnd.Next(2) == 0 ? "4CAF50" : "66BB6A");
-                // flowers and bushes
-                string[] fc = { "FF5FA2", "FFE14D", "FFFFFF", "B266FF", "FF7043", "5FD3FF" };
-                for (int k = 0; k < 90; k++)
-                {
-                    var p = new Vector3(Rf(-20, 75), 0, Rf(-20, 22));
-                    if (Mathf.Abs(p.x - 36) < 3.5f) continue;   // not in the river
-                    var f = Node("Flower", W, p);
-                    Cy(f, new Vector3(0, 0.15f, 0), new Vector3(0.04f, 0.15f, 0.04f), M("3FAE3A", 0.2f));
-                    S(f, new Vector3(0, 0.32f, 0), 0.18f, M(fc[k % fc.Length], 0.3f));
-                    NoShadow(f.gameObject);
-                }
-                foreach (var p in new[] { new Vector3(57.5f, 0, 1), new Vector3(-11, 0, 2), new Vector3(15, 0, 9), new Vector3(44, 0, 3), new Vector3(68, 0, -4) })
-                    S(W, p + Vector3.up * 0.5f, new Vector3(1.8f, 1.3f, 1.8f), M("4CAF50", 0.2f));
+                    trees.Add((p, rng.F(0.85f, 1.25f)));
+                Trees(rng, trees);
 
-                // the onion field
-                B(W, new Vector3(8, 0.02f, 6), new Vector3(10, 0.06f, 6.4f), M("8B5E3C", 0.1f));
+                // the onion field: soil with ridges, onions half in the ground
+                Field();
                 for (int ix = 0; ix < 8; ix++)
                     for (int iz = 0; iz < 5; iz++)
                     {
                         var p = new Vector3(3.8f + ix * 1.2f, 0, 3.6f + iz * 1.2f);
                         var o = Node("Onion", W, p);
-                        S(o, new Vector3(0, 0.15f, 0), new Vector3(0.34f, 0.3f, 0.34f), M("F3E3C3", 0.5f));
-                        Cy(o, new Vector3(0.04f, 0.45f, 0), new Vector3(0.04f, 0.22f, 0.04f), M("3FAE3A", 0.3f), new Vector3(0, 0, -12));
-                        Cy(o, new Vector3(-0.04f, 0.45f, 0), new Vector3(0.04f, 0.22f, 0.04f), M("3FAE3A", 0.3f), new Vector3(0, 0, 12));
+                        S(o, new Vector3(0, 0.15f, 0), new Vector3(0.34f, 0.3f, 0.34f), Look.Onion());
+                        Cy(o, new Vector3(0.04f, 0.45f, 0), new Vector3(0.04f, 0.22f, 0.04f), M("4CB848", 0.45f), new Vector3(0, 0, -12));
+                        Cy(o, new Vector3(-0.04f, 0.45f, 0), new Vector3(0.04f, 0.22f, 0.04f), M("3E9E3A", 0.45f), new Vector3(0, 0, 12));
                         NoShadow(o.gameObject);
                         fieldOnions.Add(o);
                     }
 
                 // the soup pot (appears in scene 4)
                 pot = Node("Pot", W, P0);
-                Cy(pot, new Vector3(0, 1.2f, 0), new Vector3(2.6f, 0.8f, 2.6f), M("3B3F4A", 0.6f, 0.4f));
-                Ring(pot, new Vector3(0, 2.0f, 0), 1.3f, 0.12f, M("2A2D35", 0.6f, 0.4f));
-                soup = Cy(pot, new Vector3(0, 1.93f, 0), new Vector3(2.45f, 0.03f, 2.45f), M("E8C35A", 0.7f)).transform;
+                Cy(pot, new Vector3(0, 1.2f, 0), new Vector3(2.6f, 0.8f, 2.6f), Look.Metal());
+                Ring(pot, new Vector3(0, 2.0f, 0), 1.3f, 0.12f, Look.Metal("C8CCD4"));
+                soup = Cy(pot, new Vector3(0, 1.93f, 0), new Vector3(2.45f, 0.03f, 2.45f), Look.Soup()).transform;
                 for (int k = 0; k < 3; k++)
                 {
                     float a = k * 120 * Mathf.Deg2Rad;
-                    Cy(pot, new Vector3(Mathf.Cos(a) * 0.9f, 0.25f, Mathf.Sin(a) * 0.9f), new Vector3(0.18f, 0.25f, 0.18f), M("2A2D35", 0.5f));
+                    Cy(pot, new Vector3(Mathf.Cos(a) * 0.9f, 0.25f, Mathf.Sin(a) * 0.9f), new Vector3(0.18f, 0.25f, 0.18f), Look.Metal("A0A4AC"));
                 }
-                B(pot, new Vector3(0, 0.12f, 0), new Vector3(1.8f, 0.22f, 0.25f), M("7A4A1F", 0.2f), new Vector3(0, 30, 0));
-                B(pot, new Vector3(0, 0.12f, 0), new Vector3(1.8f, 0.22f, 0.25f), M("7A4A1F", 0.2f), new Vector3(0, -30, 0));
+                B(pot, new Vector3(0, 0.12f, 0), new Vector3(1.8f, 0.22f, 0.25f), Look.Bark(), new Vector3(0, 30, 0));
+                B(pot, new Vector3(0, 0.12f, 0), new Vector3(1.8f, 0.22f, 0.25f), Look.Bark(), new Vector3(0, -30, 0));
                 for (int k = 0; k < 3; k++)
                 {
                     var fl = Cone(pot, new Vector3((k - 1) * 0.35f, 0.15f, 0), new Vector3(0.5f, 0.75f - (k % 2) * 0.2f, 0.5f), G(k == 1 ? "FFD23F" : "FF8A1E", 1.8f));
                     NoShadow(fl);
                     fl.AddComponent<Pulse>().amount = 0.18f;
                 }
-                B(pot, new Vector3(2.1f, 0.4f, -0.2f), new Vector3(0.8f, 0.8f, 0.8f), M("C68A4A", 0.2f));   // the crate Бублик stands on
+                B(pot, new Vector3(2.1f, 0.4f, -0.2f), new Vector3(0.8f, 0.8f, 0.8f), Look.Planks("C68A4A"));   // the crate Бублик stands on
                 spoon = Node("Spoon", pot, Vector3.zero);
-                Rod(spoon, new Vector3(0.3f, 1.5f, -0.2f), new Vector3(1.55f, 2.7f, -0.2f), 0.1f, M("A0642F", 0.3f));
-                S(spoon, new Vector3(0.3f, 1.5f, -0.2f), new Vector3(0.4f, 0.15f, 0.3f), M("A0642F", 0.3f));
+                Rod(spoon, new Vector3(0.3f, 1.5f, -0.2f), new Vector3(1.55f, 2.7f, -0.2f), 0.1f, Look.Planks("A0642F", 0.35f));
+                S(spoon, new Vector3(0.3f, 1.5f, -0.2f), new Vector3(0.4f, 0.15f, 0.3f), Look.Planks("A0642F", 0.35f));
                 pot.gameObject.SetActive(false);
 
-                // bowls (eating; the middle one becomes Чихуня's boat)
+                // bowls (eating; the middle one becomes Чихуня's boat): glossy glazed clay
                 for (int k = 0; k < 5; k++)
                 {
                     var b = Node("Bowl", W, Vector3.zero);
-                    S(b, new Vector3(0, 0.02f, 0), new Vector3(0.72f, 0.36f, 0.72f), M("C0703A", 0.4f));
-                    Cy(b, new Vector3(0, 0.19f, 0), new Vector3(0.56f, 0.008f, 0.56f), M("E8C35A", 0.7f));
-                    Ring(b, new Vector3(0, 0.19f, 0), 0.31f, 0.05f, M("A85A2A", 0.4f));
+                    S(b, new Vector3(0, 0.02f, 0), new Vector3(0.72f, 0.36f, 0.72f), M("C0703A", 0.78f));
+                    Cy(b, new Vector3(0, 0.19f, 0), new Vector3(0.56f, 0.008f, 0.56f), Look.Soup());
+                    Ring(b, new Vector3(0, 0.19f, 0), 0.31f, 0.05f, M("F2E6D2", 0.75f));
                     b.gameObject.SetActive(false);
                     bowls.Add(b);
                 }
                 puddle = Cy(W, new Vector3(-1, 0.012f, -4.4f), new Vector3(1, 0.01f, 1), M("5FC8F5", 0.95f)).transform;
                 puddle.gameObject.SetActive(false);
 
-                // the river and stones
-                B(W, new Vector3(36, 0.03f, -5), new Vector3(5, 0.06f, 140), M("4FC3F7", 0.92f));
-                B(W, new Vector3(33.4f, 0.025f, -5), new Vector3(0.4f, 0.05f, 140), M("E8D9A8", 0.1f));
-                B(W, new Vector3(38.6f, 0.025f, -5), new Vector3(0.4f, 0.05f, 140), M("E8D9A8", 0.1f));
-                S(W, new Vector3(35f, 0.02f, -7.2f), new Vector3(1.5f, 0.5f, 1.4f), M("9EA7AD", 0.3f));
-                S(W, new Vector3(37.3f, 0.02f, -7.0f), new Vector3(1.4f, 0.5f, 1.5f), M("8F989E", 0.3f));
+                // the river (moving water, sandy banks) and the stepping stones
+                River();
+                S(W, new Vector3(35f, 0.02f, -7.2f), new Vector3(1.5f, 0.5f, 1.4f), Look.Stone(0));
+                S(W, new Vector3(37.3f, 0.02f, -7.0f), new Vector3(1.4f, 0.5f, 1.5f), Look.Stone(2));
 
                 // the carousel
                 var car = Node("Carousel", W, CAR);
-                Cy(car, new Vector3(0, 0.15f, 0), new Vector3(11, 0.15f, 11), M("F2F2F2", 0.4f));
+                Cy(car, new Vector3(0, 0.15f, 0), new Vector3(11, 0.15f, 11), Look.Stone(1));
                 carSpin = Node("Spin", car, Vector3.zero);
-                Cy(carSpin, new Vector3(0, 0.4f, 0), new Vector3(10, 0.1f, 10), M("5BC0EB", 0.5f));
-                Cy(carSpin, new Vector3(0, 2.6f, 0), new Vector3(0.35f, 2.3f, 0.35f), M("FFC83A", 0.6f, 0.5f));
-                Cone(carSpin, new Vector3(0, 4.6f, 0), new Vector3(11.5f, 2.2f, 11.5f), M("F0435A", 0.4f));
+                Cy(carSpin, new Vector3(0, 0.4f, 0), new Vector3(10, 0.1f, 10), Look.Planks("5BB8E0", 0.45f));
+                Cy(carSpin, new Vector3(0, 2.6f, 0), new Vector3(0.35f, 2.3f, 0.35f), M("FFC83A", 0.8f, 0.7f));
+                var canopy = new Geo();
+                canopy.Cyl(Look.Stripes(), new Vector3(0, 4.6f, 0), 5.75f, 2.2f, 32, 0, true, 2 * Mathf.PI * 5.75f / 2);
+                Keep(canopy.Build("Canopy", carSpin, true, Layers.Preview));
                 Cy(carSpin, new Vector3(0, 4.58f, 0), new Vector3(11.4f, 0.04f, 11.4f), M("FFD6E0", 0.3f));
                 for (int k = 0; k < 16; k++)
                 {
                     float a = k * 22.5f * Mathf.Deg2Rad;
-                    S(carSpin, new Vector3(Mathf.Sin(a) * 5.6f, 4.5f, Mathf.Cos(a) * 5.6f), 0.7f, M(k % 2 == 0 ? "FFFFFF" : "FFE14D", 0.4f));
+                    S(carSpin, new Vector3(Mathf.Sin(a) * 5.6f, 4.5f, Mathf.Cos(a) * 5.6f), 0.7f, M(k % 2 == 0 ? "FFFFFF" : "FFE14D", 0.6f));
                     NoShadow(S(carSpin, new Vector3(Mathf.Sin(a + 0.2f) * 5.3f, 4.2f, Mathf.Cos(a + 0.2f) * 5.3f), 0.22f, G("FFE36B", 2f)));
                 }
                 string[] seat = { "FF5FA2", "5FD3FF", "FFC83A", "6EDC3C", "B266FF" };
@@ -642,18 +621,18 @@ namespace Chubrik
                 {
                     float a = (k * 72 + 36) * Mathf.Deg2Rad;
                     var p = new Vector3(Mathf.Sin(a) * 4.3f, 0, Mathf.Cos(a) * 4.3f);
-                    Rod(carSpin, p + Vector3.up * 4.55f, p + Vector3.up * 1.4f, 0.08f, M("FFC83A", 0.6f, 0.5f));
-                    S(carSpin, p + Vector3.up * 1.2f, 0.95f, M(seat[k], 0.5f));
+                    Rod(carSpin, p + Vector3.up * 4.55f, p + Vector3.up * 1.4f, 0.08f, M("FFC83A", 0.8f, 0.7f));
+                    S(carSpin, p + Vector3.up * 1.2f, 0.95f, M(seat[k], 0.78f));
                 }
-                Rod(carSpin, new Vector3(0, 6.7f, 0), new Vector3(0, 8.1f, 0), 0.07f, M("FFC83A", 0.6f, 0.5f));
-                B(carSpin, new Vector3(0.45f, 7.8f, 0), new Vector3(0.8f, 0.45f, 0.04f), M("6EDC3C", 0.3f));
+                Rod(carSpin, new Vector3(0, 6.7f, 0), new Vector3(0, 8.1f, 0), 0.07f, M("FFC83A", 0.8f, 0.7f));
+                B(carSpin, new Vector3(0.45f, 7.8f, 0), new Vector3(0.8f, 0.45f, 0.04f), M("6EDC3C", 0.4f));
 
                 // the haystack
-                hay = S(W, HAY + Vector3.up * 1.0f, new Vector3(4.2f, 3.2f, 4.2f), M("E8C85A", 0.1f)).transform;
+                hay = S(W, HAY + Vector3.up * 1.0f, new Vector3(4.2f, 3.2f, 4.2f), Look.Hay()).transform;
                 for (int k = 0; k < 10; k++)
                 {
                     float a = k * 36 * Mathf.Deg2Rad;
-                    Rod(W, HAY + new Vector3(Mathf.Cos(a) * 1.9f, 1.2f, Mathf.Sin(a) * 1.9f), HAY + new Vector3(Mathf.Cos(a) * 2.4f, 1.6f + (k % 3) * 0.2f, Mathf.Sin(a) * 2.4f), 0.05f, M("F2D675", 0.1f));
+                    Rod(W, HAY + new Vector3(Mathf.Cos(a) * 1.9f, 1.2f, Mathf.Sin(a) * 1.9f), HAY + new Vector3(Mathf.Cos(a) * 2.4f, 1.6f + (k % 3) * 0.2f, Mathf.Sin(a) * 2.4f), 0.05f, Look.Straw());
                 }
 
                 // the characters
@@ -735,8 +714,10 @@ namespace Chubrik
                 if (carSpin) { carAngle += carSpeed * Dt; carSpin.localRotation = Quaternion.Euler(0, carAngle, 0); }
                 foreach (var c in clouds)
                 {
-                    var p = c.localPosition; p.x += 0.6f * Dt; if (p.x > 140) p.x -= 220; c.localPosition = p;
+                    var p = c.localPosition; p.x += 0.6f * Dt; if (p.x > 240) p.x -= 430; c.localPosition = p;
                 }
+                FlowRiver();
+                Smoke();
                 if (stirring)
                 {
                     spoon.localRotation = Quaternion.Euler(0, Mathf.Sin(clock * 5) * 28, 0);
@@ -835,13 +816,17 @@ namespace Chubrik
                 cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fovT, 1 - Mathf.Exp(-3 * Dt));
                 shake = Mathf.Max(0, shake - Dt * 1.2f);
                 ApplyCam();
+                FocusDof();
             }
 
             void ApplyCam()
             {
                 var sh = shake > 0 ? UnityEngine.Random.insideUnitSphere * shake * 0.25f : Vector3.zero;
+                // a barely-there handheld drift: the shot breathes like a filmed one
+                float dk = 0.035f * Mathf.Clamp((camLook - camPos).magnitude / 8f, 0.3f, 1.5f);
+                var drift = new Vector3(Mathf.PerlinNoise(clock * 0.23f, 1.7f) - 0.5f, Mathf.PerlinNoise(4.1f, clock * 0.19f) - 0.5f, 0) * dk;
                 cam.transform.localPosition = camPos + sh;
-                cam.transform.LookAt(W.TransformPoint(camLook + sh * 0.5f));
+                cam.transform.LookAt(W.TransformPoint(camLook + sh * 0.5f + drift));
             }
 
             // ================= camera moves =================

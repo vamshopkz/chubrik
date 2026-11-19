@@ -293,6 +293,9 @@ namespace Chubrik
                 WardrobeUI.Changed();
                 return true;
             }
+            // 19.11: songs — the game opens them in YouTube Music (the songs belong to their authors, they are not inside the game)
+            if (n == Norm("Фиксай")) { OpenSong("Фиксай Жизнь в розовых очках", "«Жизнь в розовых очках»"); return true; }
+            if (n == Norm("Домер")) { OpenSong("Домер Семицвет", "«Семицвет»"); return true; }
             if (n == Norm("Миллиард"))
             {
                 P.coins += BillionSum; P.tokens += BillionSum; Save.Write();
@@ -327,6 +330,16 @@ namespace Chubrik
             PlayerCtl.I?.PlayVictory();
             Hud.Toast(again ? "Артём22X снова: +10 000 000 монет, +100 000 жетонов, все 8 премиум-наборов твои!" : "ПРОМОКОД «АРТЁМ22X»: +10 000 000 монет, +100 000 жетонов и все 8 премиум-наборов!", UIKit.Gold);
             return true;
+        }
+
+        public static string LastSongUrl;
+
+        static void OpenSong(string query, string title)
+        {
+            LastSongUrl = "https://music.youtube.com/search?q=" + System.Uri.EscapeDataString(query);
+            AudioFx.Play("magic");
+            Hud.Toast($"Открываю песню {title} в YouTube Music!", UIKit.Pink);
+            if (!Boot.Testing) Application.OpenURL(LastSongUrl);
         }
 
         public static void UnlockAll()
