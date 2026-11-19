@@ -53,6 +53,8 @@ namespace Chubrik
         public class Peer
         {
             public string id, ver = "", lookStr = "", nick = "";
+            public long lockUntil;   // 19.11: their room is locked until (unix seconds)
+            public bool Locked => lockUntil > NowUnix;
             public Look look;
             public int world = 1, seq = -1;
             public float seen, stateSeen = -99;
@@ -133,6 +135,17 @@ namespace Chubrik
         }
 
         static string Subs => Topic + "\n" + StatsTopic + "/#";
+
+        public static long NowUnix => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        /// <summary>19.11 «Заблокировать комнату»: nobody can send us invitations until this time.</summary>
+        public static bool Locked => Save.P.roomLockUntil > NowUnix;
+        public static void LockRoom(int minutes)
+        {
+            Save.P.roomLockUntil = minutes > 0 ? NowUnix + minutes * 60L : 0;
+            Save.Write();
+            if (I != null) I.helloT = 0;   // tell the others now
+        }
+        public static string LockTime(long until) => System.DateTimeOffset.FromUnixTimeSeconds(until).ToLocalTime().ToString("HH:mm");
 
         public static string Clean(string s) => (s ?? "").Replace("|", "").Replace(";", "").Replace("\n", "").Trim();
 
@@ -219,7 +232,7 @@ namespace Chubrik
             {
                 helloT = now + 3f;
                 lookStr = LookString(Save.CurrentLook());
-                Send($"H|{Id}|{Application.version}|{Worlds.Current}|{lookStr}|{Clean(Nick)}");
+                Send($"H|{Id}|{Application.version}|{Worlds.Current}|{lookStr}|{Clean(Nick)}|{(Locked ? Save.P.roomLockUntil : 0)}");
             }
             // our line in the records table (kept on the relay), when something changed
             if (now >= recordT && Connected && p != null)
@@ -256,7 +269,7 @@ namespace Chubrik
             {
                 var peer = kv.Value;
                 if (now - peer.seen > 10f) { gone.Add(kv.Key); continue; }
-                bool show = playing && peer.SameVersion && peer.id == RoomWith && peer.world == Worlds.Current && now - peer.stateSeen < 3f;
+                bool show = playing && peer.SameVersion && (peer.id == RoomWith || peer.id == FootballFans.Watching) && peer.world == Worlds.Current && now - peer.stateSeen < 3f;
                 if (show && peer.avatar == null) peer.avatar = RemoteChubrik.Spawn(peer, avatarsRoot);
                 else if (!show && peer.avatar != null) { Destroy(peer.avatar.gameObject); peer.avatar = null; }
             }
@@ -268,6 +281,14 @@ namespace Chubrik
         {
             var rp = RoomPeer;   // our position goes only to the friend we are together with
             if (rp != null && rp.SameVersion && rp.world == Worlds.Current) return true;
+            // 19.11: playing football — others may watch from the stands
+            if (PlayerCtl.I != null && Football.Mode != 0 && Football.Inside(PlayerCtl.I.transform.position) && AnyoneInLobby()) return true;
+            return false;
+        }
+
+        public bool AnyoneInLobby()
+        {
+            foreach (var peer in Peers.Values) if (peer.SameVersion && peer.world == 1) return true;
             return false;
         }
 
@@ -294,6 +315,7 @@ namespace Chubrik
                     peer.ver = f[2];
                     int.TryParse(f[3], out peer.world);
                     if (f.Length >= 6) peer.nick = f[5];
+                    peer.lockUntil = f.Length >= 7 && long.TryParse(f[6], out var lu) ? lu : 0;
                     // an older game (before the records): still put them in the table while they are online
                     if (string.Compare(peer.ver, "0.17", StringComparison.Ordinal) < 0 && peer.ver.Length <= 4 && !Records.ContainsKey("s:" + id))
                         Records["s:" + id] = new Record { pid = "s:" + id, nick = string.IsNullOrEmpty(peer.nick) ? "Игрок (старая версия)" : peer.nick, old = true, lookStr = f[4], look = ParseLook(f[4]) };
@@ -326,6 +348,7 @@ namespace Chubrik
                     break;
                 case "I" when f.Length >= 3:
                     // an invitation for us
+                    if (f[2] == Id && Peers.ContainsKey(id) && RoomWith != id && Locked) { Send($"N|{Id}|{id}"); break; }   // 19.11 our room is locked
                     if (f[2] == Id && Peers.ContainsKey(id) && RoomWith != id)
                     {
                         InviteFrom = id;
@@ -338,6 +361,9 @@ namespace Chubrik
                     break;
                 case "N" when f.Length >= 3:
                     if (f[2] == Id && Invited.Remove(id)) Hud.Toast($"«{NickOf(id)}» сейчас не может играть вместе", UIKit.Orange);
+                    break;
+                case "FW":
+                    FootballFans.OnWatch(f, id);
                     break;
                 case "FS": case "FB": case "FK": case "FE":
                     Football.OnNet(f, id);
@@ -368,6 +394,7 @@ namespace Chubrik
         public void Invite(Peer peer)
         {
             if (peer == null) return;
+            if (peer.Locked) { AudioFx.Play("error"); Hud.Toast($"Комната «{NickOf(peer.id)}» закрыта до {LockTime(peer.lockUntil)}", UIKit.Orange); return; }
             Invited[peer.id] = Time.unscaledTime;
             Send($"I|{Id}|{peer.id}|{Clean(Nick)}");
             AudioFx.Play("click");

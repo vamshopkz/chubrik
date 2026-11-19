@@ -1334,6 +1334,58 @@ namespace Chubrik
                 yield return Wait(1f);
                 Check("leaving the stadium takes you back to the lobby", !Football.Inside(pl.transform.position) && Football.Mode == 0);
 
+                // ---- 19.11 fans are the rescued chubriks, «Следить за кем-то», «Заблокировать комнату» ----
+                Football.EnsureBuilt();
+                int wantFans = Mathf.Min(Save.P.rescued.Count, FootballFans.MaxFans, FootballFans.Seats.Count - 8);
+                Check("the stadium's fans are the rescued chubriks, some seats stay free", FootballFans.Fans.Count == wantFans && wantFans > 0 && FootballFans.FreeSeats > 0, $"{FootballFans.Fans.Count} fans, {FootballFans.FreeSeats} free");
+                Football.Menu();
+                yield return Wait(0.4f);
+                bool watchBtn = false, standBtn = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) { if (tx.text == "СЛЕДИТЬ") watchBtn = true; if (tx.text == "НА ТРИБУНУ") standBtn = true; }
+                yield return Shot("115_football_menu");
+                Window.Close();
+                Check("the football pad has many buttons: «Следить за кем-то», «Сесть на трибуну»", watchBtn && standBtn);
+                Online.I.Inject($"H|fanpeer|{Application.version}|1|color=color_4|Футболист|0");
+                var fanPos = Football.O + new Vector3(3, 0.3f, 2);
+                Online.I.Inject(string.Format(System.Globalization.CultureInfo.InvariantCulture, "S|fanpeer|1|1|{0:0.00}|{1:0.00}|{2:0.00}|90|0.5|0|1", fanPos.x, fanPos.y, fanPos.z));
+                Check("someone playing football shows in «Следить за кем-то»", FootballFans.Players().Exists(pp => pp.id == "fanpeer"));
+                FootballFans.Watch(Online.I.Peers["fanpeer"]);
+                for (int k = 0; k < 15; k++)
+                {
+                    Online.I.Inject(string.Format(System.Globalization.CultureInfo.InvariantCulture, "S|fanpeer|{0}|1|{1:0.00}|{2:0.00}|{3:0.00}|90|0.5|0|1", k + 2, fanPos.x + k * 0.1f, fanPos.y, fanPos.z));
+                    Online.I.Inject($"FW|fanpeer|{4 + k * 0.1f:0.00}|0.40|2.50|2|1".Replace(',', '.'));
+                    yield return Wait(0.1f);
+                }
+                yield return Wait(0.5f);
+                var fanPeer = Online.I.Peers["fanpeer"];
+                yield return Shot("116_watching");
+                Check("«Следить»: from the stands the camera follows the player and his ball", FootballFans.Watching == "fanpeer" && fanPeer.avatar != null && pl.Cam.transform.position.z < Football.O.z - Football.HalfW && FootballFans.WatchMe == 2,
+                    $"cam {pl.Cam.transform.position - Football.O}, avatar {fanPeer.avatar != null}");
+                FootballFans.StopWatching();
+                Online.I.Inject("B|fanpeer");
+                yield return Enter(1);
+
+                InviteUI.Close();   // a real player online may have invited the test game
+                Online.LockRoom(25);
+                Online.I.Inject($"H|lockpeer|{Application.version}|1|color=color_2|Гость|0");
+                Online.I.Inject($"I|lockpeer|{Online.I.Id}|Гость");
+                yield return Wait(0.3f);
+                Check("a locked room gets no invitations", Online.Locked && !InviteUI.IsOpen);
+                LockUI.Set(1, 25);
+                LockUI.Open();
+                yield return Wait(0.4f);
+                yield return Shot("117_lock_room");
+                PlayersUI.Open();
+                yield return Wait(0.5f);
+                bool openBtn = false;
+                foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) if (tx.text == "ОТКРЫТЬ КОМНАТУ") openBtn = true;
+                yield return Shot("118_room_locked");
+                Window.Close();
+                Check("«Игроки онлайн»: the room is locked until a chosen time, «Открыть комнату» unlocks it", openBtn);
+                Online.LockRoom(0);
+                Check("the room is open again", !Online.Locked);
+                Online.I.Inject("B|lockpeer");
+
                 // ---- 18.11 cheats: flying, endless coins, the admin panel ----
                 Menus.Settings();
                 yield return Wait(0.4f);

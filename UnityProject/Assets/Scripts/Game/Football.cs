@@ -92,6 +92,8 @@ namespace Chubrik
 
         // ---------------- the stadium ----------------
 
+        public static void EnsureBuilt() { Build(); FootballFans.Refresh(); }
+
         static void Build()
         {
             if (Root != null) return;
@@ -133,20 +135,11 @@ namespace Chubrik
                 Board(new Vector3(sd * bx, 0, -(GoalW + 2 + bz) / 2), new Vector3(0.3f, 0, bz - GoalW - 2));
                 Board(new Vector3(sd * (HalfL + 2.6f), 0, 0), new Vector3(0.3f, 0, (GoalW + 2) * 2));   // behind the goal
             }
-            var rng = new Rng(11);
-            string[] shirts = { "E53935", "1E5BD8", "FFD31A", "FFFFFF", "43A047", "FF7AD9" };
+            // the stands (the fans are the friends you rescued — FootballFans)
             foreach (var sd in new[] { -1f, 1f })
                 for (int row = 0; row < 4; row++)
-                {
-                    float z = sd * (bz + 2 + row * 1.6f);
-                    B(Root, new Vector3(0, 0.5f + row * 0.9f, z), new Vector3(bx * 2, 1 + row * 1.8f, 1.6f), M("9AA3AE", 0.2f));
-                    for (int k = 0; k < 22; k++)
-                    {
-                        var p = new Vector3(-bx + 1 + k * (bx * 2 - 2) / 21f + rng.F(-0.3f, 0.3f), 1.4f + row * 1.8f, z);
-                        S(Root, p, 0.55f, M(shirts[rng.I(shirts.Length)], 0.3f));
-                        S(Root, p + Vector3.up * 0.45f, 0.4f, M("F2C9A0", 0.3f));
-                    }
-                }
+                    B(Root, new Vector3(0, 0.5f + row * 0.9f, sd * (bz + 2 + row * 1.6f)), new Vector3(bx * 2, 1 + row * 1.8f, 1.6f), M("9AA3AE", 0.2f));
+            FootballFans.Build(Root, bx, bz);
             foreach (var p in new[] { new Vector3(-bx - 3, 0, -bz - 3), new Vector3(bx + 3, 0, -bz - 3), new Vector3(-bx - 3, 0, bz + 3), new Vector3(bx + 3, 0, bz + 3) })
             {
                 Rod(Root, p, p + Vector3.up * 14, 0.25f, M("8C96A3", 0.6f, 0.5f));
@@ -213,6 +206,9 @@ namespace Chubrik
                 w.Row("Играть с другом", friend ? "Один мяч на двоих, 3 минуты. Друг тоже окажется на стадионе" : "Сначала пригласи друга в «Игроки онлайн» — и вы будете в одной комнате",
                     "С ДРУГОМ", UIKit.Violet, () => StartFriend(), friend, UIKit.Violet);
                 w.Row("Просто погонять мяч", "Без счёта и без ботов", "ВПЕРЁД", UIKit.Blue, () => Start(3, 0), true, UIKit.Blue);
+                int playing = FootballFans.Players().Count;
+                w.Row("Следить за кем-то", playing > 0 ? $"Сейчас играют: {playing} — смотри их матч с трибуны" : "Посмотреть, как играют другие", "СЛЕДИТЬ", UIKit.Violet, FootballFans.PickTarget, true, UIKit.Violet);
+                w.Row("Сесть на трибуну", $"Болельщики — твои спасённые друзья ({Mathf.Min(Save.P.rescued.Count, FootballFans.MaxFans)}), есть свободные места", "НА ТРИБУНУ", UIKit.Cyan, FootballFans.SitDown, true, UIKit.Cyan);
                 for (int l = 1; l <= Levels; l++)
                 {
                     int lv = l;
@@ -231,6 +227,8 @@ namespace Chubrik
         public static void Start(int mode, int level)
         {
             Build();
+            FootballFans.Refresh();
+            if (FootballFans.Watching != null) FootballFans.StopWatching();
             Window.Close();
             ClearBots();
             Mode = mode; Level = level; Me = Them = 0; Host = true; Friend = null; startedAt = Time.time;
@@ -396,6 +394,7 @@ namespace Chubrik
             AudioFx.Play(forMe ? "victory" : "error");
             Effects.Emit("confetti", Ball.position + Vector3.up, 80, 1f, Vector3.up * 5);
             Hud.Toast(forMe ? "ГОООЛ!" : (Mode == 2 ? "Гол другу!" : "Гол в твои ворота!"), forMe ? UIKit.Gold : UIKit.Orange);
+            FootballFans.Cheer();
             ResetBall(forMe ? 3 : -3);
             if (Mode == 1 && Level == 1 && Me >= 3) Finish();
         }

@@ -750,6 +750,7 @@ namespace Chubrik
                 return;
             }
             if (WardrobeView) { WardrobeCamera(); return; }
+            if (FootballFans.CameraUpdate(Cam)) return;   // 19.11 watching someone's football
             wCamInit = false;
             float s = Model.SizeScale;
             var targetPos = transform.position + Vector3.up * (1.15f * s + 0.2f);
