@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Chubrik
 {
     /// <summary>
-    /// Procedural animation of the chubrik rig: 8 walk styles, jump squash &amp; stretch, glide, 8 idle emotes,
+    /// Procedural animation of the chubrik rig: 7 walk styles (21.11: no moonwalk) × tempo variants, jump squash &amp; stretch, glide, 8 idle emotes,
     /// weapon swing, blinking. Fires OnStep at every footfall (step effects / sounds).
     /// </summary>
     public class ChubrikAnim : MonoBehaviour
@@ -41,10 +41,27 @@ namespace Chubrik
         public void PlayEmote() { emoting = true; emoteT = 0; }
         public void StopEmote() { emoting = false; if (coin) Destroy(coin); }
 
+        // 21.11: walk / emote variants («Пружинистый шаг (вихрем)»): tempo and size of the moves, read from the look
+        Look tempoLook;
+        float walkK = 1, walkAmp = 1, emoteK = 1, emoteAmp = 1;
+
+        void Tempo(ChubrikModel m)
+        {
+            if (ReferenceEquals(tempoLook, m.look)) return;   // the model gets a new look object on every rebuild
+            tempoLook = m.look;
+            var w = m.look != null ? Catalog.Get(m.look.Of("walk")) : null;
+            var e = m.look != null ? Catalog.Get(m.look.Of("emote")) : null;
+            walkK = w != null ? w.speed : 1; walkAmp = w != null ? w.amp : 1;
+            emoteK = e != null ? e.speed : 1; emoteAmp = e != null ? e.amp : 1;
+        }
+
+        static Quaternion Amp(Quaternion rest, Quaternion pose, float k) => k == 1 ? pose : Quaternion.SlerpUnclamped(rest, pose, k);
+
         void LateUpdate()
         {
             var m = model;
             if (m == null || m.Body == null) return;
+            Tempo(m);
             float dt = Time.deltaTime;
             m.speed01 = speed01;
             m.flap = Mathf.MoveTowards(m.flap, gliding || !grounded ? 1 : 0, dt * 3);
@@ -61,7 +78,7 @@ namespace Chubrik
 
             if (grounded)
             {
-                float freq = walkStyle switch { 1 => 2.6f, 2 => 1.6f, 3 => 2.4f, 4 => 1.8f, 5 => 1.5f, 6 => 1.8f, _ => 2.1f };
+                float freq = walkStyle switch { 1 => 2.6f, 2 => 1.6f, 3 => 2.4f, 4 => 1.8f, 5 => 1.5f, _ => 2.1f } * walkK;
                 phase += dt * freq * Mathf.Lerp(0.6f, 1.6f, speed01) * Mathf.PI * 2 * (speed01 > 0.05f ? 1 : 0);
                 float s = Mathf.Sin(phase), c = Mathf.Cos(phase);
                 float a = speed01;
@@ -97,12 +114,6 @@ namespace Chubrik
                             legL = Quaternion.Euler(s * 28 * a, 0, -6); legR = Quaternion.Euler(-s * 28 * a, 0, 6);
                             armL = Quaternion.Euler(-s * 15, 0, -10); armR = Quaternion.Euler(s * 15, 0, 10);
                             break;
-                        case 6: // moonwalk: feet slide backwards
-                            legL = Quaternion.Euler(-Mathf.Max(0, s) * 30 * a, 0, 0); legR = Quaternion.Euler(-Mathf.Max(0, -s) * 30 * a, 0, 0);
-                            m.Body.localPosition = new Vector3(0, 0, -0.05f);
-                            m.Torso.localRotation = Quaternion.Euler(-8, 0, 0);
-                            armL = Quaternion.Euler(10, 0, -25 + s * 10); armR = Quaternion.Euler(10, 0, 25 - s * 10);
-                            break;
                         case 7: // levitation
                             lift = 0.3f + Mathf.Sin(Time.time * 2) * 0.05f;
                             legL = Quaternion.Euler(20, 0, 0); legR = Quaternion.Euler(20, 0, 0);
@@ -115,6 +126,14 @@ namespace Chubrik
                             armL = Quaternion.Euler(-s * 35 * a, 0, -16); armR = Quaternion.Euler(s * 35 * a, 0, 16);
                             m.Torso.localRotation = Quaternion.Euler(6 * a, s * 5 * a, 0);
                             break;
+                    }
+                    if (walkAmp != 1)
+                    {
+                        // a wide / small variant: every swing bigger or smaller round the standing pose
+                        legL = Amp(Quaternion.identity, legL, walkAmp); legR = Amp(Quaternion.identity, legR, walkAmp);
+                        armL = Amp(Quaternion.Euler(0, 0, -18), armL, walkAmp); armR = Amp(Quaternion.Euler(0, 0, 18), armR, walkAmp);
+                        m.Torso.localRotation = Amp(Quaternion.identity, m.Torso.localRotation, walkAmp);
+                        lift *= walkAmp;
                     }
                     // footfall when the swing changes direction
                     if (walkStyle != 7 && Mathf.Sign(s) != Mathf.Sign(prevSin)) OnStep?.Invoke(s > 0);
@@ -152,8 +171,16 @@ namespace Chubrik
             // emote (idle only)
             if (emoting && speed01 < 0.05f && grounded)
             {
-                emoteT += dt;
+                emoteT += dt * emoteK;
                 Emote(m, ref armL, ref armR, ref legL, ref legR, ref lift, ref sx, ref sy);
+                if (emoteAmp != 1)
+                {
+                    legL = Amp(Quaternion.identity, legL, emoteAmp); legR = Amp(Quaternion.identity, legR, emoteAmp);
+                    armL = Amp(Quaternion.Euler(0, 0, -18), armL, emoteAmp); armR = Amp(Quaternion.Euler(0, 0, 18), armR, emoteAmp);
+                    m.Head.localRotation = Amp(Quaternion.identity, m.Head.localRotation, emoteAmp);
+                    m.Torso.localRotation = Amp(Quaternion.identity, m.Torso.localRotation, emoteAmp);
+                    lift *= emoteAmp;
+                }
                 if (!Preview && emoteT > 6f) StopEmote();
             }
             else if (emoting && !Preview) StopEmote();
@@ -295,7 +322,7 @@ namespace Chubrik
                     armL = Quaternion.Euler(0, 0, -8); armR = Quaternion.Euler(0, 0, 8);
                     if (m.EyeL) { winkL = true; }
                     if (m.EyeR) m.EyeR.localScale = new Vector3(1, 0.1f, 1);
-                    if (Mathf.Repeat(t, 1.6f) < Time.deltaTime) Effects.Zzz(m.HeadC.position + Vector3.up * 0.5f);
+                    if (Mathf.Repeat(t, 1.6f) < Time.deltaTime * Mathf.Max(1f, emoteK)) Effects.Zzz(m.HeadC.position + Vector3.up * 0.5f);
                     break;
                 case 4: // juggling a coin
                 {

@@ -10,7 +10,7 @@ namespace Chubrik
         static GameObject main;
         public static bool MainOpen => main != null;
         /// <summary>A full-screen page (wardrobe, loot box) is open.</summary>
-        public static bool OverlayOpen => MainOpen || WardrobeUI.IsOpen || ShopUI.BoxOpen || Cartoon.IsOpen || LuckyUI.IsOpen;
+        public static bool OverlayOpen => MainOpen || WardrobeUI.IsOpen || ShopUI.BoxOpen || Cartoon.IsOpen || LuckyUI.IsOpen || Tutorial.IsOpen;
         public static bool AnyOpen => OverlayOpen || UIRoot.Open != null;
 
         public static void LockCursor()
@@ -168,6 +168,7 @@ namespace Chubrik
                         ("ВКЛ", UIKit.Green, P.navigatorOn, () => { P.navigatorOn = true; Save.Write(); Window.Refresh(); }),
                         ("ВЫКЛ", UIKit.Red, !P.navigatorOn, () => { P.navigatorOn = false; Save.Write(); Window.Refresh(); }),
                     });
+                w.Row("Обучение", "Видео с голосом: как играть, куда идти и что нажимать", "СМОТРЕТЬ", UIKit.Green, () => { Window.Close(); Tutorial.Play(); });   // 21.11
                 w.Row("Читы", "Полёт, бесконечные монеты и админ-панель", "ЧИТЫ", UIKit.Red, Cheats.Open, true, UIKit.Red);
                 w.Row("Версии игры", "Сейчас: " + Application.version + " · можно выбрать новую или старую", "ВЫБРАТЬ", UIKit.Blue, VersionsUI.Open);
                 w.Text("На телефоне: A — прыжок (нажми два раза — двойной прыжок), B — удар. Рывок вперёд «хэ-хэй»: беги, нажми B, а сразу за ним A. Не допрыгнул до края — чубрик сам зацепится и залезет. Прыжок вниз: A, потом B — маленький; A или 2×A и держи B — летит вниз головой и смешно плюхается.", 24, UIKit.Gold);

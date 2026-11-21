@@ -39,6 +39,13 @@ namespace Chubrik
                 Application.Quit();
                 yield break;
             }
+            if (Boot.Arg("-overview") != null)
+            {
+                // a photo of the lobby and of every world from straight above (and the backrooms without their ceiling)
+                yield return Overview(Boot.Arg("-overview"));
+                Application.Quit();
+                yield break;
+            }
             if (Boot.Arg("-sounds") != null)
             {
                 while (!AudioFx.MusicReady) yield return null;
@@ -58,7 +65,8 @@ namespace Chubrik
             // ---- catalogue ----
             Check("32 departments (with «Костюмы»)", Catalog.Depts.Count == 32, Catalog.Depts.Count.ToString());
             bool eight = true;
-            foreach (var d in Catalog.Depts) if (d.id != "suit" && d.items.FindAll(i => !i.Premium && !i.Reward && i.finish < 0).Count != 8) eight = false;
+            // the regular named things (not premium, rewards or variants): 8 each; «Походка» 7 since «Лунная походка» left (21.11)
+            foreach (var d in Catalog.Depts) if (d.id != "suit" && d.items.FindAll(i => !i.Premium && !i.Reward && !i.Variant).Count != (d.id == "walk" ? 7 : 8)) eight = false;
             Updater.I.Fake("9.99", "Новый мир. Тысяча скинов. Футбол с друзьями.");
             Updater.I.ShowMessage();
             yield return Wait(0.4f);
@@ -68,7 +76,43 @@ namespace Chubrik
             Window.Close();
             Updater.I.Fake(null);
             Check("«Вышло обновление 9.99!» with what is new in it", updMsg && updNote);
-            Check("v0.27: 1000 more skins (things in 10 finishes)", Catalog.VariantCount == 1000 && Catalog.Get("hat_v0") != null && Catalog.Get("hat_v0").name.Contains("("), Catalog.VariantCount.ToString());
+            {
+                // 21.11: every department (weapons too) has exactly M things — as many as the biggest one (the costumes)
+                int N = Catalog.PerDept;
+                bool same = N > 8 && Catalog.Dept("weapon").items.Count == N, unique = true;
+                var off = new List<string>();
+                foreach (var d in Catalog.Depts)
+                {
+                    bool ok = d.items.Count == N;
+                    if (!ok) { same = false; off.Add(d.id + ":" + d.items.Count); }
+                    var names = new HashSet<string>(); var pairs = new HashSet<(int, int)>();
+                    foreach (var it in d.items)
+                    {
+                        if (!names.Add(it.name)) { unique = false; off.Add("name " + it.name); }
+                        if (it.Variant && it.dept != "color" && it.dept != "wcolor" && !pairs.Add((it.baseIndex, Catalog.Mod(it)))) { unique = false; off.Add("pair " + it.id); }
+                        if (it.Variant && (!Lucky.InPool(it) || Lucky.Rarity(it) < 0 || Lucky.Rarity(it) > 3 || it.price <= 0)) { unique = false; off.Add("pool " + it.id); }
+                    }
+                }
+                bool walk6 = Catalog.Get("walk_6") == null && !Catalog.Dept("walk").items.Exists(i => i.id == "walk_6");
+                var keep = Save.P.look.ToArray();
+                Save.P.look.RemoveAll(e => e.StartsWith("walk="));
+                Save.P.look.Add("walk=walk_6");
+                bool fallback = Save.Worn("walk") == Catalog.Dept("walk").def;
+                Save.Fix();
+                fallback &= !Save.P.look.Contains("walk=walk_6");
+                Save.P.look.Clear(); Save.P.look.AddRange(keep);
+                var sec = Catalog.Dept("secret").items.FindAll(i => i.Variant);
+                bool secretOk = sec.Count > 0 && sec.TrueForAll(i => i.tokens && (i.finish >= 0 || i.tint >= 0) && i.baseIndex != 7);
+                var wv = Catalog.Get("walk_v0");
+                bool mods = wv != null && (wv.speed != 1 || wv.amp != 1);
+                mods &= Catalog.PitchOf("jsnd_v0") != 1 && Catalog.TintOf("aura_v0").HasValue && Catalog.TintOf("skin_v0").HasValue;
+                mods &= Catalog.FinishOf("head_v0") >= 0 && Catalog.FinishOf("pet_v0") >= 0 && Catalog.Index("color_v0") == 8;
+                Check("v0.27: 1000 more skins (things in 10 finishes)", Catalog.VariantCount == 1000 && Catalog.Get("hat_v0") != null && Catalog.Get("hat_v0").name.Contains("("), Catalog.VariantCount.ToString());
+                Check("every department has as many items as «Оружие и инструменты» (all exactly M)", same, $"M = {N}, weapon {Catalog.Dept("weapon").items.Count}, {Catalog.FillCount} new" + (off.Count > 0 ? " off: " + string.Join(", ", off.GetRange(0, Mathf.Min(10, off.Count))) : ""));
+                Check("variants: unique names, no two alike, all in the lucky blocks", unique, off.Count > 0 ? string.Join(", ", off.GetRange(0, Mathf.Min(10, off.Count))) : "");
+                Check("«Лунная походка» (walking backwards) is gone, a save wearing it walks the default way", walk6 && fallback);
+                Check("variants really change something (tempo, pitch, tint, finish, new colours); secret ones cost tokens", mods && secretOk);
+            }
             Check("25+ costumes: chicken, rich Артём and Али, footballers, sport, robots, phones, computers", Catalog.Dept("suit").items.Count >= 26, Catalog.Dept("suit").items.Count.ToString());
             Check("8 named items in every department", eight);
             Check("200+ items in total", Catalog.Items.Count >= 200, Catalog.Items.Count + " (regular " + Catalog.RegularCount + ")");
@@ -95,7 +139,7 @@ namespace Chubrik
                     {
                         var t = new GameObject("p").transform;
                         int made = Parts.Made;
-                        Pet.Build(it.Premium ? 100 + it.set : Catalog.Index(it.id), t);
+                        Pet.BuildItem(it.id, t);
                         parts = Parts.Made - made;
                         Destroy(t.gameObject);
                     }
@@ -257,8 +301,8 @@ namespace Chubrik
             {
                 var cg = new GameObject("TopCam");
                 var cam = cg.AddComponent<Camera>();
-                cam.orthographic = true; cam.orthographicSize = 54; cam.aspect = 1;
-                cam.transform.SetPositionAndRotation(new Vector3(0, 120, 0), Quaternion.Euler(90, 0, 0));
+                cam.orthographic = true; cam.orthographicSize = 70; cam.aspect = 1;
+                cam.transform.SetPositionAndRotation(new Vector3(-16, 120, -2), Quaternion.Euler(90, 0, 0));
                 cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.5f, 0.75f, 0.95f);
                 cam.farClipPlane = 300; cam.enabled = false;
                 var rt = new RenderTexture(1024, 1024, 24) { antiAliasing = 4 };
@@ -1382,6 +1426,29 @@ namespace Chubrik
                 yield return Wait(1f);
                 Check("leaving the stadium takes you back to the lobby", !Football.Inside(pl.transform.position) && Football.Mode == 0);
 
+                // ---- 21.11 the tutorial video (Settings → «Обучение») and the neon quarter with the portals of worlds 67 and 8 ----
+                Tutorial.Speed = 4f;
+                Tutorial.Play();
+                for (float t = 0; t < 20 && Tutorial.Scene < 4; t += Time.unscaledDeltaTime) yield return null;
+                yield return Shot("122_tutorial_leap");
+                for (float t = 0; t < 30 && Tutorial.Scene < 12; t += Time.unscaledDeltaTime) yield return null;
+                yield return Shot("123_tutorial_cages");
+                for (float t = 0; t < 40 && Tutorial.Scene < Tutorial.Scenes - 1; t += Time.unscaledDeltaTime) yield return null;
+                yield return Wait(1f);
+                yield return Shot("124_tutorial_end");
+                Check("«Обучение»: the tutorial video with voice plays to the end", Tutorial.IsOpen && Tutorial.Scene == Tutorial.Scenes - 1, Tutorial.Scene + " / " + Tutorial.Scenes);
+                Tutorial.Stop();
+                Tutorial.Speed = 1f;
+                yield return Wait(0.5f);
+                Check("after the tutorial the game is back (not frozen)", !Tutorial.IsOpen && !pl.Frozen);
+                pl.Teleport(Lobby.NeonGate + new Vector3(4, 0.3f, 0), 270); pl.yaw = 270; pl.pitch = 10;
+                yield return Wait(0.8f);
+                yield return Shot("125_neon_gate");
+                pl.Teleport(new Vector3(-56, 0.3f, 0), 270); pl.yaw = 270; pl.pitch = 8;
+                yield return Wait(0.8f);
+                yield return Shot("126_neon_quarter");
+                Check("the neon quarter holds the portals of worlds 67 and 8", Lobby.Portal67.x < -55 && Lobby.Portal8Pos.x < -55 && GameObject.Find("Portal8") != null);
+
                 // ---- 19.11 fans are the rescued chubriks, «Следить за кем-то», «Заблокировать комнату» ----
                 Football.EnsureBuilt();
                 int wantFans = Mathf.Min(Save.P.rescued.Count, FootballFans.MaxFans, FootballFans.Seats.Count - 8);
@@ -1651,6 +1718,78 @@ namespace Chubrik
                 File.WriteAllBytes(Path.Combine(outDir, d.id + ".png"), sheet.EncodeToPNG());
                 Destroy(sheet);
             }
+        }
+
+        IEnumerator Overview(string outDir)
+        {
+            Directory.CreateDirectory(outDir);
+            var pl = PlayerCtl.I;
+            Menus.Main(); yield return Wait(0.5f);
+            Window.Close();
+            yield return Enter(1);
+            yield return Wait(1f);
+            yield return TopShot(Lobby.root, Vector3.zero, 130f, Path.Combine(outDir, "01_lobby.png"), null);
+            int[] worlds = { 2, 3, 4, 5, 6, World67.Id, World8.Id };
+            string[] names = { "02_mir2_paryashchie_ruiny", "03_mir3_kristalnaya_peshchera", "04_mir4_snezhnaya_dolina", "05_mir5_dzhungli", "06_mir6_oshibka_404", "07_mir67", "08_mir8_memnyy" };
+            for (int i = 0; i < worlds.Length; i++)
+            {
+                yield return Enter(worlds[i]);
+                for (float t = 0; t < 8 && Worlds.Current != worlds[i]; t += Time.unscaledDeltaTime) { Window.Close(); yield return null; }
+                yield return Wait(1.5f);
+                Debug.Log($"[Overview] world {worlds[i]}: current {Worlds.Current}, player {pl.transform.position}");
+                var root = worlds[i] == 2 ? World2.Root : worlds[i] == 3 ? World3.Root : worlds[i] == 4 ? World4.Root : worlds[i] == 5 ? World5.Root : worlds[i] == 6 ? World6.Root : worlds[i] == World67.Id ? World67.Root : World8.Root;
+                var spawn = pl.transform.position;
+                yield return TopShot(root, spawn, 320f, Path.Combine(outDir, names[i] + ".png"), null);
+            }
+            yield return Enter(1);
+            Backrooms.Enter();
+            yield return Wait(1.5f);
+            float ceil = Backrooms.O.y + 2.6f;
+            yield return TopShot(Backrooms.Root, pl.transform.position, 120f, Path.Combine(outDir, "09_zakulise.png"), r => r.bounds.min.y > ceil);
+            Backrooms.Exit();
+            yield return Wait(1f);
+            Football.EnsureBuilt();
+            yield return TopShot(Football.Root, Football.O, 70f, Path.Combine(outDir, "10_stadion.png"), null);
+        }
+
+        /// <summary>An orthographic photo from straight above of everything solid under root (within reach of the centre).</summary>
+        IEnumerator TopShot(Transform root, Vector3 centre, float reach, string file, Func<Renderer, bool> hide)
+        {
+            yield return null;
+            Physics.SyncTransforms();
+            bool any = false; var b = new Bounds();
+            foreach (var c in root.GetComponentsInChildren<Collider>())
+            {
+                if (c.isTrigger || c.gameObject.layer == Layers.Barrier) continue;
+                var cb = c.bounds;
+                if (Mathf.Abs(cb.center.x - centre.x) > reach || Mathf.Abs(cb.center.z - centre.z) > reach || cb.size.x > reach * 1.6f || cb.size.z > reach * 1.6f) continue;
+                if (!any) { b = cb; any = true; } else b.Encapsulate(cb);
+            }
+            if (!any) b = new Bounds(centre, Vector3.one * 60);
+            b.Expand(new Vector3(8, 0, 8));
+            var hidden = new List<Renderer>();
+            if (hide != null) foreach (var r in root.GetComponentsInChildren<Renderer>()) if (r.enabled && hide(r)) { r.enabled = false; hidden.Add(r); }
+            bool fog = RenderSettings.fog; RenderSettings.fog = false;
+            float aspect = Mathf.Clamp(b.size.x / Mathf.Max(1, b.size.z), 0.35f, 2.8f);
+            int w = aspect >= 1 ? 2048 : Mathf.RoundToInt(2048 * aspect), h = aspect >= 1 ? Mathf.RoundToInt(2048 / aspect) : 2048;
+            var cg = new GameObject("TopCam");
+            var cam = cg.AddComponent<Camera>();
+            cam.orthographic = true; cam.aspect = w / (float)h;
+            cam.orthographicSize = Mathf.Max(b.size.z, b.size.x / cam.aspect) * 0.5f;
+            cam.transform.SetPositionAndRotation(new Vector3(b.center.x, b.max.y + 60, b.center.z), Quaternion.Euler(90, 0, 0));
+            cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = PlayerCtl.I.Cam.backgroundColor;
+            cam.cullingMask = ~((1 << Layers.Preview) | (1 << 5));
+            cam.nearClipPlane = 1; cam.farClipPlane = b.size.y + 400; cam.enabled = false;
+            var rt = new RenderTexture(w, h, 24) { antiAliasing = 4 };
+            cam.targetTexture = rt; cam.Render();
+            RenderTexture.active = rt;
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, w, h), 0, 0); tex.Apply();
+            RenderTexture.active = null;
+            File.WriteAllBytes(file, tex.EncodeToPNG());
+            Destroy(tex); rt.Release(); Destroy(cg);
+            RenderSettings.fog = fog;
+            foreach (var r in hidden) if (r) r.enabled = true;
         }
 
         /// <summary>Goes to a world and waits until the portal animation has really finished.</summary>

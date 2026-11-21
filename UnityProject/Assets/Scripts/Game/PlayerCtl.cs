@@ -131,7 +131,7 @@ namespace Chubrik
             pet.scale = Mathf.Clamp(Model.SizeScale, 0.7f, 1.5f);
             aura.model = Model;
             aura.Set(Aura.KindOf(look));
-            shadow.Set(Mathf.Max(0, look.Idx("shadow")));
+            shadow.Set(Mathf.Max(0, look.Idx("shadow")), Catalog.TintOf(look.Of("shadow")));
             shadow.size = Model.SizeScale;
             float s = Model.SizeScale;
             CC.radius = 0.38f * Mathf.Clamp(s, 0.6f, 1.6f); CC.height = 1.45f * s; CC.center = new Vector3(0, 0.74f * s, 0);
@@ -236,7 +236,6 @@ namespace Chubrik
             if (wish.sqrMagnitude > 0.01f && dive == 0)
             {
                 var face = Quaternion.LookRotation(wish);
-                if (look != null && look.Idx("walk") == 6 && Grounded) face = Quaternion.LookRotation(-wish);   // moonwalk: backwards
                 transform.rotation = Quaternion.Slerp(transform.rotation, face, dt * 14);
                 idle = 0;
                 if (Anim.emoting) Anim.StopEmote();
@@ -311,7 +310,7 @@ namespace Chubrik
                 EndLeap();
                 float impact = Mathf.InverseLerp(-4, -22, vyBefore);
                 Anim.Land(impact);
-                if (vyBefore < -6) { AudioFx.Land(Mathf.Max(0, look.Idx("lsnd"))); Effects.Emit("dust", transform.position, 6, 0.3f); }
+                if (vyBefore < -6) { AudioFx.Land(Mathf.Max(0, look.Idx("lsnd")), Catalog.PitchOf(look.Of("lsnd"))); Effects.Emit("dust", transform.position, 6, 0.3f); }
             }
             if (wasGrounded && !Grounded) fallStart = transform.position.y;
             grabCd -= dt;
@@ -351,7 +350,7 @@ namespace Chubrik
             vel.y = v;
             Grounded = false; coyote = 0;
             Jumps++;
-            AudioFx.Jump(Mathf.Max(0, look.Idx("jsnd")), air);
+            AudioFx.Jump(Mathf.Max(0, look.Idx("jsnd")), air, Catalog.PitchOf(look.Of("jsnd")));
             if (air)
             {
                 Effects.Emit(Model.HasJet ? "fire" : "dust", transform.position + Vector3.up * 0.2f, 8, 0.25f, Vector3.down);
@@ -596,7 +595,7 @@ namespace Chubrik
             var p = foot ? foot.position : transform.position;
             p.y = transform.position.y + 0.03f;
             int k = Effects.StepKind(look);
-            if (k >= 0 || Random.value < 0.3f) Effects.Step(k, p);
+            if (k >= 0 || Random.value < 0.3f) Effects.Step(k, p, Catalog.TintOf(look.Of("steps")));
             AudioFx.Step(look.Idx("shoes"), look.Idx("walk") == 4);
             if (look.Of("skin") == Catalog.IceSkin) Effects.Emit("stardust", p + Vector3.up * 0.05f, 4, 0.2f);   // frosty trail
             if (Worlds.Current == 4) World4.Footprint(p, transform.rotation);

@@ -22,14 +22,23 @@ namespace Chubrik
             if (string.IsNullOrEmpty(id)) return;
             Parts.Layer = layer;
             body = Node("PetBody", transform, Vector3.zero);
-            int set = Catalog.SetOf(id);
-            Build(set >= 0 ? 100 + set : Catalog.Index(id), body);
+            BuildItem(id, body);
             foreach (var tr in body.GetComponentsInChildren<Transform>(true)) tr.gameObject.layer = layer;
             foreach (var r in body.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             if (owner) transform.position = owner.position + Vector3.up * 1.4f;
         }
 
         void OnDestroy() { if (body) PetMeshes.Free(body); }
+
+        /// <summary>The pet of a wardrobe item: premium sets by their number, 21.11 finish variants
+        /// («Мини-медвежонок (золото)») built in their finish.</summary>
+        public static void BuildItem(string id, Transform b)
+        {
+            int set = Catalog.SetOf(id);
+            Parts.Finish = SkinFinish.For(Catalog.FinishOf(id));
+            try { Build(set >= 0 ? 100 + set : Catalog.Index(id), b); }
+            finally { Parts.Finish = null; }
+        }
 
         public static void Build(int kind, Transform b)
         {

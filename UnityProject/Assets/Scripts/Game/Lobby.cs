@@ -26,7 +26,14 @@ namespace Chubrik
         /// <summary>Spots the autotest uses.</summary>
         public static readonly Vector3 TestMushroom = new Vector3(3, 0, -4), PadFrom = new Vector3(19, 0.07f, -5), PadTo = new Vector3(-20, 4.9f, 12), CactusPos = new Vector3(-22, 0, 0);
         /// <summary>Rescued friends needed to open the way to each world.</summary>
-        public static readonly Vector3 Portal67 = new Vector3(-47.5f, 0, -3.2f);
+        /// <summary>21.11: World 67 and World 8 stand in their own area, the «Neon quarter» west of the park.</summary>
+        public static readonly Vector3 Portal67 = new Vector3(-76, 0, 7);
+        /// <summary>The entrance to the neon quarter: an opening in the park's wall with a neon arch over it.</summary>
+        public static readonly Vector3 NeonGate = new Vector3(-43.7f, 0, 5.5f);
+        /// <summary>Where the corridor from the entrance opens into the neon square (both portals face it).</summary>
+        static readonly Vector3 NeonDoor = new Vector3(-50.7f, 0, 5.5f);
+        /// <summary>The football pad looks for free ground round this spot (in the neon quarter, near World 67).</summary>
+        public static readonly Vector3 FootballNear = new Vector3(-64, 0, 13);
         public static int NeedFor(int world) => world switch { 3 => 20, 4 => 4, 5 => 10, 6 => 25, 8 => 30, _ => 0 };
         public static bool Open(int world) => Save.P.rescued.Count >= NeedFor(world);
 
@@ -55,6 +62,7 @@ namespace Chubrik
             PortalArch(new Vector3(18, 0, 19.5f), 0, 2, "ПАРЯЩИЕ РУИНЫ", "B57CFF", M("9AA3AE", 0.2f), "ruins");
             Park();
             Glitch();
+            NeonQuarter();             // 21.11 World 67 and World 8 in their own area
             Jungle();
             Snow();
             CrystalCave();
@@ -66,8 +74,8 @@ namespace Chubrik
             Clouds();
             Tokens();
             MakeSolid();
-            Football.BuildPad(root);   // 18.11
-            Portal8();                 // 19.11 the portal to World 8
+            Football.BuildPad(root);   // 18.11 (21.11: in the neon quarter)
+            Portal8();                 // 19.11 the portal to World 8 (21.11: at its spot in the neon quarter)
             Eggs.SpawnLobby();
             Bird.ForWorld(1);
             building = false;
@@ -208,9 +216,13 @@ namespace Chubrik
             // the hub with the wardrobe corner (top left), the ruins corner (top right) and the shop corner (bottom left)
             Ground("Hub", g, 4, P(-11, 23, 3), P(2.3f, 23), P(2.3f, 16.3f), P(10, 16.3f), P(10, 23.7f), P(26.6f, 23.7f), P(26.6f, -21.5f), P(-11, -21.5f, 3));
             // the park with the pond corner and the notch on its left side
-            Ground("Park", g, 4, P(-50.7f, 17.5f, 3), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f), P(-50.7f, 0.6f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-50.7f, 10.4f, 1.5f));
-            // the glitch checkerboard with the portal nook on its left
-            Ground("Glitch", GroundMat(CheckerTex(), 0.2f), 7, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f, 2));
+            // (21.11: its top-left corner is square now and the notch is the way into the neon quarter next to it)
+            Ground("Park", g, 4, P(-50.7f, 17.5f), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f), P(-50.7f, 0.6f, 1.5f), P(-43.7f, 0.6f), P(-43.7f, 10.4f), P(-50.7f, 10.4f, 1.5f));
+            // the glitch checkerboard with the portal nook on its left (21.11: square bottom-left corner, the neon quarter is next to it)
+            Ground("Glitch", GroundMat(CheckerTex(), 0.2f), 7, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f));
+            // 21.11 the neon quarter west of the park and the glitch area: dark violet with a glowing grid; the park's notch is its entrance hall
+            var neon = Mats.Emissive(Tex.Grid("1C0A36", "D24CFF", 4), Color.white, Color.white * 0.75f, null, 0.35f);
+            Ground("Neon", neon, 6, NeonOutline);
             Ground("Jungle", g, 3.5f, P(-8.5f, -21.5f), P(26.6f, -21.5f), P(26.6f, -53, 3), P(-8.5f, -53, 3));
             // the snowy valley round the top of the hub, down the right side to the crystal cave
             Ground("Snow", GroundMat(Tex.Snow()), 7, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 6.8f), P(26.6f, 6.8f), P(26.6f, 23.7f), P(10, 23.7f), P(10, 16.3f), P(2.3f, 16.3f), P(2.3f, 23));
@@ -218,13 +230,21 @@ namespace Chubrik
             var cave = GroundMat(Tex.Concrete(), 0.3f); cave.color = Hex("6A6480");
             Ground("CrystalCave", cave, 4, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
             // each area's walls are its own: grass-and-earth in the lobby, park and jungle, snow, glitch, crystal
+            Area(WallStyle.Neon, NeonOutline);   // first: the park's rectangle below still covers the notch
             Area(WallStyle.Crystal, P(26.6f, 6.8f), P(50.7f, 6.8f, 6), P(50.7f, -24, 9), P(26.6f, -24));
-            Area(WallStyle.Glitch, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f, 2));
+            Area(WallStyle.Glitch, P(-50.7f, -6.9f), P(-22.6f, -6.9f), P(-22.6f, -24, 2), P(-44, -24, 2), P(-44, -16.3f, 1), P(-50.7f, -16.3f));
             Area(WallStyle.Snow, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 6.8f), P(26.6f, 6.8f), P(26.6f, 23.7f), P(10, 23.7f), P(10, 16.3f), P(2.3f, 16.3f), P(2.3f, 23));
             Area(WallStyle.Grass, P(-11, 23, 3), P(2.3f, 23), P(2.3f, 16.3f), P(10, 16.3f), P(10, 23.7f), P(26.6f, 23.7f), P(26.6f, -21.5f), P(-11, -21.5f, 3));
-            Area(WallStyle.Grass, P(-50.7f, 17.5f, 3), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f));
+            Area(WallStyle.Grass, P(-50.7f, 17.5f), P(-11, 17.5f), P(-11, -6.9f), P(-50.7f, -6.9f));
             Area(WallStyle.Grass, P(-8.5f, -21.5f), P(26.6f, -21.5f), P(26.6f, -53, 3), P(-8.5f, -53, 3));
         }
+
+        /// <summary>21.11 the neon quarter: x −84..−50.7, z −24..17.5, plus the park's old notch (x −50.7..−43.7, z 0.6..10.4)
+        /// as the entrance hall. The corners shared with the park keep exactly the park's rounding.</summary>
+        static readonly Vector3[] NeonOutline =
+        {
+            P(-84, 17.5f, 4), P(-50.7f, 17.5f), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f), P(-43.7f, 0.6f), P(-50.7f, 0.6f, 1.5f), P(-50.7f, -24, 2), P(-84, -24, 4),
+        };
 
         static void Water(Vector3 a, Vector3 b, float w)
         {
@@ -252,7 +272,7 @@ namespace Chubrik
 
         // The four lobby walls from the player's drawing: dirt with grass on top (hub, park, ruins, jungle),
         // dirt with snow on top (snowy valley), the purple/teal checker (glitch world), dark stone with pink crystals (crystal cave).
-        enum WallStyle { Grass, Snow, Glitch, Crystal }
+        enum WallStyle { Grass, Snow, Glitch, Crystal, Neon }
         static WallStyle style;
         static readonly Dictionary<(WallStyle, int), Material> wallMats = new Dictionary<(WallStyle, int), Material>();
         static readonly Dictionary<WallStyle, Texture2D> wallTex = new Dictionary<WallStyle, Texture2D>();
@@ -276,6 +296,13 @@ namespace Chubrik
                             break;
                         case WallStyle.Crystal:
                             c = new Color(0.30f, 0.42f, 0.46f);
+                            break;
+                        case WallStyle.Neon:
+                            // 21.11 dark violet panels with a pink neon band on top and a cyan line low down
+                            c = new Color(0.13f, 0.06f, 0.26f);
+                            if (x % (N / 2) < 2) c = new Color(0.22f, 0.12f, 0.42f);
+                            if (v > 0.86f && v < 0.93f) c = new Color(1f, 0.24f, 0.94f);
+                            else if (v > 0.12f && v < 0.15f) c = new Color(0.21f, 0.88f, 1f);
                             break;
                         default:
                         {
@@ -301,7 +328,8 @@ namespace Chubrik
         {
             int rep = Mathf.Max(1, Mathf.RoundToInt(len / h * 1.25f));
             if (wallMats.TryGetValue((st, rep), out var m)) return m;
-            m = Mats.Tex(WallTex(st), Color.white, st == WallStyle.Crystal ? 0.35f : 0.12f);
+            m = st == WallStyle.Neon ? Mats.Emissive(WallTex(st), Color.white, Color.white * 0.8f, null, 0.3f)   // the neon bands glow
+                                     : Mats.Tex(WallTex(st), Color.white, st == WallStyle.Crystal ? 0.35f : 0.12f);
             m.mainTextureScale = new Vector2(rep, 1);
             return wallMats[(st, rep)] = m;
         }
@@ -317,9 +345,15 @@ namespace Chubrik
             var st = StyleAt(p + new Vector3(0.9f, 0, 0.9f)) ?? StyleAt(p - new Vector3(0.9f, 0, 0.9f)) ?? style;
             var go = Solid(PrimitiveType.Cylinder, new Vector3(p.x, h / 2, p.z), new Vector3(1.04f, h / 2, 1.04f), WallMat(st, 3.2f, h));
             go.name = "WallPost";
-            string cap = st switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
-            Cy(root, new Vector3(p.x, h + 0.02f, p.z), new Vector3(1.16f, 0.17f, 1.16f), M(cap, 0.3f));   // a little higher than the wall caps: no flicker
+            Cy(root, new Vector3(p.x, h + 0.02f, p.z), new Vector3(1.16f, 0.17f, 1.16f), CapMat(st));   // a little higher than the wall caps: no flicker
         }
+
+        /// <summary>The top of a wall or a post: grass, snow, purple, stone — and glowing pink in the neon quarter.</summary>
+        static Material CapMat(WallStyle st) => st switch
+        {
+            WallStyle.Grass => M("2E9E3E", 0.3f), WallStyle.Snow => M("FFFFFF", 0.3f), WallStyle.Glitch => M("6A3FC0", 0.3f),
+            WallStyle.Neon => G("FF3CF0", 1.5f), _ => M("3E5560", 0.3f),
+        };
 
         static Material barrierM;
         public const float BarrierH = 30f;
@@ -353,8 +387,7 @@ namespace Chubrik
             void Half(Vector3 c, float thick, WallStyle st)
             {
                 var go = Box(c + Vector3.up * h / 2, new Vector3(thick, h, len), WallMat(st, len, h), yaw);
-                string cap = st switch { WallStyle.Grass => "2E9E3E", WallStyle.Snow => "FFFFFF", WallStyle.Glitch => "6A3FC0", _ => "3E5560" };
-                B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.12f, 0.06f, 1.02f), M(cap, 0.3f));   // the top
+                B(go.transform, new Vector3(0, 0.5f, 0), new Vector3(1.12f, 0.06f, 1.02f), CapMat(st));   // the top
                 if (st != WallStyle.Crystal) return;
                 // pink crystal clusters sticking out of the top, like on the drawing
                 crystalRun += d.magnitude;
@@ -389,12 +422,17 @@ namespace Chubrik
             WallPath(5.5f, P(-11, -5.3f), P(4, -5.3f));                                                 // the line above the shops (in by the river)
             WallPath(5.5f, P(-8.5f, -40.3f), P(2.6f, -40.3f));                                          // the jungle portal nook
             // the park, the glitch checkerboard below it
-            WallPath(5.5f, P(-11, 17.5f), P(-50.7f, 17.5f, 3), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f, 1.5f), P(-43.7f, 0.6f, 1.5f), P(-50.7f, 0.6f, 1.5f), P(-50.7f, -6.9f));
+            // (21.11: the old notch on the left is the entrance hall of the neon quarter: a 6 m opening under the neon arch)
+            WallPath(5.5f, P(-11, 17.5f), P(-50.7f, 17.5f), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f), P(-43.7f, NeonGate.z + 3.9f));
+            WallPath(5.5f, P(-43.7f, NeonGate.z - 3.9f), P(-43.7f, 0.6f), P(-50.7f, 0.6f, 1.5f), P(-50.7f, -6.9f));
             style = WallStyle.Glitch;
             WallPath(5.5f, P(-50.7f, -6.9f),
-                     P(-50.7f, -16.3f, 2), P(-44, -16.3f, 1), P(-44, -24, 2), P(-22.6f, -24, 2), P(-22.6f, -6.9f));
+                     P(-50.7f, -16.3f), P(-44, -16.3f, 1), P(-44, -24, 2), P(-22.6f, -24, 2), P(-22.6f, -6.9f));
             WallPath(5.5f, P(-50.7f, -6.9f), P(-43.3f, -6.9f));                                         // glitch gate in this line
             WallPath(5.5f, P(-34.8f, -6.9f), P(-11, -6.9f));
+            // 21.11 the neon quarter: the rest of its outline (the sides by the park and the glitch area are theirs)
+            style = WallStyle.Neon;
+            WallPath(5.5f, P(-50.7f, 17.5f), P(-84, 17.5f, 4), P(-84, -24, 4), P(-50.7f, -24, 2), P(-50.7f, -16.3f));
             // the snowy valley: the big outline, the line round the portal hollow, the lake corner
             style = WallStyle.Snow;
             WallPath(5.5f, P(-5.9f, 23), P(-5.9f, 49.8f, 4), P(47.5f, 49.8f, 4), P(47.5f, 5.5f));
@@ -611,37 +649,19 @@ namespace Chubrik
 
         public static Vector3 Portal8Pos;
 
-        /// <summary>19.11: the portal to World 8 «Самый мемный мир» — on free flat ground in the hub or the park.</summary>
+        /// <summary>19.11: the portal to World 8 «Самый мемный мир». 21.11: at its own spot in the neon quarter,
+        /// facing the entrance; it still lets you in only with enough rescued friends (NeedFor(8)).</summary>
         static void Portal8()
         {
-            Physics.SyncTransforms();
-            Portal8Pos = new Vector3(20, 0, -2);
-            float yaw = 270;
-            bool found = false;
-            foreach (var (c, y) in new[] { (new Vector3(20, 0, -2), 270f), (new Vector3(-18, 0, 15.5f), 180f), (new Vector3(-34, 0, -3.5f), 0f), (new Vector3(-14, 0, 2), 90f), (new Vector3(16, 0, 12), 200f), (new Vector3(-40, 0, 14), 180f), (new Vector3(-2, 0, -18), 0f), (new Vector3(23, 0, -18), 0f) })
-            {
-                for (int k = 0; k < 9 && !found; k++)
-                {
-                    var p = c + new Vector3((k % 3 - 1) * 2.5f, 0, (k / 3 - 1) * 2.5f);
-                    if (!Physics.Raycast(p + Vector3.up * 6, Vector3.down, out var hit, 9, Layers.SolidMask, QueryTriggerInteraction.Ignore) || Mathf.Abs(hit.point.y) > 0.25f) continue;
-                    var rot = Quaternion.Euler(0, y, 0);
-                    if (Physics.CheckBox(p + Vector3.up * 3.5f, new Vector3(4.6f, 3.2f, 1.6f), rot, ~0, QueryTriggerInteraction.Ignore)) continue;
-                    if (Physics.CheckBox(p + rot * new Vector3(0, 1.5f, -3f), new Vector3(2f, 1.2f, 1.6f), rot, ~0, QueryTriggerInteraction.Ignore)) continue;
-                    bool near = false;
-                    foreach (var z in Zones.All) if ((z.pos - p).magnitude < 6) near = true;
-                    foreach (var t in TokenSpots) if (new Vector2(t.x - p.x, t.z - p.z).magnitude < 3) near = true;
-                    if (near) continue;
-                    Portal8Pos = new Vector3(p.x, 0, p.z); yaw = y; found = true;
-                }
-                if (found) break;
-            }
-            PortalArch(Portal8Pos, yaw, World8.Id, "САМЫЙ МЕМНЫЙ МИР", "FF7AD9", M("7A3CFF", 0.3f), "meme");
+            Portal8Pos = new Vector3(-76, 0, -8);
+            PortalArch(Portal8Pos, YawFacing(Portal8Pos, NeonDoor), World8.Id, "САМЫЙ МЕМНЫЙ МИР", "FF7AD9", M("7A3CFF", 0.3f), "meme");
         }
+
+        /// <summary>The yaw that turns a portal's front (local −Z) towards a point.</summary>
+        static float YawFacing(Vector3 from, Vector3 to) => Mathf.Repeat(Mathf.Atan2(-(to.x - from.x), -(to.z - from.z)) * Mathf.Rad2Deg, 360);
 
         static void Glitch()
         {
-            // the portal to World 67 in the park's left corner, facing the park
-            PortalArch(Portal67, 270, World67.Id, "ГЛЮЧНЫЙ СИКС-СЕВЕН", "39FF6A", M("3A1C78", 0.3f), "glitch");
             var r = new Rng(66);
             for (int k = 0; k < 6; k++)
                 Box(new Vector3(r.F(-40, -26), 0.8f + (k % 2) * 0.8f, r.F(-21, -11)), new Vector3(1.6f, 1.6f + (k % 2) * 1.6f, 1.6f), checker, r.F(0, 45));
@@ -649,6 +669,158 @@ namespace Chubrik
             Mushroom(new Vector3(-30, 0, -19), 17f);
             // the portal in the little nook on the left, facing the checkerboard
             PortalArch(new Vector3(-47.6f, 0, -11.6f), 270, 6, "ГЛЮК-МИР 404", "FF5FD2", checker, "glitch");
+        }
+
+        // ---------------- the neon quarter (21.11) ----------------
+
+        /// <summary>
+        /// 21.11 the player asked for World 67 and World 8 to get a place of their own: the neon quarter west of the park.
+        /// In through the park's old notch under a neon arch; inside, a dark violet square with a glowing grid: the World 67
+        /// portal with a big neon «67» on the wall and green/purple glitch blocks, the World 8 portal (built in Portal8())
+        /// with meme smiley billboards, neon lamps, a few trees and benches; the football pad finds its spot here too.
+        /// </summary>
+        static void NeonQuarter()
+        {
+            NeonArch();
+            PortalArch(Portal67, YawFacing(Portal67, NeonDoor), World67.Id, "ГЛЮЧНЫЙ СИКС-СЕВЕН", "39FF6A", M("3A1C78", 0.3f), "glitch");
+            Neon67(new Vector3(-82.9f, 0, Portal67.z));
+            // glitch blocks round World 67: standing on the ground (solid) and hanging in the air (spinning)
+            var green = G("39FF6A", 1.2f); var purple = G("A040FF", 1.3f);
+            foreach (var (p, sz, yaw, gr) in new[] { (new Vector3(-81.2f, 0, 13.8f), 1.8f, 20f, true), (new Vector3(-81.2f, 1.8f, 13.8f), 1.1f, 50f, false), (new Vector3(-80.8f, 0, 0.6f), 1.4f, 35f, false),
+                                                   (new Vector3(-71, 0, 15.3f), 1.6f, 10f, false), (new Vector3(-69.4f, 0, 13.8f), 1.1f, 40f, true), (new Vector3(-53.6f, 0, -2.4f), 1.2f, 15f, true) })
+                Box(p + Vector3.up * sz / 2, Vector3.one * sz, gr ? green : purple, yaw);
+            var air = new[] { new Vector3(-79.5f, 4.6f, 12.4f), new Vector3(-79.8f, 3.8f, 1.6f), new Vector3(-72, 6.4f, 10.5f), new Vector3(-67, 4.2f, -0.5f), new Vector3(-58, 5.2f, 12) };
+            for (int k = 0; k < air.Length; k++)
+            {
+                var c = Node("GlitchCube", root, air[k]);
+                c.gameObject.AddComponent<Bob>().amp = 0.35f;
+                var cube = B(c, Vector3.zero, Vector3.one * (0.8f + (k % 3) * 0.3f), k % 2 == 0 ? G("39FF6A", 1.5f) : G("A040FF", 1.5f), new Vector3(k * 17, k * 40, k * 9));
+                var sp = cube.AddComponent<Spin>(); sp.axis = new Vector3(0.4f, 1, 0.2f).normalized; sp.speed = 35 + k * 12;
+            }
+            // glowing tiles from the entrance to World 67, and a branch to World 8
+            var pink = G("FF3CF0", 1.3f); var cyan = G("35E0FF", 1.3f);
+            int n = 0;
+            for (float x = NeonGate.x - 1.5f; x > Portal67.x + 4.2f; x -= 2.4f) B(root, new Vector3(x, 0.02f, NeonGate.z), new Vector3(1.1f, 0.04f, 1.1f), n++ % 2 == 0 ? pink : cyan);
+            var p8 = new Vector3(-76, 0, -8);   // = Portal8Pos (set in Portal8())
+            Vector3 from = new Vector3(-62, 0, NeonGate.z), to = p8 + (NeonDoor - p8).normalized * 2.6f;
+            float ty = YawFacing(from, to);
+            for (int k = 1; k <= 7; k++) B(root, Vector3.Lerp(from, to, k / 7f) + Vector3.up * 0.02f, new Vector3(1.1f, 0.04f, 1.1f), k % 2 == 0 ? pink : cyan, new Vector3(0, ty, 0));
+            // meme billboards round World 8
+            MemeBoard(new Vector3(-80.5f, 0, -19), "LOL", 0, "2B1060");
+            MemeBoard(new Vector3(-69, 0, -21), "ХА-ХА", 1, "0E3A5C");
+            MemeBoard(new Vector3(-57.5f, 0, -19.5f), "ЖИЗА", 2, "4A0E44");
+            // neon lamps, trees, benches
+            foreach (var (p, col) in new[] { (new Vector3(-53, 0, 12.2f), "FF3CF0"), (new Vector3(-53, 0, 0), "35E0FF"), (new Vector3(-66, 0, 9.3f), "39FF6A"),
+                                             (new Vector3(-66, 0, -3), "FF3CF0"), (new Vector3(-82, 0, -1.5f), "A040FF"), (new Vector3(-62, 0, -12), "35E0FF") })
+                NeonLamp(p, col);
+            foreach (var p in new[] { new Vector3(-55, 0, 14.5f), new Vector3(-53.5f, 0, -13), new Vector3(-80.8f, 0, -12) })
+                Tree(p, 0.95f, (int)(p.x * 5 + p.z));
+            Bench(new Vector3(-59.5f, 0, 16.2f), 180); Bench(new Vector3(-63, 0, -22.4f), 0);
+        }
+
+        /// <summary>The neon arch over the entrance in the park's wall: «НЕОНОВЫЙ КВАРТАЛ · МИР 67 · МИР 8» on both sides.</summary>
+        static void NeonArch()
+        {
+            var t = Node("NeonGate", root, NeonGate, new Vector3(0, 270, 0));   // front (local −Z) faces the park, local x = world +z
+            var dark = M("1C0A36", 0.4f);
+            var pink = G("FF3CF0", 1.8f); var cyan = G("35E0FF", 1.8f);
+            foreach (var sd in new[] { -1, 1 })
+            {
+                // the pillars stand over the ends of the wall (the opening between them is 6.2 m)
+                Solid(PrimitiveType.Cube, new Vector3(sd * 3.9f, 4.25f, 0), new Vector3(1.6f, 8.5f, 1.6f), dark, default, t);
+                foreach (var fz in new[] { -0.82f, 0.82f }) B(t, new Vector3(sd * 3.9f, 3.6f, fz), new Vector3(0.3f, 7f, 0.05f), sd < 0 ? pink : cyan);
+            }
+            Solid(PrimitiveType.Cube, new Vector3(0, 8.3f, 0), new Vector3(9.6f, 2.6f, 1.4f), dark, default, t);
+            foreach (var fz in new[] { -0.72f, 0.72f })
+            {
+                B(t, new Vector3(0, 9.5f, fz), new Vector3(9.4f, 0.12f, 0.06f), pink);
+                B(t, new Vector3(0, 7.1f, fz), new Vector3(9.4f, 0.12f, 0.06f), cyan);
+            }
+            foreach (var back in new[] { false, true })
+            {
+                float z = back ? 0.77f : -0.77f;
+                var a = Prim.Text(t, "НЕОНОВЫЙ КВАРТАЛ", new Vector3(0, 8.75f, z), 6.5f, Hex("FF7AF0"));
+                a.transform.localRotation = Quaternion.Euler(0, back ? 180 : 0, 0);
+                var b = Prim.Text(t, "МИР 67 · МИР 8", new Vector3(0, 7.75f, z), 5.5f, Hex("39FF6A"));
+                b.transform.localRotation = Quaternion.Euler(0, back ? 180 : 0, 0);
+            }
+        }
+
+        /// <summary>A big neon «67» on a dark board on the wall behind the World 67 portal.</summary>
+        static void Neon67(Vector3 c)
+        {
+            var t = Node("Neon67", root, c, new Vector3(0, 270, 0));   // faces east (local −Z), local x = world +z, local +z = towards the wall
+            B(t, new Vector3(0, 6.4f, 0.3f), new Vector3(8.8f, 7.2f, 0.15f), M("12061F", 0.5f));
+            var frame = G("FF3CF0", 1.6f);
+            foreach (var sd in new[] { -1, 1 })
+            {
+                B(t, new Vector3(0, 6.4f + sd * 3.6f, 0.15f), new Vector3(8.9f, 0.14f, 0.14f), frame);
+                B(t, new Vector3(sd * 4.4f, 6.4f, 0.15f), new Vector3(0.14f, 7.2f, 0.14f), frame);
+            }
+            Digit(t, new Vector3(-2, 6.4f, 0), '6', G("39FF6A", 1.8f));
+            Digit(t, new Vector3(2, 6.4f, 0), '7', G("B04CFF", 1.8f));
+        }
+
+        /// <summary>A seven-segment neon digit, 3 × 6 m, in t's local x/y plane.</summary>
+        static void Digit(Transform t, Vector3 c, char d, Material m)
+        {
+            const float W = 3, H = 6, th = 0.6f;
+            string on = d switch { '6' => "acdefg", '7' => "abc", '8' => "abcdefg", _ => "g" };
+            foreach (char s in on)
+            {
+                var (p, sz) = s switch
+                {
+                    'a' => (new Vector2(0, H / 2 - th / 2), new Vector2(W, th)),
+                    'b' => (new Vector2(W / 2 - th / 2, H / 4), new Vector2(th, H / 2)),
+                    'c' => (new Vector2(W / 2 - th / 2, -H / 4), new Vector2(th, H / 2)),
+                    'd' => (new Vector2(0, -H / 2 + th / 2), new Vector2(W, th)),
+                    'e' => (new Vector2(-W / 2 + th / 2, -H / 4), new Vector2(th, H / 2)),
+                    'f' => (new Vector2(-W / 2 + th / 2, H / 4), new Vector2(th, H / 2)),
+                    _ => (Vector2.zero, new Vector2(W, th)),
+                };
+                B(t, c + new Vector3(p.x, p.y, 0), new Vector3(sz.x, sz.y, 0.3f), m);
+            }
+        }
+
+        /// <summary>A meme billboard on two posts: a smiley (0 laughing, 1 winking, 2 in sunglasses) and a caption.</summary>
+        static void MemeBoard(Vector3 p, string caption, int face, string bg)
+        {
+            var t = Node("MemeBoard", root, p, new Vector3(0, YawFacing(p, new Vector3(-64, 0, -6)), 0));   // front (local −Z) to the square
+            var iron = M("2A2E36", 0.5f, 0.4f);
+            foreach (var sd in new[] { -1, 1 }) Solid(PrimitiveType.Cylinder, new Vector3(sd * 1.7f, 1.4f, 0.25f), new Vector3(0.24f, 1.4f, 0.24f), iron, default, t);
+            B(t, new Vector3(0, 4.3f, 0), new Vector3(4.4f, 3.4f, 0.2f), M(bg, 0.3f));
+            var glow = G("FF3CF0", 1.6f);
+            foreach (var sd in new[] { -1, 1 })
+            {
+                B(t, new Vector3(0, 4.3f + sd * 1.76f, 0), new Vector3(4.64f, 0.12f, 0.26f), glow);
+                B(t, new Vector3(sd * 2.26f, 4.3f, 0), new Vector3(0.12f, 3.64f, 0.26f), glow);
+            }
+            var sm = Node("Smiley", t, new Vector3(-1, 4.3f, -0.12f));
+            Cy(sm, Vector3.zero, new Vector3(2.2f, 0.03f, 2.2f), G("FFE14D", 0.9f), new Vector3(90, 0, 0));
+            var dark = M("1A1A1A", 0.5f);
+            if (face == 2) B(sm, new Vector3(0, 0.28f, -0.06f), new Vector3(1.6f, 0.36f, 0.06f), dark);   // sunglasses
+            else
+            {
+                S(sm, new Vector3(-0.38f, 0.3f, -0.05f), new Vector3(0.26f, 0.42f, 0.08f), dark);
+                if (face == 1) B(sm, new Vector3(0.38f, 0.3f, -0.05f), new Vector3(0.42f, 0.09f, 0.06f), dark);   // the wink
+                else S(sm, new Vector3(0.38f, 0.3f, -0.05f), new Vector3(0.26f, 0.42f, 0.08f), dark);
+            }
+            if (face == 0)
+            {
+                S(sm, new Vector3(0, -0.38f, -0.05f), new Vector3(1.0f, 0.55f, 0.08f), dark);   // laughing mouth with a tongue
+                S(sm, new Vector3(0, -0.52f, -0.08f), new Vector3(0.45f, 0.2f, 0.05f), M("FF5F7A", 0.4f));
+            }
+            else for (int k = 0; k < 7; k++) { float a = (k / 6f - 0.5f) * 2.2f; S(sm, new Vector3(Mathf.Sin(a) * 0.6f + (face == 2 ? 0.1f : 0), -0.25f - Mathf.Cos(a) * 0.28f, -0.05f), 0.15f, dark); }
+            sm.gameObject.AddComponent<Bob>().amp = 0.08f;
+            var tx = Prim.Text(t, caption, new Vector3(1.15f, 4.3f, -0.14f), 5.5f, Color.white);
+            tx.transform.localRotation = Quaternion.identity;
+        }
+
+        static void NeonLamp(Vector3 p, string col)
+        {
+            Solid(PrimitiveType.Cylinder, p + Vector3.up * 1.7f, new Vector3(0.16f, 1.7f, 0.16f), M("2A1E3A", 0.6f, 0.5f));
+            Cy(root, p + Vector3.up * 2.2f, new Vector3(0.22f, 1.1f, 0.22f), G(col, 1.6f));   // a glowing tube round the post
+            S(root, p + Vector3.up * 3.65f, 0.6f, G(col, 1.9f));
         }
 
         static void Jungle()

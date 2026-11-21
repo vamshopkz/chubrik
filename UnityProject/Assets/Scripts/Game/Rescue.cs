@@ -47,7 +47,8 @@ namespace Chubrik
             {
                 if (!r.Chance(chance)) return;
                 var d = Catalog.Dept(dept);
-                var regular = d.items.FindAll(i => !i.Premium && !i.tokens && !i.Reward);
+                // 21.11: friends keep ordinary heads and skin patterns (no gold / neon heads, no tinted patterns)
+                var regular = d.items.FindAll(i => !i.Premium && !i.tokens && !i.Reward && !(i.Variant && (dept == "head" || dept == "skin")));
                 l[dept] = regular[r.I(regular.Count)].id;
             }
             Pick("head", 1); Pick("hair", 0.9f); Pick("ears", 0.9f); Pick("hat", 0.5f); Pick("eyes", 0.35f);

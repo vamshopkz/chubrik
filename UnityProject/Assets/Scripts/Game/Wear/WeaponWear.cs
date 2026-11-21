@@ -22,7 +22,20 @@ namespace Chubrik
                 case 5: return Mats.Tex(Patterns.Skin(7, Color.black), Color.white, 0.8f, 0.3f);
                 case 6: return Tex.SkinMat("rainbow");
                 case 7: return Glass("BFEFFF", 0.7f);
-                default: return M(fallbackHex, smooth, metal);
+                default:
+                    if (c >= 8 && c - 8 < Catalog.WeaponColors.Count)
+                    {
+                        // 21.11 named paints: metallic, lacquer, pearl, neon
+                        var (_, hex, kind) = Catalog.WeaponColors[c - 8];
+                        switch (kind)
+                        {
+                            case 0: return M(hex, 0.8f, 0.9f);
+                            case 1: return M(hex, 0.92f, 0.05f);
+                            case 2: return Mats.Lit(Color.Lerp(Hex(hex), Color.white, 0.3f), 0.85f, 0.45f);
+                            default: return G(hex, 1.6f);
+                        }
+                    }
+                    return M(fallbackHex, smooth, metal);
             }
         }
 

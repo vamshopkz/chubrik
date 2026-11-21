@@ -63,7 +63,13 @@ namespace Chubrik
             bool chicken = IsChicken(suit);
             var bodyCol = BodyColor(look.Idx("color"));
             int skinIdx = look.Idx("skin");
-            Skin = skinIdx >= 0 ? Mats.Tex(Patterns.Skin(skinIdx, bodyCol), Color.white, skinIdx == 7 ? 0.75f : 0.35f) : Mats.Lit(bodyCol, 0.35f);
+            // 21.11 tinted patterns («Тигровые полоски (мята)»): the pattern is drawn over the tint; camo, stars,
+            // holo and carbon have their own colours, so they are tinted by the material instead
+            var skinTint = Catalog.TintOf(look.Of("skin"));
+            bool ownCols = skinIdx == 2 || skinIdx == 3 || skinIdx == 6 || skinIdx == 7;
+            var patCol = skinTint.HasValue && !ownCols ? skinTint.Value : bodyCol;
+            var matTint = skinTint.HasValue && ownCols ? Color.Lerp(Color.white, skinTint.Value, 0.7f) : Color.white;
+            Skin = skinIdx >= 0 ? Mats.Tex(Patterns.Skin(skinIdx, patCol), matTint, skinIdx == 7 ? 0.75f : 0.35f) : Mats.Lit(bodyCol, 0.35f);
             if (skinIdx == 6) { Skin.SetFloat("_Smoothness", 0.85f); }
             if (chicken) Skin = suit == 200 ? Mats.Emissive(null, Hex("FFD24A"), Hex("FF9A00") * 0.35f, null, 0.9f) : M("FAFAF5", 0.25f);
             if (skinIdx == 200)
@@ -74,6 +80,11 @@ namespace Chubrik
                 var sh = GetComponent<IceShimmer>() ?? gameObject.AddComponent<IceShimmer>();
                 sh.skin = Skin;
             }
+            // 21.11 secret modifier variants («Режим гиганта (золото)»): the whole body in a finish
+            int secretFin = Catalog.FinishOf(look.Of("secret"));
+            if (secretFin >= 0 && !chicken) Skin = SkinFinish.Apply(skinIdx >= 0 ? Mats.Lit(patCol, 0.35f) : Skin, secretFin);
+            var secretTint = Catalog.TintOf(look.Of("secret"));   // «Режим гиганта (мята)»: the whole body in that colour
+            if (secretTint.HasValue && !chicken) Skin = Mats.Lit(secretTint.Value, 0.35f);
 
             Body = Node("Body", transform, Vector3.zero);
             Torso = Node("Torso", Body, new Vector3(0, 0.36f, 0));
@@ -95,7 +106,10 @@ namespace Chubrik
 
             if (suit < 0) WolfBody();
             int made = Parts.Made;
-            HeadShape(chicken ? 2 : look.Idx("head"));
+            // 21.11: head shape variants («Кругляш (неон)») are built in their finish like the clothes
+            Parts.Finish = chicken ? null : SkinFinish.For(Catalog.FinishOf(look.Of("head")));
+            try { HeadShape(chicken ? 2 : look.Idx("head")); }
+            finally { Parts.Finish = null; }
             PartCount["head"] = Parts.Made - made;
             FitHat();
             suitOn = suit >= 0; chickenOn = chicken;
@@ -225,10 +239,13 @@ namespace Chubrik
             if (!string.IsNullOrEmpty(id)) PartCount[dept] = Parts.Made - made;
         }
 
+        static readonly string[] FirstColors = { "8E99A8", "5BB8FF", "F2403C", "2A2A33", "8BE03A", "A050FF", "FF8FC4", "F4F7FA" };
+
+        /// <summary>Body colour number i: the first 8, then the named colours of 21.11 (Catalog.BodyColors).</summary>
         public static Color BodyColor(int i)
         {
-            string[] c = { "8E99A8", "5BB8FF", "F2403C", "2A2A33", "8BE03A", "A050FF", "FF8FC4", "F4F7FA" };
-            return Hex(c[Mathf.Clamp(i, 0, 7)]);
+            if (i >= 8 && i - 8 < Catalog.BodyColors.Length) return Hex(Catalog.BodyColors[i - 8].hex);
+            return Hex(FirstColors[Mathf.Clamp(i, 0, 7)]);
         }
 
         Vector3 HP(float theta, float phi, float r = 1f, float rx = 0.4f, float ry = 0.39f, float rz = 0.38f)
@@ -244,15 +261,19 @@ namespace Chubrik
             int i = Catalog.Index(id);
             if (i < 0) return;
             var rs = GetComponentsInChildren<Renderer>(true);
+            int fin = Catalog.FinishOf(id);
+            var tint = Catalog.TintOf(id);
+            string th = tint.HasValue ? ColorUtility.ToHtmlStringRGB(tint.Value) : null;
+            Material Fin(Material m) => fin >= 0 ? SkinFinish.Apply(m, fin) : m;   // the silhouette / ghost / mirror in the variant's finish
             switch (i)
             {
                 case 0: SizeScale = 1.8f; break;
                 case 1: SizeScale = 0.55f; break;
                 case 2: Body.localScale = new Vector3(0.8f, 1.5f, 0.8f); break;
                 case 3: Body.localScale = new Vector3(1.1f, 1f, 0.22f); break;
-                case 4: { var m = Mats.Glow(new Color(0.03f, 0.03f, 0.04f)); foreach (var r in rs) r.sharedMaterial = m; break; }
-                case 5: { var m = Glass("BFE6FF", 0.3f); foreach (var r in rs) r.sharedMaterial = m; break; }
-                case 6: { var m = M("E8EEF5", 0.98f, 1f); foreach (var r in rs) r.sharedMaterial = m; break; }
+                case 4: { var m = Fin(Mats.Glow(tint.HasValue ? tint.Value * 0.22f : new Color(0.03f, 0.03f, 0.04f))); foreach (var r in rs) r.sharedMaterial = m; break; }
+                case 5: { var m = Fin(Glass(th ?? "BFE6FF", 0.3f)); foreach (var r in rs) r.sharedMaterial = m; break; }
+                case 6: { var m = Fin(M(th ?? "E8EEF5", 0.98f, 1f)); foreach (var r in rs) r.sharedMaterial = m; break; }
                 case 7:
                 {
                     SizeScale = 1.2f;

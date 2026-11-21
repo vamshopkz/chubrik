@@ -92,7 +92,9 @@ namespace Chubrik
         readonly Dictionary<string, Spec> specs = new Dictionary<string, Spec>();
 
         /// <summary>Emit <paramref name="n"/> particles of a kind around <paramref name="pos"/>.</summary>
-        public static void Emit(string kind, Vector3 pos, int n, float radius = 0.2f, Vector3 vel = default, Color? color = null, float speedMul = 1f)
+        /// <param name="tint">21.11: a tinted variant of an effect («Огненные искры (мята)»): every particle in this
+        /// colour (a little lighter or darker each), the kind's own transparency kept.</param>
+        public static void Emit(string kind, Vector3 pos, int n, float radius = 0.2f, Vector3 vel = default, Color? color = null, float speedMul = 1f, Color? tint = null)
         {
             if (I == null) return;
             var ps = I.Sys(kind);
@@ -105,6 +107,12 @@ namespace Chubrik
                 ep.velocity = vel + rnd.normalized * sp.speed * speedMul * UnityEngine.Random.Range(0.4f, 1f);
                 Color c = color ?? sp.col;
                 if (sp.rainbow && color == null) c = Color.HSVToRGB(UnityEngine.Random.value, 0.8f, 1f);
+                if (tint.HasValue)
+                {
+                    float a = c.a, j = UnityEngine.Random.Range(-0.2f, 0.25f);
+                    c = j > 0 ? Color.Lerp(tint.Value, Color.white, j) : Color.Lerp(tint.Value, Color.black, -j);
+                    c.a = a;
+                }
                 ep.startColor = c;
                 ps.Emit(ep, 1);
             }
@@ -112,20 +120,20 @@ namespace Chubrik
 
         // ---------------- steps ----------------
 
-        public static void Step(int kind, Vector3 foot)
+        public static void Step(int kind, Vector3 foot, Color? tint = null)
         {
             switch (kind)
             {
-                case 0: Emit("fire", foot, 4, 0.08f, Vector3.up * 0.8f); break;
-                case 1: Emit("bubble", foot + Vector3.up * 0.1f, 2, 0.1f, Vector3.up * 0.4f); break;
-                case 2: Emit("slime", foot, 3, 0.06f, Vector3.up * 0.6f); break;
-                case 3: Emit("pixel", foot, 4, 0.08f, Vector3.up * 1.2f); break;
-                case 4: Emit("stardust", foot + Vector3.up * 0.1f, 4, 0.12f); break;
-                case 5: Emit("bolt", foot + Vector3.up * 0.1f, 3, 0.1f); break;
-                case 6: Emit("ice", foot, 4, 0.1f, Vector3.up * 0.8f); break;
-                case 7: Emit("coin", foot, 2, 0.06f, Vector3.up * 1.5f); break;
-                case 102: Emit("comet", foot + Vector3.up * 0.1f, 5, 0.1f); break;
-                case 106: Emit("rainbow", foot + Vector3.up * 0.1f, 5, 0.12f); break;
+                case 0: Emit("fire", foot, 4, 0.08f, Vector3.up * 0.8f, tint: tint); break;
+                case 1: Emit("bubble", foot + Vector3.up * 0.1f, 2, 0.1f, Vector3.up * 0.4f, tint: tint); break;
+                case 2: Emit("slime", foot, 3, 0.06f, Vector3.up * 0.6f, tint: tint); break;
+                case 3: Emit("pixel", foot, 4, 0.08f, Vector3.up * 1.2f, tint: tint); break;
+                case 4: Emit("stardust", foot + Vector3.up * 0.1f, 4, 0.12f, tint: tint); break;
+                case 5: Emit("bolt", foot + Vector3.up * 0.1f, 3, 0.1f, tint: tint); break;
+                case 6: Emit("ice", foot, 4, 0.1f, Vector3.up * 0.8f, tint: tint); break;
+                case 7: Emit("coin", foot, 2, 0.06f, Vector3.up * 1.5f, tint: tint); break;
+                case 102: Emit("comet", foot + Vector3.up * 0.1f, 5, 0.1f, tint: tint); break;
+                case 106: Emit("rainbow", foot + Vector3.up * 0.1f, 5, 0.12f, tint: tint); break;
                 default: Emit("dust", foot, 1, 0.05f, Vector3.up * 0.3f); break;
             }
         }
@@ -152,21 +160,23 @@ namespace Chubrik
 
         // ---------------- damage ----------------
 
-        public static void Damage(int kind, ChubrikModel m)
+        /// <summary>The damage effect; a tinted variant («Вспышка красного экрана (мята)») is read from the model's look.</summary>
+        public static void Damage(int kind, ChubrikModel m, Color? tint = null)
         {
             if (I == null || m == null) return;
             AudioFx.Play("hurt");
+            if (tint == null && m.look != null) tint = Catalog.TintOf(m.look.Of("dmg"));
             var head = m.HeadC ? m.HeadC.position : m.transform.position + Vector3.up;
             switch (kind)
             {
                 case 1: Hud.Crack(); break;
-                case 2: Emit("star", head + Vector3.up * 0.3f, 14, 0.2f); break;
+                case 2: Emit("star", head + Vector3.up * 0.3f, 14, 0.2f, tint: tint); break;
                 case 3: Hud.Glitch(); break;
-                case 4: Emit("pixel", m.transform.position + Vector3.up * 0.7f, 30, 0.45f, Vector3.up, ChubrikModel.BodyColor(m.look.Idx("color"))); I.StartCoroutine(I.Flicker(m, 0.7f)); break;
-                case 5: I.StartCoroutine(I.Lightning(head)); break;
-                case 6: Emit("ice", m.transform.position + Vector3.up * 0.7f, 24, 0.4f, Vector3.up * 2); I.StartCoroutine(I.Tint(m, new Color(0.6f, 0.85f, 1f), 0.8f)); break;
-                case 7: Emit("splash", m.transform.position + Vector3.up * 0.5f, 30, 0.3f, Vector3.up * 3); break;
-                default: Hud.Flash(new Color(1, 0.1f, 0.1f, 0.45f)); break;
+                case 4: Emit("pixel", m.transform.position + Vector3.up * 0.7f, 30, 0.45f, Vector3.up, tint ?? ChubrikModel.BodyColor(m.look.Idx("color"))); I.StartCoroutine(I.Flicker(m, 0.7f)); break;
+                case 5: I.StartCoroutine(I.Lightning(head, tint)); break;
+                case 6: Emit("ice", m.transform.position + Vector3.up * 0.7f, 24, 0.4f, Vector3.up * 2, tint: tint); I.StartCoroutine(I.Tint(m, tint.HasValue ? Color.Lerp(tint.Value, Color.white, 0.35f) : new Color(0.6f, 0.85f, 1f), 0.8f)); break;
+                case 7: Emit("splash", m.transform.position + Vector3.up * 0.5f, 30, 0.3f, Vector3.up * 3, tint: tint); break;
+                default: { var c = tint ?? new Color(1, 0.1f, 0.1f); c.a = 0.45f; Hud.Flash(c); break; }
             }
         }
 
@@ -192,12 +202,14 @@ namespace Chubrik
             foreach (var r in rs) if (r) r.SetPropertyBlock(null);
         }
 
-        IEnumerator Lightning(Vector3 target)
+        IEnumerator Lightning(Vector3 target, Color? tint = null)
         {
-            Hud.Flash(new Color(1, 1, 0.85f, 0.5f));
+            var fc = tint.HasValue ? Color.Lerp(tint.Value, Color.white, 0.5f) : new Color(1, 1, 0.85f);
+            fc.a = 0.5f;
+            Hud.Flash(fc);
             AudioFx.Play("zap");
             var root = new GameObject("Bolt").transform;
-            var mat = Parts.G("FFF59D", 4f);
+            var mat = Parts.G(tint.HasValue ? ColorUtility.ToHtmlStringRGB(tint.Value) : "FFF59D", 4f);
             var p = target + Vector3.up * 9;
             var r = new Rng(Environment.TickCount);
             Parts.Layer = 0;
@@ -208,7 +220,7 @@ namespace Chubrik
                 Parts.Rod(root, p, q, 0.09f, mat);
                 p = q;
             }
-            Emit("elec", target, 20, 0.3f);
+            Emit("elec", target, 20, 0.3f, tint: tint);
             yield return new WaitForSeconds(0.25f);
             Destroy(root.gameObject);
         }
@@ -230,51 +242,55 @@ namespace Chubrik
         IEnumerator VictoryCo(int kind, ChubrikModel m, Action mid)
         {
             Vector3 C() => m.transform.position + Vector3.up * 0.7f * m.SizeScale;
+            // 21.11: a tinted variant («Салют из конфетти (лимон)») recolours every particle, the portal ring and the rocket
+            var tint = m.look != null ? Catalog.TintOf(m.look.Of("win")) : null;
+            string tintHex = tint.HasValue ? ColorUtility.ToHtmlStringRGB(tint.Value) : null;
+            void E(string k, Vector3 p, int n, float r = 0.2f, Vector3 v = default) => Emit(k, p, n, r, v, null, 1f, tint);
             AudioFx.Play("win" + Mathf.Clamp(kind, 0, 7));
             switch (kind)
             {
                 case 0: // pixels
-                    for (int i = 0; i < 6; i++) { Emit("pixel", C(), 12, 0.4f, Vector3.up * 3); yield return new WaitForSeconds(0.05f); }
+                    for (int i = 0; i < 6; i++) { E("pixel", C(), 12, 0.4f, Vector3.up * 3); yield return new WaitForSeconds(0.05f); }
                     Show(m, false); yield return new WaitForSeconds(0.15f);
                     mid?.Invoke();
-                    Emit("pixel", C(), 40, 0.5f, Vector3.down * 1);
+                    E("pixel", C(), 40, 0.5f, Vector3.down * 1);
                     yield return new WaitForSeconds(0.15f); Show(m, true);
                     break;
                 case 1: // confetti
-                    Emit("confetti", C() + Vector3.up, 120, 0.3f, Vector3.up * 4);
+                    E("confetti", C() + Vector3.up, 120, 0.3f, Vector3.up * 4);
                     yield return new WaitForSeconds(0.3f);
                     mid?.Invoke();
-                    Emit("confetti", C() + Vector3.up, 80, 0.3f, Vector3.up * 4);
+                    E("confetti", C() + Vector3.up, 80, 0.3f, Vector3.up * 4);
                     break;
                 case 2: // portal burst
                 {
-                    var ring = Parts.Ring(I.transform, m.transform.position + Vector3.up * 0.05f, 0.5f, 0.06f, Parts.Add("B57CFF", 0.9f));
+                    var ring = Parts.Ring(I.transform, m.transform.position + Vector3.up * 0.05f, 0.5f, 0.06f, Parts.Add(tintHex ?? "B57CFF", 0.9f));
                     ring.transform.position = m.transform.position + Vector3.up * 0.05f;
                     for (float t = 0; t < 0.4f; t += Time.deltaTime) { ring.transform.localScale = Vector3.one * (1 + t * 6); yield return null; }
-                    Show(m, false); Emit("magic", C(), 40, 0.5f);
+                    Show(m, false); E("magic", C(), 40, 0.5f);
                     mid?.Invoke();
                     ring.transform.position = m.transform.position + Vector3.up * 0.05f;
                     for (float t = 0.4f; t > 0; t -= Time.deltaTime) { ring.transform.localScale = Vector3.one * (1 + t * 6); yield return null; }
-                    Destroy(ring); Show(m, true); Emit("magic", C(), 40, 0.5f);
+                    Destroy(ring); Show(m, true); E("magic", C(), 40, 0.5f);
                     break;
                 }
                 case 3: // smoke
-                    Emit("smoke", C(), 30, 0.5f);
+                    E("smoke", C(), 30, 0.5f);
                     yield return new WaitForSeconds(0.2f); Show(m, false);
                     yield return new WaitForSeconds(0.3f);
                     mid?.Invoke();
-                    Emit("smoke", C(), 30, 0.5f);
+                    E("smoke", C(), 30, 0.5f);
                     yield return new WaitForSeconds(0.2f); Show(m, true);
                     break;
                 case 4: // gold rain
-                    for (int i = 0; i < 20; i++) { Emit("coin", C() + Vector3.up * 3, 6, 1.6f, Vector3.down * 2); Emit("gold", C(), 2, 0.5f); if (i == 10) mid?.Invoke(); yield return new WaitForSeconds(0.06f); }
+                    for (int i = 0; i < 20; i++) { E("coin", C() + Vector3.up * 3, 6, 1.6f, Vector3.down * 2); E("gold", C(), 2, 0.5f); if (i == 10) mid?.Invoke(); yield return new WaitForSeconds(0.06f); }
                     break;
                 case 5: // rocket launch
                 {
                     Parts.Layer = m.gameObject.layer;
                     var rocket = new GameObject("Rocket").transform;
                     rocket.SetParent(m.transform, false);
-                    Parts.Cy(rocket, new Vector3(0, -0.05f, 0), new Vector3(0.5f, 0.05f, 0.5f), Parts.M("E53935"));
+                    Parts.Cy(rocket, new Vector3(0, -0.05f, 0), new Vector3(0.5f, 0.05f, 0.5f), Parts.M(tintHex ?? "E53935"));
                     var fl = Parts.Cone(rocket, new Vector3(0, -0.1f, 0), new Vector3(0.4f, 0.8f, 0.4f), Parts.G("FF8A1E", 2.5f), new Vector3(180, 0, 0));
                     var body = m.Body;
                     for (float t = 0; t < 0.7f; t += Time.deltaTime)
@@ -282,7 +298,7 @@ namespace Chubrik
                         float h = t * t * 30;
                         if (body) body.localPosition = Vector3.up * h;
                         rocket.localPosition = Vector3.up * h;
-                        Emit("smoke", m.transform.position + Vector3.up * h, 2, 0.2f);
+                        E("smoke", m.transform.position + Vector3.up * h, 2, 0.2f);
                         yield return null;
                     }
                     Show(m, false);
@@ -290,7 +306,7 @@ namespace Chubrik
                     yield return new WaitForSeconds(0.2f);
                     Destroy(rocket.gameObject);
                     Show(m, true);
-                    Emit("star", C(), 16, 0.4f);
+                    E("star", C(), 16, 0.4f);
                     break;
                 }
                 case 6: // matrix code
@@ -299,7 +315,7 @@ namespace Chubrik
                         for (int k = 0; k < 6; k++)
                         {
                             float a = k * Mathf.PI / 3 + i * 0.3f;
-                            Emit("glyph", C() + new Vector3(Mathf.Cos(a), 1.2f, Mathf.Sin(a)) * 0.9f, 1, 0.05f, Vector3.down * 2);
+                            E("glyph", C() + new Vector3(Mathf.Cos(a), 1.2f, Mathf.Sin(a)) * 0.9f, 1, 0.05f, Vector3.down * 2);
                         }
                         if (i == 9) { Show(m, false); mid?.Invoke(); }
                         if (i == 12) Show(m, true);
@@ -310,11 +326,11 @@ namespace Chubrik
                     for (int i = 0; i < 24; i++)
                     {
                         float a = i * 0.6f;
-                        Emit("magic", C() + new Vector3(Mathf.Cos(a) * 0.7f, -0.6f + i * 0.08f, Mathf.Sin(a) * 0.7f), 3, 0.05f);
+                        E("magic", C() + new Vector3(Mathf.Cos(a) * 0.7f, -0.6f + i * 0.08f, Mathf.Sin(a) * 0.7f), 3, 0.05f);
                         if (i == 12) mid?.Invoke();
                         yield return new WaitForSeconds(0.04f);
                     }
-                    Emit("gold", C(), 20, 0.5f);
+                    E("gold", C(), 20, 0.5f);
                     break;
             }
         }
@@ -342,6 +358,7 @@ namespace Chubrik
     {
         public ChubrikModel model;
         public int kind = -1;   // 0..7 regular, 100+set premium
+        public Color? tint;     // 21.11: a tinted variant («Огненное пламя (лаванда)»), read from the model's look
         GameObject extra;
         float acc;
 
@@ -350,16 +367,18 @@ namespace Chubrik
             kind = k;
             if (extra) Destroy(extra);
             if (model == null) return;
+            tint = model.look != null ? Catalog.TintOf(model.look.Of("aura")) : null;
+            string th = tint.HasValue ? ColorUtility.ToHtmlStringRGB(tint.Value) : null;
             Parts.Layer = model.gameObject.layer;
             if (k == 6)
             {
-                extra = Parts.Ring(model.HeadC, new Vector3(0, 0.62f, 0), 0.3f, 0.04f, Parts.G("FFFFFF", 2f));
-                extra.AddComponent<Hue>().glow = 2.5f;
+                extra = Parts.Ring(model.HeadC, new Vector3(0, 0.62f, 0), 0.3f, 0.04f, Parts.G(th ?? "FFFFFF", 2f));
+                if (th == null) extra.AddComponent<Hue>().glow = 2.5f;
                 extra.AddComponent<Spin>().speed = 50;
             }
             else if (k == 1)
             {
-                extra = Parts.S(model.Torso, new Vector3(0, 0.45f, 0), new Vector3(1.4f, 1.6f, 1.4f), Parts.Add("7FD8FF", 0.18f));
+                extra = Parts.S(model.Torso, new Vector3(0, 0.45f, 0), new Vector3(1.4f, 1.6f, 1.4f), Parts.Add(th ?? "7FD8FF", 0.18f));
                 extra.AddComponent<Pulse>().amount = 0.04f;
             }
             else if (k == 107)
@@ -381,17 +400,17 @@ namespace Chubrik
             float r = 0.55f * model.SizeScale;
             switch (kind)
             {
-                case 0: Effects.Emit("fire", c + Vector3.down * 0.4f, n, r, Vector3.up * 1.2f); break;
-                case 1: Effects.Emit("ice", c, n / 2 + 1, r, Vector3.up * 0.2f); break;
-                case 2: Effects.Emit("elec", c, n, r); break;
-                case 3: Effects.Emit("glitch", c, n, r); break;
-                case 4: Effects.Emit("gold", c, n, r, Vector3.up * 0.4f); break;
-                case 5: Effects.Emit("dark", c, n, r, Vector3.up * 0.2f); break;
-                case 6: Effects.Emit("rainbow", c + Vector3.up * 0.6f, 1, 0.3f); break;
-                case 7: Effects.Emit("heart", c, Mathf.Max(1, n / 3), r, Vector3.up * 0.5f); break;
-                case 100: Effects.Emit("fire", c + Vector3.down * 0.4f, n * 2, r * 1.2f, Vector3.up * 2f); break;
-                case 103: Effects.Emit("smoke", c + Vector3.down * 0.5f, n, r, Vector3.up * 0.2f, new Color(0.15f, 0.1f, 0.25f, 0.7f)); break;
-                case 107: Effects.Emit("gold", c, n, r * 1.1f, Vector3.up * 0.6f); break;
+                case 0: Effects.Emit("fire", c + Vector3.down * 0.4f, n, r, Vector3.up * 1.2f, tint: tint); break;
+                case 1: Effects.Emit("ice", c, n / 2 + 1, r, Vector3.up * 0.2f, tint: tint); break;
+                case 2: Effects.Emit("elec", c, n, r, tint: tint); break;
+                case 3: Effects.Emit("glitch", c, n, r, tint: tint); break;
+                case 4: Effects.Emit("gold", c, n, r, Vector3.up * 0.4f, tint: tint); break;
+                case 5: Effects.Emit("dark", c, n, r, Vector3.up * 0.2f, tint: tint); break;
+                case 6: Effects.Emit("rainbow", c + Vector3.up * 0.6f, 1, 0.3f, tint: tint); break;
+                case 7: Effects.Emit("heart", c, Mathf.Max(1, n / 3), r, Vector3.up * 0.5f, tint: tint); break;
+                case 100: Effects.Emit("fire", c + Vector3.down * 0.4f, n * 2, r * 1.2f, Vector3.up * 2f, tint: tint); break;
+                case 103: Effects.Emit("smoke", c + Vector3.down * 0.5f, n, r, Vector3.up * 0.2f, tint.HasValue ? (Color?)null : new Color(0.15f, 0.1f, 0.25f, 0.7f), tint: tint); break;
+                case 107: Effects.Emit("gold", c, n, r * 1.1f, Vector3.up * 0.6f, tint: tint); break;
             }
         }
 
@@ -414,7 +433,7 @@ namespace Chubrik
         GameObject quad;
         Material mat;
 
-        public void Set(int s)
+        public void Set(int s, Color? tint = null)
         {
             style = s;
             if (quad == null)
@@ -427,9 +446,11 @@ namespace Chubrik
             if (hue) Destroy(hue);
             string tex = s switch { 1 => "puddle", 2 => "square", 6 => "star", _ => "soft" };
             Color c = s switch { 3 => new Color(0.2f, 0.9f, 1f, 0.9f), 4 => new Color(0.75f, 0.85f, 1f, 0.45f), 5 => new Color(1, 0.3f, 0.6f, 0.7f), _ => new Color(0, 0, 0, 0.45f) };
+            // 21.11: a tinted shadow («Тень-лужица (бирюза)») in that colour, a bit stronger than the black one
+            if (tint.HasValue) { float a = c.a; c = tint.Value; c.a = Mathf.Max(a, 0.6f); }
             mat = s == 3 ? Mats.Additive(c, Patterns.Shape(tex)) : Mats.UnlitTransparent(c, Patterns.Shape(tex));
             quad.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            if (s == 5) { var h = quad.AddComponent<Hue>(); h.speed = 0.4f; }
+            if (s == 5 && !tint.HasValue) { var h = quad.AddComponent<Hue>(); h.speed = 0.4f; }
             quad.SetActive(s != 7);
         }
 

@@ -179,7 +179,7 @@ namespace Chubrik
                 UIKit.Place(raw.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(150, 132));
                 if (NoPicture.Contains(it.dept))
                 {
-                    raw.color = Color.HSVToRGB((Catalog.Index(it.id) % 100 + 1) / 9f, 0.45f, 0.95f);
+                    raw.color = Catalog.TintOf(it.id) is Color tc ? Color.Lerp(tc, Color.white, 0.25f) : Color.HSVToRGB((Catalog.Index(it.id) % 100 + 1) / 9f, 0.45f, 0.95f);
                     var word = it.dept switch { "jsnd" => "ПРЫЖОК", "lsnd" => "ПРИЗЕМЛ.", "dmg" => "УРОН", "win" => "ПОБЕДА", "walk" => "ПОХОДКА", "emote" => "ЭМОЦИЯ", "shadow" => "ТЕНЬ", _ => "СЛЕДЫ" };
                     var big = UIKit.Txt(raw.transform, word + "\n" + (it.Premium || it.Reward ? "★" : (Catalog.Index(it.id) + 1).ToString()), 26, Color.white);
                     UIKit.Fill(big.rectTransform, 4, 4, 4, 4);
@@ -224,8 +224,8 @@ namespace Chubrik
             int i = Mathf.Max(0, Catalog.Index(sel.id));
             switch (sel.dept)
             {
-                case "jsnd": AudioFx.Jump(i, false); A.Land(0.5f); break;
-                case "lsnd": AudioFx.Land(i); A.Land(1f); break;
+                case "jsnd": AudioFx.Jump(i, false, Catalog.PitchOf(sel.id)); A.Land(0.5f); break;
+                case "lsnd": AudioFx.Land(i, Catalog.PitchOf(sel.id)); A.Land(1f); break;
                 case "dmg": Effects.Damage(i, m); break;
                 case "win": Effects.Victory(i, m); break;
                 case "emote": A.emote = i; A.PlayEmote(); break;

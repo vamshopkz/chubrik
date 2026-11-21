@@ -454,8 +454,21 @@ namespace Chubrik
             if (music.clip != null) music.time = Mathf.Min(t0 + 0.33f, music.clip.length - 0.01f);
         }
 
-        public static void Jump(int i, bool air) => Play("jump" + Mathf.Clamp(i, 0, 7), air ? 0.8f : 1f);
-        public static void Land(int i) => Play("land" + Mathf.Clamp(i, 0, 7), 0.9f);
+        public static void Jump(int i, bool air, float pitch = 1f) => Pitched("jump" + Mathf.Clamp(i, 0, 7), air ? 0.8f : 1f, pitch);
+        public static void Land(int i, float pitch = 1f) => Pitched("land" + Mathf.Clamp(i, 0, 7), 0.9f, pitch);
+
+        AudioSource pitchSrc;
+        /// <summary>21.11: jump / landing sound variants («Бух! (тонкий)») play on their own source at another pitch.</summary>
+        static void Pitched(string name, float vol, float pitch)
+        {
+            if (Mathf.Approximately(pitch, 1f) || I == null) { Play(name, vol); return; }
+            var c = Get(name);
+            if (c == null) { Play(name, vol); return; }
+            if (I.pitchSrc == null) I.pitchSrc = I.gameObject.AddComponent<AudioSource>();
+            I.pitchSrc.pitch = pitch;
+            I.pitchSrc.volume = I.src.volume;
+            I.pitchSrc.PlayOneShot(c, vol);
+        }
         public static void Note(int i) => Play("note" + Mathf.Clamp(i, 0, 7));
         public static void Step(int shoes, bool robot)
         {

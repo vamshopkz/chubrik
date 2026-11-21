@@ -47,15 +47,15 @@ namespace Chubrik
         public static void BuildPad(Transform lobby)
         {
             Physics.SyncTransforms();
-            // 18.11: next to the portal of World 67 (in the park), not by the water
-            var p67 = Lobby.Portal67;
-            PadPos = p67 + new Vector3(6, 0, 3);
-            for (int ring = 0; ring < 5; ring++)
+            // 18.11: next to the portal of World 67, not by the water (21.11: in the neon quarter — its spot first, then rings round it)
+            var p67 = Lobby.FootballNear;
+            PadPos = p67;
+            for (int ring = -1; ring < 5; ring++)
             {
                 bool found = false;
-                for (int k = 0; k < 16 && !found; k++)
+                for (int k = 0; k < (ring < 0 ? 1 : 16) && !found; k++)
                 {
-                    float a = k * Mathf.PI * 2 / 16 + ring * 0.2f, r = 5f + ring * 1.5f;
+                    float a = k * Mathf.PI * 2 / 16 + ring * 0.2f, r = ring < 0 ? 0 : 3f + ring * 1.5f;
                     var c = new Vector3(p67.x + Mathf.Cos(a) * r, 0, p67.z + Mathf.Sin(a) * r);
                     if (!Physics.Raycast(c + Vector3.up * 5, Vector3.down, out var hit, 8, Layers.SolidMask, QueryTriggerInteraction.Ignore) || Mathf.Abs(hit.point.y) > 0.2f) continue;
                     if (Physics.CheckBox(c + Vector3.up * 1.5f, new Vector3(1.8f, 1.3f, 1.8f), Quaternion.identity, ~0, QueryTriggerInteraction.Ignore)) continue;

@@ -66,7 +66,7 @@ namespace Chubrik
             Anim.OnStep = left =>
             {
                 int k = Effects.StepKind(Model.look);
-                if (k >= 0) Effects.Step(k, (left ? Model.FootL : Model.FootR).position);
+                if (k >= 0) Effects.Step(k, (left ? Model.FootL : Model.FootR).position, Catalog.TintOf(Model.look.Of("steps")));
             };
             pet = new GameObject("PreviewPet") { layer = Layers.Preview }.AddComponent<Pet>();
             pet.owner = Model.transform;
@@ -95,7 +95,7 @@ namespace Chubrik
             pet.scale = Mathf.Clamp(Model.SizeScale, 0.7f, 1.4f);
             aura.model = Model;
             aura.Set(Aura.KindOf(l));
-            shadow.Set(Mathf.Max(0, l.Idx("shadow")));
+            shadow.Set(Mathf.Max(0, l.Idx("shadow")), Catalog.TintOf(l.Of("shadow")));
             shadow.size = Model.SizeScale;
             foreach (var t in pet.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layers.Preview;
         }
@@ -182,7 +182,7 @@ namespace Chubrik
                 pet.gameObject.SetActive(false);
                 Parts.Layer = Layers.Preview;
                 var holder = Parts.Node("PetThumb", stage, new Vector3(0, 0.9f, 0), new Vector3(0, -25, 0));   // three-quarter front
-                Pet.Build(it.Premium ? 100 + it.set : Catalog.Index(it.id), holder);
+                Pet.BuildItem(it.id, holder);
                 foreach (var tr in holder.GetComponentsInChildren<Transform>(true)) tr.gameObject.layer = Layers.Preview;
                 cam.transform.position = Origin + new Vector3(0, 1.0f, 1.25f);
                 cam.transform.rotation = Quaternion.LookRotation(new Vector3(0, -0.1f, -1.25f));

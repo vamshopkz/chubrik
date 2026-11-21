@@ -66,6 +66,8 @@ namespace Chubrik
             P.maxHearts = Mathf.Clamp(P.maxHearts, 3, 6);
             if (P.promo) P.maxHearts = 6;   // developer promo code: 6 hearts
             foreach (var set in P.sets) if (!P.setBonus.Contains(set)) P.setBonus.Add(set);
+            // 21.11: a thing that left the catalogue (walk_6 «Лунная походка») is taken off: the department's default comes back
+            P.look.RemoveAll(e => { int k = e.IndexOf('='); var id = k > 0 ? e.Substring(k + 1) : ""; return k > 0 && id != "" && Catalog.Get(id) == null; });
         }
 
         /// <summary>Gives a premium set back: its items are no longer owned and are taken off (it can be bought or unlocked by code again).</summary>
@@ -99,7 +101,12 @@ namespace Chubrik
         public static string Worn(string dept)
         {
             foreach (var e in P.look)
-                if (e.StartsWith(dept + "=")) return e.Substring(dept.Length + 1);
+                if (e.StartsWith(dept + "="))
+                {
+                    var id = e.Substring(dept.Length + 1);
+                    if (id == "" || Catalog.Get(id) != null) return id;
+                    break;   // not in the catalogue any more (walk_6): the default is worn
+                }
             return Catalog.Dept(dept)?.def ?? "";
         }
 
