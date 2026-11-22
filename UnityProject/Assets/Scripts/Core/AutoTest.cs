@@ -1118,6 +1118,50 @@ namespace Chubrik
                 yield return Wait(0.4f);
                 Window.Close();   // the leap may land on the football pad (its menu opens)
 
+                // ---- 22.11 swimming in the lobby river: float, no current, dive with B held, up with A, climb out by the bank ----
+                {
+                    float sz = pl.Model.SizeScale;
+                    bool inRiver = Water.At(Lobby.SwimSpot + Vector3.down * 0.5f, out float surfY, out float botY);
+                    Check("the lobby river is a deep channel with water in it", inRiver && surfY < -0.1f && surfY - botY > 1.4f && GameObject.Find("RiverBed") != null, $"surface {surfY:0.00}, bed {botY:0.00}");
+                    pl.Teleport(new Vector3(Lobby.SwimSpot.x, surfY - 1.0f * sz, Lobby.SwimSpot.z), Lobby.SwimYaw); pl.yaw = Lobby.SwimYaw; pl.pitch = 14;
+                    int swims0 = pl.Swims;
+                    yield return Wait(1.4f);
+                    var sp0 = pl.transform.position;
+                    bool floats = pl.Swimming && !pl.UnderWater && pl.Swims == swims0 + 1 && Mathf.Abs(sp0.y - (surfY - pl.FloatDepth())) < 0.3f;
+                    yield return Shot("128_swim_surface");
+                    Check("in the river he swims: floats at the surface (head and back out)", floats, $"swimming {pl.Swimming}, y {sp0.y:0.00}, surface {surfY:0.00}");
+                    yield return Wait(2f);
+                    var sp1 = pl.transform.position;
+                    float swimDrift = new Vector2(sp1.x - sp0.x, sp1.z - sp0.z).magnitude;
+                    Check("the river doesn't carry him away (no current)", pl.Swimming && swimDrift < 0.3f, $"drift {swimDrift:0.00} m in 2 s");
+                    Check("in the river he doesn't fall into the sea", pl.Swimming && sp1.y > botY - 0.2f && Vector2.Distance(new Vector2(sp1.x, sp1.z), new Vector2(Lobby.SwimSpot.x, Lobby.SwimSpot.z)) < 1f, $"y {sp1.y:0.00}");
+                    pl.HoldAttack = true;
+                    yield return Wait(1.0f);
+                    float headY = pl.transform.position.y + 0.8f * sz;
+                    bool under = pl.UnderWater && headY < surfY;
+                    yield return Shot("129_swim_under");
+                    Check("B held: dives and swims under water", under, $"under {pl.UnderWater}, head {headY:0.00}, surface {surfY:0.00}");
+                    Check("under the water the screen is tinted blue", Water.CameraUnder, $"camera y {pl.Cam.transform.position.y:0.00}");
+                    pl.HoldAttack = false;
+                    yield return Wait(0.5f);
+                    bool stays = pl.UnderWater;
+                    pl.QueueJump();
+                    for (float t = 0; t < 3f && pl.UnderWater; t += Time.deltaTime) yield return null;
+                    yield return Wait(0.5f);
+                    Check("A under water: comes up to the surface", stays && pl.Swimming && !pl.UnderWater, $"stayed under {stays}, swimming {pl.Swimming}");
+                    yield return Wait(0.5f);
+                    Check("the blue tint goes when the camera is out of the water", !Water.CameraUnder);
+                    // by the bank: A climbs out onto the grass
+                    pl.Teleport(new Vector3(Lobby.SwimBank.x, surfY - 1.0f * sz, Lobby.SwimBank.z), Lobby.SwimBankYaw); pl.yaw = Lobby.SwimBankYaw;
+                    yield return Wait(1f);
+                    int climbs0 = pl.Climbs;
+                    pl.QueueJump();
+                    yield return Wait(1.3f);
+                    Check("A by the bank: climbs out of the water", pl.Climbs == climbs0 + 1 && !pl.Swimming && pl.transform.position.y > -0.1f, $"climbs {pl.Climbs - climbs0}, y {pl.transform.position.y:0.00}");
+                    pl.Teleport(Lobby.Spawn, 0); pl.pitch = 16;
+                    yield return Wait(0.4f);
+                }
+
                 // ledge grab: jump at a ledge that is too high — he catches the edge and climbs up
                 var lt = new GameObject("LedgeTest").transform;
                 var lfloor = Lobby.Solid(PrimitiveType.Cube, new Vector3(500, 99.75f, 500), new Vector3(20, 0.5f, 20), Mats.Lit(Color.gray), default, lt);
@@ -1678,6 +1722,62 @@ namespace Chubrik
                 yield return Shot("114_lobby_portal8");
             }
 
+
+            // ---- 22.11 several chubriks: «ИГРАТЬ» → the picker, «+» makes a new one, the old one waits in the lobby ----
+            {
+                Window.Close();
+                if (Worlds.Current != 1) yield return Enter(1);
+                var hatDept = Catalog.Dept("hat");
+                var hatItem = hatDept.items.Find(it => it.id != hatDept.def && !string.IsNullOrEmpty(it.id));
+                string hatId = hatItem != null ? hatItem.id : hatDept.def;
+                Save.Give(hatId); Save.Wear("hat", hatId); pl.ApplyLook(Save.CurrentLook());
+                int charsBefore = Save.P.chars.Count;
+                var firstSlot = Save.ActiveChar;
+                Menus.Main();
+                yield return Wait(0.5f);
+                CharSlots.Open();
+                yield return Wait(0.8f);
+                Check("«ИГРАТЬ» opens the chubrik picker with 3 squares", CharSlots.IsOpen && CharSlots.Squares == Save.MaxChars, CharSlots.Squares.ToString());
+                yield return Shot("127_char_slots");
+                CharSlots.New();
+                yield return Wait(1.2f);
+                Window.Close();
+                int newIdx = Save.P.activeChar;
+                Check("«+» makes a new chubrik and plays it in the starting outfit", Save.P.chars.Count == charsBefore + 1 && Save.P.chars[newIdx] != firstSlot && Save.Worn("hat") == hatDept.def && pl.Model.look.Of("hat") == hatDept.def,
+                      $"{Save.P.chars.Count} chars, hat {Save.Worn("hat")}");
+                Check("the new chubrik gets its own name", Save.CharName(newIdx).StartsWith("Чубрик "), Save.CharName(newIdx));
+                yield return Wait(0.3f);
+                StandingChar stand = null;
+                foreach (var st in CharStand.Stands) if (st && st.Slot == firstSlot) stand = st;
+                Check("the first chubrik stands in the lobby as an NPC in his own outfit", stand != null && stand.Model.look.Of("hat") == hatId && Vector3.Distance(stand.transform.position, Lobby.Spawn) < 12,
+                      stand != null ? stand.transform.position.ToString() : "none");
+                if (stand != null)
+                {
+                    var spot = CharStand.SpotOf(stand.Spot);
+                    var toSpawn = Lobby.Spawn - spot; toSpawn.y = 0; toSpawn = toSpawn.normalized;
+                    var at = spot + toSpawn * 2f + Vector3.up * 0.3f;
+                    float yawTo = Mathf.Atan2(-toSpawn.x, -toSpawn.z) * Mathf.Rad2Deg;
+                    pl.Teleport(at, yawTo); pl.yaw = yawTo; pl.pitch = 12;
+                    yield return Wait(1f);
+                    yield return Shot("128_char_stand");
+                    var zone = Zones.Near();
+                    Check("next to him the button says «ИГРАТЬ ЗА: …»", zone != null && zone.label.StartsWith("ИГРАТЬ ЗА"), zone != null ? zone.label : "no zone");
+                    Zones.Interact();
+                    yield return Wait(0.6f);
+                    Check("«ВОЙТИ» switches back to the first chubrik — his hat is on again", Save.ActiveChar == firstSlot && Save.Worn("hat") == hatId && pl.Model.look.Of("hat") == hatId, Save.Worn("hat"));
+                    StandingChar other = null;
+                    foreach (var st in CharStand.Stands) if (st && st.Slot != firstSlot) other = st;
+                    Check("the new chubrik now waits there instead, in the starting outfit", other != null && other.Spot == stand.Spot && other.Model.look.Of("hat") == hatDept.def,
+                          other != null ? other.Name : "none");
+                }
+                int otherIdx = -1;
+                for (int i = 0; i < Save.P.chars.Count; i++) if (i != Save.P.activeChar) otherIdx = i;
+                Check("each chubrik keeps its own outfit", otherIdx >= 0 && Save.CharLook(otherIdx).Of("hat") == hatDept.def && Save.CurrentLook().Of("hat") == hatId);
+                Check("a chubrik not played now can be deleted", otherIdx >= 0 && Save.DeleteChar(otherIdx) && Save.P.chars.Count == charsBefore);
+                yield return Wait(0.3f);
+                Check("after deleting him nobody waits in the lobby", CharStand.Stands.Count == 0, CharStand.Stands.Count.ToString());
+                Save.Wear("hat", hatDept.def); pl.ApplyLook(Save.CurrentLook());
+            }
 
             // ---- main menu ----
             Menus.Main();

@@ -34,6 +34,18 @@ namespace Chubrik
         public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;   // 18.11 cheats (Settings → «Читы»)
         public List<string> placed = new List<string>();     // admin panel copies: id|path|pos|rot|scale|1                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)
+        // 22.11: up to 3 chubriks on one account — coins, items, friends and worlds are shared, each has its own name and outfit.
+        // `look` above is always the active one's outfit (kept in chars[activeChar].look too).
+        public List<CharSlot> chars = new List<CharSlot>();
+        public int activeChar;
+    }
+
+    /// <summary>One of the player's chubriks: its name ("" = the nickname / «Чубрик 1») and outfit ("dept=item").</summary>
+    [Serializable]
+    public class CharSlot
+    {
+        public string name = "";
+        public List<string> look = new List<string>();
     }
 
     /// <summary>Local profile: coins, tokens, owned items, current look, settings (JSON in persistentDataPath).</summary>
@@ -68,6 +80,95 @@ namespace Chubrik
             foreach (var set in P.sets) if (!P.setBonus.Contains(set)) P.setBonus.Add(set);
             // 21.11: a thing that left the catalogue (walk_6 «Лунная походка») is taken off: the department's default comes back
             P.look.RemoveAll(e => { int k = e.IndexOf('='); var id = k > 0 ? e.Substring(k + 1) : ""; return k > 0 && id != "" && Catalog.Get(id) == null; });
+            FixChars();
+        }
+
+        // ---------------- 22.11: several chubriks ----------------
+
+        public const int MaxChars = 3;
+
+        /// <summary>Old saves: one chubrik from the current look; the active index in range; the active outfit in its slot.</summary>
+        static void FixChars()
+        {
+            if (P.chars == null) P.chars = new List<CharSlot>();
+            P.chars.RemoveAll(c => c == null);
+            if (P.chars.Count == 0) P.chars.Add(new CharSlot { name = "", look = new List<string>(P.look) });
+            while (P.chars.Count > MaxChars) P.chars.RemoveAt(P.chars.Count - 1);
+            P.activeChar = Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1);
+            foreach (var c in P.chars)
+            {
+                if (c.look == null) c.look = new List<string>();
+                c.look.RemoveAll(e => { int k = e.IndexOf('='); var id = k > 0 ? e.Substring(k + 1) : ""; return k > 0 && id != "" && Catalog.Get(id) == null; });
+            }
+            SyncActive();
+        }
+
+        /// <summary>The active chubrik's slot gets the outfit being worn now.</summary>
+        static void SyncActive()
+        {
+            if (P.chars == null || P.chars.Count == 0) return;
+            P.activeChar = Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1);
+            var a = P.chars[P.activeChar];
+            if (a.look == null) a.look = new List<string>();
+            a.look.Clear(); a.look.AddRange(P.look);
+        }
+
+        public static CharSlot ActiveChar => P.chars.Count > 0 ? P.chars[Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1)] : null;
+
+        /// <summary>«Чубрик 2»…; the first one is called by the nickname when it is set.</summary>
+        public static string CharName(int i)
+        {
+            if (i < 0 || i >= P.chars.Count) return "";
+            var n = P.chars[i].name;
+            if (!string.IsNullOrEmpty(n)) return n;
+            if (i == 0 && !string.IsNullOrEmpty(P.nick)) return P.nick;
+            return "Чубрик " + (i + 1);
+        }
+
+        /// <summary>The outfit of chubrik <paramref name="i"/> (the active one: what is worn now).</summary>
+        public static Look CharLook(int i)
+        {
+            if (i == P.activeChar || i < 0 || i >= P.chars.Count) return CurrentLook();
+            return LookOf(P.chars[i].look);
+        }
+
+        /// <summary>Plays as chubrik <paramref name="i"/> from now on (the player model is not touched here).</summary>
+        public static void SwitchChar(int i)
+        {
+            if (i < 0 || i >= P.chars.Count) return;
+            SyncActive();
+            P.activeChar = i;
+            P.look = new List<string>(P.chars[i].look);
+            Fix();
+            Write();
+        }
+
+        /// <summary>A new chubrik in the starting outfit, made active. −1 when there are 3 already.</summary>
+        public static int NewChar()
+        {
+            if (P.chars.Count >= MaxChars) return -1;
+            int n = 2;
+            for (; n < 100; n++)
+            {
+                bool used = false;
+                for (int k = 0; k < P.chars.Count; k++) if (CharName(k) == "Чубрик " + n) used = true;
+                if (!used) break;
+            }
+            SyncActive();
+            P.chars.Add(new CharSlot { name = "Чубрик " + n, look = new List<string>() });
+            SwitchChar(P.chars.Count - 1);
+            return P.activeChar;
+        }
+
+        /// <summary>Deletes a chubrik that is not being played now (its outfit only — things stay on the account).</summary>
+        public static bool DeleteChar(int i)
+        {
+            if (i < 0 || i >= P.chars.Count || i == P.activeChar || P.chars.Count <= 1) return false;
+            SyncActive();
+            P.chars.RemoveAt(i);
+            if (i < P.activeChar) P.activeChar--;
+            Write();
+            return true;
         }
 
         /// <summary>Gives a premium set back: its items are no longer owned and are taken off (it can be bought or unlocked by code again).</summary>
@@ -75,10 +176,12 @@ namespace Chubrik
         {
             P.sets.Remove(set);
             P.look.RemoveAll(e => { int k = e.IndexOf('='); return k > 0 && Catalog.SetOf(e.Substring(k + 1)) == set; });
+            foreach (var c in P.chars) c.look.RemoveAll(e => { int k = e.IndexOf('='); return k > 0 && Catalog.SetOf(e.Substring(k + 1)) == set; });
         }
 
         public static void Write()
         {
+            SyncActive();
             Changed?.Invoke();
             if (Boot.Testing && !Boot.Has("-keepsave")) return;
             try { File.WriteAllText(Path, JsonUtility.ToJson(P)); WebBridge.SyncFiles(); }
@@ -98,9 +201,12 @@ namespace Chubrik
         }
 
         /// <summary>The worn item of a department ("" = nothing).</summary>
-        public static string Worn(string dept)
+        public static string Worn(string dept) => WornIn(P.look, dept);
+
+        /// <summary>The worn item of a department in an outfit list.</summary>
+        public static string WornIn(List<string> list, string dept)
         {
-            foreach (var e in P.look)
+            foreach (var e in list)
                 if (e.StartsWith(dept + "="))
                 {
                     var id = e.Substring(dept.Length + 1);
@@ -110,10 +216,12 @@ namespace Chubrik
             return Catalog.Dept(dept)?.def ?? "";
         }
 
-        public static Look CurrentLook()
+        public static Look CurrentLook() => LookOf(P.look);
+
+        public static Look LookOf(List<string> list)
         {
             var l = new Look();
-            foreach (var d in Catalog.Depts) l[d.id] = Worn(d.id);
+            foreach (var d in Catalog.Depts) l[d.id] = WornIn(list, d.id);
             return l;
         }
 

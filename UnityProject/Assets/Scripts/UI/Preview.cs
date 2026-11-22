@@ -249,18 +249,22 @@ namespace Chubrik
         readonly Dictionary<string, RenderTexture> portraits = new Dictionary<string, RenderTexture>();
 
         /// <summary>A whole-body picture of someone else's chubrik (online players list), cached by their look.</summary>
-        public Texture Portrait(Look l, string key)
+        public Texture Portrait(Look l, string key, int size = 0)
         {
+            if (size > 0) key += "@" + size;
             if (portraits.TryGetValue(key, out var have) && have && have.IsCreated()) return have;
             bool wasActive = gameObject.activeSelf;
             Show(true);
             var keep = Model.look.Copy();
             pet.gameObject.SetActive(false);
+            var small = thumbRT;
+            if (size > 0) thumbRT = new RenderTexture(size, size, 24) { name = "PortraitRT", antiAliasing = small.antiAliasing };   // 22.11: big pictures (the chubrik picker)
             cam.targetTexture = thumbRT;
             Model.Build(l);
             Model.transform.localRotation = Quaternion.Euler(0, 20, 0);
             Frame(cam, "body", Model.SizeScale, true);
             var t = Copy();
+            if (thumbRT != small) { thumbRT.Release(); Destroy(thumbRT); thumbRT = small; }
             portraits[key] = t;
             cam.targetTexture = RT;
             pet.gameObject.SetActive(true);

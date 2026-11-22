@@ -27,6 +27,7 @@ namespace Chubrik
         public static void Main()
         {
             Window.Close();
+            CharSlots.Close();
             if (main) Object.Destroy(main);
             Unlock();
             PlayerCtl.I.MenuOrbit = true;
@@ -50,7 +51,7 @@ namespace Chubrik
                 var b = UIKit.Button(col, label, c, a, font);
                 b.Bg.rectTransform.sizeDelta = new Vector2(560, h);
             }
-            Btn("ИГРАТЬ", UIKit.Green, Play, 112, 52);
+            Btn("ИГРАТЬ", UIKit.Green, CharSlots.Open, 112, 52);   // 22.11: first pick a chubrik (or make a new one)
             Btn("ИГРОКИ ОНЛАЙН", UIKit.Violet, () => { CloseMain(); PlayersUI.Open(); });
             Btn("ТАБЛИЦА РЕКОРДОВ", UIKit.Orange, () => { CloseMain(); RecordsUI.Open(); });
             Btn("ПРОМОКОДЫ", UIKit.Pink, () => { CloseMain(); PromoWindow(); });
@@ -279,6 +280,7 @@ namespace Chubrik
             {
                 // 18.11: the typhoon blows every skin off the account (the starting look stays)
                 P.owned.Clear(); P.sets.Clear(); P.look.Clear(); P.promo = false;
+                foreach (var c in P.chars) c.look.Clear();   // 22.11: every chubrik of the account loses its skins
                 Save.Fix(); Save.Write();
                 PlayerCtl.I?.ApplyLook(Save.CurrentLook());
                 AudioFx.Play("portal");

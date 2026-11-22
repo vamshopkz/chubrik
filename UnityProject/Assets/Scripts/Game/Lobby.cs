@@ -51,6 +51,7 @@ namespace Chubrik
             posts.Clear();
             building = true;
             Sky();
+            PlanRiver();               // 22.11 the river is a real channel: planned first, the ground and the sea leave room for it
             Sea();
             Regions();
             Rivers();
@@ -67,7 +68,9 @@ namespace Chubrik
             Snow();
             CrystalCave();
             Gates.Add(LobbyGate.Spawn(new Vector3(6.15f, 0, 16.3f), 0, 7.7f, 4, "СНЕЖНАЯ ДОЛИНА", root));     // between the wardrobe and ruins corners
-            Gates.Add(LobbyGate.Spawn(new Vector3(26.6f, 0, 10.4f), 90, 4.4f, 4, "СНЕЖНАЯ ДОЛИНА", root));    // where the river comes in
+            var riverGate = LobbyGate.Spawn(new Vector3(26.6f, 0, 10.4f), 90, 4.4f, 4, "СНЕЖНАЯ ДОЛИНА", root);    // where the river comes in
+            riverGate.Grate(RiverDepth + 0.5f);   // 22.11 a grate under it: you can't swim under a closed gate
+            Gates.Add(riverGate);
             Gates.Add(LobbyGate.Spawn(new Vector3(19.15f, 0, -21.5f), 0, 11.1f, 10, "ДЖУНГЛИ", root));
             Gates.Add(LobbyGate.Spawn(new Vector3(26.6f, 0, 1.5f), 90, 7f, 20, "КРИСТАЛЬНАЯ ПЕЩЕРА", root));
             Gates.Add(LobbyGate.Spawn(new Vector3(-39.05f, 0, -6.9f), 0, 8.5f, 25, "ГЛЮК-МИР 404", root));
@@ -110,27 +113,72 @@ namespace Chubrik
 
         static void Sea()
         {
-            var water = Prim.Make(PrimitiveType.Plane, root, new Vector3(0, PlayerCtl.I != null ? PlayerCtl.I.WaterY : -0.9f, 0), new Vector3(30, 1, 30), null, "Water", 0);
+            // 22.11: the sea (300 × 300 m) has a hole under the river: the channel is deeper than the sea level,
+            // and the island's ground covers the hole everywhere else
+            float y = PlayerCtl.I != null ? PlayerCtl.I.WaterY : -0.9f;
+            const float H = 150;
+            var hole = river != null ? new Rect(river.area.xMin - 0.5f, river.area.yMin - 0.5f, river.area.width + 1, river.area.height + 1) : new Rect(0, 0, 0, 0);
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            void Quad(float x0, float z0, float x1, float z1)
+            {
+                if (x1 - x0 < 0.01f || z1 - z0 < 0.01f) return;
+                int b = v.Count;
+                foreach (var (x, z) in new[] { (x0, z0), (x0, z1), (x1, z1), (x1, z0) }) { v.Add(new Vector3(x, 0, z)); uv.Add(new Vector2((x + H) / (2 * H), (z + H) / (2 * H))); }
+                tr.Add(b); tr.Add(b + 1); tr.Add(b + 2); tr.Add(b); tr.Add(b + 2); tr.Add(b + 3);
+            }
+            if (hole.width <= 0) Quad(-H, -H, H, H);
+            else
+            {
+                Quad(-H, -H, H, hole.yMin); Quad(-H, hole.yMax, H, H);
+                Quad(-H, hole.yMin, hole.xMin, hole.yMax); Quad(hole.xMax, hole.yMin, H, hole.yMax);
+            }
+            var mesh = new Mesh { name = "Sea" };
+            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
             var wm = Mats.Tex(Tex.Water(), new Color(0.75f, 0.9f, 1f), 0.9f);
             wm.mainTextureScale = new Vector2(40, 40);
-            water.GetComponent<Renderer>().sharedMaterial = wm;
+            var water = Prim.MeshGO(mesh, root, wm, "Water");
+            water.transform.localPosition = new Vector3(0, y, 0);
             water.AddComponent<WaterScroll>();
         }
 
-        /// <summary>A flat piece of ground in the shape of a (rounded) outline: top at y 0, 2 m thick, with a collider.</summary>
+        /// <summary>A flat piece of ground in the shape of a (rounded) outline: top at y 0, 2 m thick, with a collider.
+        /// 22.11: where the river channel runs, the ground has no floor (the outline is cut along the channel's rim).</summary>
         static GameObject Ground(string name, Material m, float tile, params Vector3[] pts)
         {
             var q = Round(pts, true);
+            if (Area2(q) < 0) q.Reverse();   // counter-clockwise seen from above
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            foreach (var piece in Carve(q, out bool carved)) Fill(piece, tile, carved, v, uv, tr);
+            var mesh = new Mesh { name = name };
+            if (v.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            var go = new GameObject(name);
+            go.layer = Layers.World;
+            go.transform.SetParent(root, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = m;
+            go.AddComponent<MeshCollider>().sharedMesh = mesh;
+            return go;
+        }
+
+        static float Area2(List<Vector3> q)
+        {
             float area = 0;
             for (int i = 0; i < q.Count; i++) { var a = q[i]; var b = q[(i + 1) % q.Count]; area += a.x * b.z - b.x * a.z; }
-            if (area < 0) q.Reverse();   // counter-clockwise seen from above
-            int n = q.Count;
-            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            return area;
+        }
+
+        /// <summary>One counter-clockwise outline: its top (ear clipping) and its sides 2 m down (not along the river's rim).</summary>
+        static void Fill(List<Vector3> q, float tile, bool carved, List<Vector3> v, List<Vector2> uv, List<int> tr)
+        {
+            int n = q.Count, b0 = v.Count;
             foreach (var p in q) { v.Add(p); uv.Add(new Vector2(p.x, p.z) / tile); }
             // ear clipping
             var idx = new List<int>(); for (int i = 0; i < n; i++) idx.Add(i);
             int guard = 0;
-            while (idx.Count > 3 && guard++ < 10000)
+            while (idx.Count > 3 && guard++ < 20000)
             {
                 bool cut = false;
                 for (int i = 0; i < idx.Count; i++)
@@ -146,16 +194,18 @@ namespace Chubrik
                         if (Cross(Bp - A, P2 - A) > 1e-4f && Cross(C - Bp, P2 - Bp) > 1e-4f && Cross(A - C, P2 - C) > 1e-4f) { inside = true; break; }
                     }
                     if (inside) continue;
-                    tr.Add(ia); tr.Add(ic); tr.Add(ib);   // clockwise from above = facing up
+                    tr.Add(b0 + ia); tr.Add(b0 + ic); tr.Add(b0 + ib);   // clockwise from above = facing up
                     idx.RemoveAt(i); cut = true; break;
                 }
                 if (!cut) break;
             }
-            if (idx.Count == 3) { tr.Add(idx[0]); tr.Add(idx[2]); tr.Add(idx[1]); }
+            if (idx.Count == 3) { tr.Add(b0 + idx[0]); tr.Add(b0 + idx[2]); tr.Add(b0 + idx[1]); }
+            else if (idx.Count > 3) Debug.LogWarning($"[Lobby] ground piece not fully filled ({idx.Count} corners left)");
             // the sides, 2 m down
             for (int i = 0; i < n; i++)
             {
                 var a = q[i]; var b = q[(i + 1) % n];
+                if (carved && OnRim((a + b) / 2)) continue;   // along the river: the riverbed lines it
                 int s = v.Count;
                 float len = (b - a).magnitude;
                 v.Add(a); v.Add(b); v.Add(a + Vector3.down * 2); v.Add(b + Vector3.down * 2);
@@ -166,16 +216,6 @@ namespace Chubrik
                 if (Vector3.Dot(nrm, outN) >= 0) { tr.Add(s); tr.Add(s + 1); tr.Add(s + 2); tr.Add(s + 1); tr.Add(s + 3); tr.Add(s + 2); }
                 else { tr.Add(s); tr.Add(s + 2); tr.Add(s + 1); tr.Add(s + 1); tr.Add(s + 2); tr.Add(s + 3); }
             }
-            var mesh = new Mesh { name = name };
-            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
-            mesh.RecalculateNormals(); mesh.RecalculateBounds();
-            var go = new GameObject(name);
-            go.layer = Layers.World;
-            go.transform.SetParent(root, false);
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = m;
-            go.AddComponent<MeshCollider>().sharedMesh = mesh;
-            return go;
         }
 
         /// <summary>The magenta/black «missing texture» checker, repeating (for the glitch floor).</summary>
@@ -246,26 +286,318 @@ namespace Chubrik
             P(-84, 17.5f, 4), P(-50.7f, 17.5f), P(-50.7f, 10.4f, 1.5f), P(-43.7f, 10.4f), P(-43.7f, 0.6f), P(-50.7f, 0.6f, 1.5f), P(-50.7f, -24, 2), P(-84, -24, 4),
         };
 
-        static void Water(Vector3 a, Vector3 b, float w)
+        // ---------------- the river (22.11: a real channel you can swim in) ----------------
+        // «Like in Super Bear Adventure»: the river from the snowy lake through the hub to the jungle pool is a half-pipe
+        // dug into the ground (a semi-ellipse across, 5.1 m wide, 1.9 m deep) lined with sand, with see-through blue
+        // water a bit below the grass. The ground has no floor over it (Ground() cuts its outline along the rim).
+        // Swimming is in Water.cs; there is no current. Two wooden bridges and the stepping stones cross it in the hub.
+
+        public const float RiverHalfW = 2.55f, RiverDepth = 1.9f, RiverSurface = -0.32f;
+        internal static Water.Channel river;
+        /// <summary>The river's rim seen from above (counter-clockwise): the ground skips everything inside it.</summary>
+        static List<Vector2> corridor;
+        /// <summary>Autotest: a deep spot in the river in the hub and the way it flows there; a spot by its west bank, facing it.</summary>
+        public static Vector3 SwimSpot, SwimBank;
+        public static float SwimYaw, SwimBankYaw;
+        const int RiverCapN = 6;
+
+        static Vector3 Left(Vector3 t) => new Vector3(-t.z, 0, t.x);
+
+        /// <summary>The river's centre line (the old water strip's line; it starts at the lake's edge and ends at the jungle pool),
+        /// samples every 0.9 m with rounded ends, registered as swimmable water.</summary>
+        static void PlanRiver()
         {
-            var d = b - a; d.y = 0;
-            var go = Prim.Make(PrimitiveType.Cube, root, (a + b) / 2 + Vector3.up * 0.03f, new Vector3(w, 0.04f, d.magnitude + w * 0.6f), waterM, "River", Layers.World);
-            go.transform.rotation = Quaternion.LookRotation(d);
+            var line = Round(new[] { P(39f, 34.8f), P(39f, 25f, 4), P(35f, 17f, 4), P(29f, 10.5f, 4), P(22f, 9f, 4), P(16f, 5f, 4), P(12f, -2.5f, 4), P(10f, -12f, 4), P(9f, -21f) }, false);
+            var pts = new List<Vector3> { line[0] };
+            float acc = 0; const float step = 0.9f;
+            for (int i = 0; i < line.Count - 1; i++)
+            {
+                var a = line[i]; var b = line[i + 1]; float len = (b - a).magnitude;
+                if (len < 1e-4f) continue;
+                float t = step - acc;
+                while (t < len) { pts.Add(a + (b - a) * (t / len)); t += step; }
+                acc = len - (t - step);
+            }
+            if ((pts[pts.Count - 1] - line[line.Count - 1]).magnitude > 0.35f) pts.Add(line[line.Count - 1]); else pts[pts.Count - 1] = line[line.Count - 1];
+            var tan = new List<Vector3>();
+            for (int i = 0; i < pts.Count; i++) { var d = pts[Mathf.Min(i + 1, pts.Count - 1)] - pts[Mathf.Max(i - 1, 0)]; d.y = 0; tan.Add(d.normalized); }
+            river = new Water.Channel { owner = root, surface = RiverSurface };
+            // the ends are round (a quarter of a ball): width and depth go down to 0
+            void Cap(Vector3 from, Vector3 outward, float u, Vector3 t) { float k = Mathf.Sqrt(Mathf.Max(0, 1 - u * u)); river.Add(from + outward * u * RiverHalfW, Left(t), RiverHalfW * k, RiverDepth * k); }
+            for (int j = RiverCapN; j >= 1; j--) Cap(pts[0], -tan[0], j / (float)RiverCapN, tan[0]);
+            for (int i = 0; i < pts.Count; i++) river.Add(pts[i], Left(tan[i]), RiverHalfW, RiverDepth);
+            for (int j = 1; j <= RiverCapN; j++) Cap(pts[pts.Count - 1], tan[tan.Count - 1], j / (float)RiverCapN, tan[tan.Count - 1]);
+            river.Seal();
+            Water.Add(river);
+            // the rim outline: along the left bank, round the end, back along the right bank (the tips are shared)
+            int N = river.Count;
+            corridor = new List<Vector2>();
+            for (int i = 0; i < N; i++) { var p = river.c[i] + river.n[i] * river.w[i]; corridor.Add(new Vector2(p.x, p.z)); }
+            for (int i = N - 2; i >= 1; i--) { var p = river.c[i] - river.n[i] * river.w[i]; corridor.Add(new Vector2(p.x, p.z)); }
+            float ar = 0;
+            for (int i = 0; i < corridor.Count; i++) ar += Cross(corridor[i], corridor[(i + 1) % corridor.Count]);
+            if (ar < 0) corridor.Reverse();
+            // the autotest's spots: mid-river between the stepping stones and the south bridge
+            int best = RiverCapN; float bd = float.MaxValue;
+            for (int i = RiverCapN; i < N - RiverCapN - 1; i++) { float dd = (river.c[i] - new Vector3(11, 0, -8)).sqrMagnitude; if (dd < bd) { bd = dd; best = i; } }
+            var flow = river.c[best + 1] - river.c[best]; flow.y = 0;
+            SwimSpot = river.c[best]; SwimYaw = Quaternion.LookRotation(flow).eulerAngles.y;
+            var west = -river.n[best];
+            SwimBank = river.c[best] + west * (RiverHalfW - 1.3f); SwimBankYaw = Quaternion.LookRotation(west).eulerAngles.y;
         }
 
-        /// <summary>The river from the snowy lake down the right side, through the hub and into the jungle pool (shallow: you can wade it).</summary>
+        /// <summary>Is a point on the river's rim (an edge of a carved ground piece along the river)?</summary>
+        static bool OnRim(Vector3 p)
+        {
+            if (corridor == null) return false;
+            var q = new Vector2(p.x, p.z);
+            if (!river.area.Contains(q)) return false;
+            for (int i = 0; i < corridor.Count; i++)
+            {
+                var a = corridor[i]; var ab = corridor[(i + 1) % corridor.Count] - a;
+                float l2 = ab.sqrMagnitude;
+                float t = l2 < 1e-8f ? 0 : Mathf.Clamp01(Vector2.Dot(q - a, ab) / l2);
+                if ((a + ab * t - q).sqrMagnitude < 0.02f * 0.02f) return true;
+            }
+            return false;
+        }
+
+        /// <summary>A ground outline minus the river: the pieces left (the hub falls in two, the snow and the jungle get a bay).</summary>
+        static List<List<Vector3>> Carve(List<Vector3> q, out bool carved)
+        {
+            carved = false;
+            var one = new List<List<Vector3>> { q };
+            if (corridor == null) return one;
+            float x0 = float.MaxValue, z0 = float.MaxValue, x1 = float.MinValue, z1 = float.MinValue;
+            foreach (var p in q) { x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x); z0 = Mathf.Min(z0, p.z); z1 = Mathf.Max(z1, p.z); }
+            if (!river.area.Overlaps(Rect.MinMaxRect(x0, z0, x1, z1))) return one;
+            var A = new List<Vector2>(); foreach (var p in q) A.Add(new Vector2(p.x, p.z));
+            var res = Subtract(A, corridor, out bool touched);
+            if (res == null) { Debug.LogWarning("[Lobby] could not cut the river out of the ground — left whole"); return one; }
+            if (!touched) return one;
+            carved = true;
+            var outL = new List<List<Vector3>>();
+            foreach (var r in res)
+            {
+                var l = new List<Vector3>(); foreach (var p in r) l.Add(new Vector3(p.x, 0, p.y));
+                CleanOutline(l);
+                if (l.Count < 3) continue;
+                if (Area2(l) < 0) l.Reverse();
+                outL.Add(l);
+            }
+            return outL;
+        }
+
+        /// <summary>Drops doubled and straight-through corners (the ear clipping can't cut at a straight corner).</summary>
+        static void CleanOutline(List<Vector3> l)
+        {
+            bool changed = true;
+            while (changed && l.Count > 3)
+            {
+                changed = false;
+                for (int i = 0; i < l.Count && l.Count > 3; i++)
+                {
+                    int n = l.Count;
+                    var a = l[(i + n - 1) % n]; var b = l[i]; var c = l[(i + 1) % n];
+                    Vector3 ab = b - a, bc = c - b;
+                    if (ab.sqrMagnitude < 1e-6f) { l.RemoveAt(i); changed = true; i--; continue; }
+                    if (bc.sqrMagnitude < 1e-6f) continue;
+                    float cr = (ab.x * bc.z - ab.z * bc.x) / (ab.magnitude * bc.magnitude);
+                    if (Mathf.Abs(cr) < 2e-3f && Vector3.Dot(ab, bc) > 0) { l.RemoveAt(i); changed = true; i--; }
+                }
+            }
+        }
+
+        class Cut { public Vector2 p; public int ea, eb, ia, ib; public float ta, tb; public bool aEnters, used; }
+
+        /// <summary>
+        /// Polygon A minus polygon B (both counter-clockwise, simple), Greiner–Hormann style: walk A where it is outside B,
+        /// switch to B (backwards) where A goes into B. Returns null if something odd happens (then the ground stays whole).
+        /// touched = false when B doesn't cut A at all.
+        /// </summary>
+        static List<List<Vector2>> Subtract(List<Vector2> A, List<Vector2> B, out bool touched)
+        {
+            touched = false;
+            int na = A.Count, nb = B.Count;
+            var cuts = new List<Cut>();
+            for (int i = 0; i < na; i++)
+            {
+                Vector2 a0 = A[i], a1 = A[(i + 1) % na];
+                float ax0 = Mathf.Min(a0.x, a1.x), ax1 = Mathf.Max(a0.x, a1.x), ay0 = Mathf.Min(a0.y, a1.y), ay1 = Mathf.Max(a0.y, a1.y);
+                for (int j = 0; j < nb; j++)
+                {
+                    Vector2 b0 = B[j], b1 = B[(j + 1) % nb];
+                    if (Mathf.Max(b0.x, b1.x) < ax0 || Mathf.Min(b0.x, b1.x) > ax1 || Mathf.Max(b0.y, b1.y) < ay0 || Mathf.Min(b0.y, b1.y) > ay1) continue;
+                    var r = a1 - a0; var sd = b1 - b0; float den = Cross(r, sd);
+                    if (Mathf.Abs(den) < 1e-9f) continue;
+                    var qp = b0 - a0; float t = Cross(qp, sd) / den, u = Cross(qp, r) / den;
+                    if (t <= 1e-6f || t >= 1 - 1e-6f || u <= 1e-6f || u >= 1 - 1e-6f) continue;
+                    cuts.Add(new Cut { p = a0 + r * t, ea = i, eb = j, ta = t, tb = u });
+                }
+            }
+            if (cuts.Count == 0)
+            {
+                if (InPoly(A[0], B)) { touched = true; return new List<List<Vector2>>(); }   // all of it under the river
+                return new List<List<Vector2>> { A };   // (a river wholly inside a piece of ground would be a hole: never needed here)
+            }
+            if (cuts.Count % 2 != 0) return null;
+            var seqA = new List<(Vector2 p, Cut c)>(); var seqB = new List<(Vector2 p, Cut c)>();
+            for (int i = 0; i < na; i++)
+            {
+                seqA.Add((A[i], null));
+                var on = cuts.FindAll(c => c.ea == i); on.Sort((x, y) => x.ta.CompareTo(y.ta));
+                foreach (var c in on) { c.ia = seqA.Count; seqA.Add((c.p, c)); }
+            }
+            for (int j = 0; j < nb; j++)
+            {
+                seqB.Add((B[j], null));
+                var on = cuts.FindAll(c => c.eb == j); on.Sort((x, y) => x.tb.CompareTo(y.tb));
+                foreach (var c in on) { c.ib = seqB.Count; seqB.Add((c.p, c)); }
+            }
+            int NA = seqA.Count, NB = seqB.Count;
+            foreach (var c in cuts) c.aEnters = InPoly((c.p + seqA[(c.ia + 1) % NA].p) * 0.5f, B);
+            var res = new List<List<Vector2>>();
+            int guard = 0;
+            foreach (var start in cuts)
+            {
+                if (start.used || start.aEnters) continue;
+                var poly = new List<Vector2>();
+                var cur = start;
+                while (true)
+                {
+                    if (++guard > 200000) return null;
+                    cur.used = true; poly.Add(cur.p);
+                    int k = (cur.ia + 1) % NA;
+                    while (seqA[k].c == null) { poly.Add(seqA[k].p); k = (k + 1) % NA; if (++guard > 200000) return null; }
+                    var into = seqA[k].c;
+                    if (!into.aEnters) return null;
+                    into.used = true; poly.Add(into.p);
+                    k = (into.ib - 1 + NB) % NB;
+                    while (seqB[k].c == null) { poly.Add(seqB[k].p); k = (k - 1 + NB) % NB; if (++guard > 200000) return null; }
+                    var outOf = seqB[k].c;
+                    if (outOf == start) break;
+                    if (outOf.aEnters || outOf.used) return null;
+                    cur = outOf;
+                }
+                res.Add(poly);
+            }
+            touched = true;
+            return res;
+        }
+
+        static bool InPoly(Vector2 p, List<Vector2> poly)
+        {
+            bool inside = false;
+            for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
+                if ((poly[i].y > p.y) != (poly[j].y > p.y) && p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) inside = !inside;
+            return inside;
+        }
+
+        /// <summary>Is the wall line a–b over the river (within <paramref name="margin"/> of its rim)?</summary>
+        static bool NearRiver(Vector3 a, Vector3 b, float margin)
+        {
+            if (river == null) return false;
+            float len = Vector3.Distance(a, b);
+            for (float t = 0; t <= len + 0.01f; t += 0.3f) if (river.Edge(Vector3.Lerp(a, b, len < 0.01f ? 0 : Mathf.Min(1, t / len))) < margin) return true;
+            return false;
+        }
+
+        /// <summary>The riverbed (a sandy half-pipe with a collider), the see-through flowing water, the lakes, the pool,
+        /// the stepping stones and the bridges.</summary>
         static void Rivers()
         {
-            Vector3[] p = { new Vector3(39.6f, 0, 42), new Vector3(39.6f, 0, 32), new Vector3(39, 0, 25), new Vector3(35, 0, 17), new Vector3(29, 0, 10.5f), new Vector3(22, 0, 9),
-                            new Vector3(16, 0, 5), new Vector3(12, 0, -2.5f), new Vector3(10, 0, -12), new Vector3(9, 0, -21), new Vector3(10, 0, -28) };
-            for (int i = 0; i < p.Length - 1; i++) Water(p[i], p[i + 1], 4.4f);
+            var c = river; int N = c.Count; const int K = 12;
+            // the riverbed: a semi-ellipse across at every sample; its rim is exactly the ground's cut edge
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            float along = 0;
+            for (int i = 0; i < N; i++)
+            {
+                if (i > 0) along += Vector3.Distance(c.c[i], c.c[i - 1]);
+                float w = c.w[i], d = c.d[i]; var n = c.n[i];
+                float arc = Mathf.PI * Mathf.Sqrt((w * w + d * d) / 2);   // about the length across
+                for (int k = 0; k <= K; k++)
+                {
+                    float th = Mathf.PI * k / K;
+                    var p = k == 0 ? c.c[i] + n * w : k == K ? c.c[i] - n * w : c.c[i] + n * (w * Mathf.Cos(th)) + Vector3.down * (d * Mathf.Sin(th));
+                    v.Add(p); uv.Add(new Vector2(along / 2.5f, arc * k / K / 2.5f));
+                }
+            }
+            for (int i = 0; i < N - 1; i++)
+                for (int k = 0; k < K; k++)
+                {
+                    int a = i * (K + 1) + k, b = a + 1, a2 = a + K + 1, b2 = a2 + 1;
+                    tr.Add(a); tr.Add(a2); tr.Add(b); tr.Add(b); tr.Add(a2); tr.Add(b2);   // facing in (up)
+                }
+            var bedMesh = new Mesh { name = "RiverBed" };
+            bedMesh.SetVertices(v); bedMesh.SetUVs(0, uv); bedMesh.SetTriangles(tr, 0);
+            bedMesh.RecalculateNormals(); bedMesh.RecalculateBounds();
+            var bedM = Tiled(Tex.Sand(), 1, 0.1f); bedM.color = Hex("D9C9A3");
+            var bed = Prim.MeshGO(bedMesh, root, bedM, "RiverBed");
+            bed.layer = Layers.World;
+            bed.AddComponent<MeshCollider>().sharedMesh = bedMesh;
+            // the water: a see-through sheet a bit below the grass, its edges just inside the riverbed; no collider
+            v = new List<Vector3>(); uv = new List<Vector2>(); tr = new List<int>();
+            float h = -RiverSurface; along = 0;
+            for (int i = 0; i < N; i++)
+            {
+                if (i > 0) along += Vector3.Distance(c.c[i], c.c[i - 1]);
+                float w = c.w[i], d = c.d[i];
+                float ww = d > h ? w * Mathf.Sqrt(1 - (h / d) * (h / d)) + 0.05f : 0;
+                var mid = new Vector3(c.c[i].x, RiverSurface, c.c[i].z);
+                v.Add(mid + c.n[i] * ww); v.Add(mid - c.n[i] * ww);
+                uv.Add(new Vector2(along / 4f, ww / 4f)); uv.Add(new Vector2(along / 4f, -ww / 4f));
+            }
+            for (int i = 0; i < N - 1; i++)
+            {
+                int l0 = i * 2, r0 = l0 + 1, l1 = l0 + 2, r1 = l0 + 3;
+                tr.Add(l0); tr.Add(l1); tr.Add(r0); tr.Add(r0); tr.Add(l1); tr.Add(r1);
+            }
+            var wMesh = new Mesh { name = "RiverWater" };
+            wMesh.SetVertices(v); wMesh.SetUVs(0, uv); wMesh.SetTriangles(tr, 0);
+            wMesh.RecalculateNormals(); wMesh.RecalculateBounds();
+            var water = Prim.MeshGO(wMesh, root, Water.SurfaceMat(0.55f), "River");
+            water.layer = Layers.World;
+            var wr = water.GetComponent<Renderer>(); wr.shadowCastingMode = ShadowCastingMode.Off;
+            water.AddComponent<WaterFlow>();   // the texture slides from the snowy lake towards the jungle
             // the lake in the snowy valley: along the top and down the right
             Prim.Make(PrimitiveType.Cube, root, new Vector3(31.8f, 0.03f, 46.6f), new Vector3(31, 0.04f, 6.4f), waterM, "Lake", Layers.World).AddComponent<WaterScroll>();
             Prim.Make(PrimitiveType.Cube, root, new Vector3(42.6f, 0.03f, 42.8f), new Vector3(9.8f, 0.04f, 10.4f), waterM, "Lake", Layers.World);
             // the jungle pool where the river ends
             Prim.Make(PrimitiveType.Cylinder, root, new Vector3(13, 0.035f, -29.5f), new Vector3(16, 0.02f, 13.5f), waterM, "Pool", Layers.World);
-            // stepping stones over the river by the hub
-            for (int k = 0; k < 4; k++) Solid(PrimitiveType.Cylinder, new Vector3(9.6f + k * 1.3f, 0.1f, -2.5f + k * 0.7f), new Vector3(0.9f, 0.1f, 0.9f), M("9AA0A8", 0.3f));
+            // stepping stones over the river by the hub (where they were): stone pillars standing on the riverbed,
+            // now straight across from bank to bank (the old row ran half along the river and ended mid-stream)
+            var stoneM = M("9AA0A8", 0.3f);
+            c.Locate(new Vector3(11.55f, 0, -1.45f), out int sseg, out float st, out _, out _, out _, out _);
+            var sc = Vector3.Lerp(c.c[sseg], c.c[sseg + 1], st); var sn = Vector3.Lerp(c.n[sseg], c.n[sseg + 1], st).normalized;
+            for (int k = 0; k < 5; k++)
+            {
+                var p = sc + sn * ((k - 2) * 1.25f);
+                float bottom = c.Over(p, out float bot) ? bot - 0.25f : -0.05f, top = 0.18f;
+                Solid(PrimitiveType.Cylinder, new Vector3(p.x, (top + bottom) / 2, p.z), new Vector3(0.9f, (top - bottom) / 2, 0.9f), stoneM).name = "SteppingStone";
+            }
+            // two wooden bridges where the main paths cross: spawn → the crystal gate, spawn → the jungle gate
+            Bridge(new Vector3(14.75f, 0, 2.65f));
+            Bridge(new Vector3(9.6f, 0, -15f));
+        }
+
+        /// <summary>A simple wooden bridge straight across the river with railings.</summary>
+        static void Bridge(Vector3 near)
+        {
+            river.Locate(near, out int seg, out float t, out _, out _, out _, out _);
+            int j = Mathf.Min(seg + 1, river.Count - 1);
+            var cp = Vector3.Lerp(river.c[seg], river.c[j], t); var n = Vector3.Lerp(river.n[seg], river.n[j], t); n.y = 0; n.Normalize();
+            float L = RiverHalfW * 2 + 2.6f;
+            var b = Node("Bridge", root, new Vector3(cp.x, 0, cp.z), new Vector3(0, Quaternion.LookRotation(n).eulerAngles.y, 0));   // local z = across the river
+            var wood = Tiled(Tex.Planks("A0642F"), 1); var dark = M("6D4425", 0.25f);
+            Solid(PrimitiveType.Cube, new Vector3(0, 0.12f, 0), new Vector3(2.3f, 0.24f, L), wood, default, b).name = "BridgeDeck";
+            for (int k = 0; k < 7; k++) B(b, new Vector3(0, 0.245f, -L / 2 + 0.4f + k * (L - 0.8f) / 6), new Vector3(2.32f, 0.02f, 0.08f), dark);   // plank seams
+            foreach (var sd in new[] { -1f, 1f })
+            {
+                B(b, new Vector3(sd * 0.85f, -0.05f, 0), new Vector3(0.22f, 0.22f, L), dark);   // beams under the deck
+                foreach (var z in new[] { -L / 2 + 0.25f, 0f, L / 2 - 0.25f })
+                    Solid(PrimitiveType.Cylinder, new Vector3(sd * 1.05f, 0.24f + 0.45f, z), new Vector3(0.14f, 0.45f, 0.14f), dark, default, b);
+                Solid(PrimitiveType.Cube, new Vector3(sd * 1.05f, 1.08f, 0), new Vector3(0.1f, 0.1f, L - 0.3f), wood, default, b);
+            }
         }
 
         // ---------------- walls ----------------
@@ -346,7 +678,12 @@ namespace Chubrik
             var go = Solid(PrimitiveType.Cylinder, new Vector3(p.x, h / 2, p.z), new Vector3(1.04f, h / 2, 1.04f), WallMat(st, 3.2f, h));
             go.name = "WallPost";
             Cy(root, new Vector3(p.x, h + 0.02f, p.z), new Vector3(1.16f, 0.17f, 1.16f), CapMat(st));   // a little higher than the wall caps: no flicker
+            // 22.11 over the river channel the post goes on down into the water like a pier
+            if (building && river != null && river.Edge(p) < 0.65f) Solid(PrimitiveType.Cylinder, new Vector3(p.x, -1.2f, p.z), new Vector3(1.04f, 1.2f, 1.04f), PlugMat()).name = "WallPlug";
         }
+
+        static Material plugM;
+        static Material PlugMat() => plugM != null ? plugM : plugM = Tiled(Tex.Concrete(), 1, 0.2f);
 
         /// <summary>The top of a wall or a post: grass, snow, purple, stone — and glowing pink in the neon quarter.</summary>
         static Material CapMat(WallStyle st) => st switch
@@ -377,6 +714,8 @@ namespace Chubrik
             // 17.11: the wall goes on up as an invisible barrier — no jumping over walls
             if (barrierM == null) barrierM = Glass("D8F4FF", 0.07f);
             Post(a, h); Post(b, h);
+            // 22.11 a wall over the river channel goes on down to its bed (no gap under it, no swimming through)
+            if (building && NearRiver(a, b, 0.6f)) Box(mid + Vector3.down * 1.2f, new Vector3(1f, 2.4f, len), PlugMat(), yaw).name = "WallPlug";
             var bar = Prim.Make(PrimitiveType.Cube, root, mid + Vector3.up * (h + BarrierH / 2), new Vector3(1.0f, BarrierH, len + 1), barrierM, "Barrier", Layers.Barrier);
             bar.transform.localEulerAngles = new Vector3(0, yaw, 0);
             bar.AddComponent<BoxCollider>();
@@ -1161,6 +1500,7 @@ namespace Chubrik
             {
                 float a = rng.F(0, Mathf.PI * 2), d = Mathf.Sqrt(rng.F()) * r;
                 var p = c + new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d);
+                if (building && river != null && river.Edge(p) < 1.6f) continue;   // 22.11 none over the river or under its bridges
                 g.Cyl(stem, p, 0.03f, 0.35f, 5);
                 var m = M(cols[rng.I(cols.Length)], 0.3f);
                 for (int k = 0; k < 5; k++)
@@ -1182,14 +1522,14 @@ namespace Chubrik
     {
         public int need;
         public bool IsOpen { get; private set; }
-        Collider col; Transform panel; TMPro.TextMeshPro front, back; string title; int shown = -1; float openT = -1, hintT;
+        Collider col; Transform panel; TMPro.TextMeshPro front, back; string title; int shown = -1; float openT = -1, hintT, width;
 
         public static LobbyGate Spawn(Vector3 p, float yaw, float width, int need, string title, Transform parent)
         {
             var g = new GameObject("Gate " + title).AddComponent<LobbyGate>();
             g.transform.SetParent(parent, false);
             g.transform.SetPositionAndRotation(p, Quaternion.Euler(0, yaw, 0));
-            g.need = need; g.title = title;
+            g.need = need; g.title = title; g.width = width;
             Parts.Layer = Layers.World;
             var bc = g.gameObject.AddComponent<BoxCollider>();
             bc.center = new Vector3(0, 2.75f, 0); bc.size = new Vector3(width, 5.5f, 0.6f);
@@ -1204,6 +1544,19 @@ namespace Chubrik
             g.back.transform.localRotation = Quaternion.Euler(0, 180, 0);
             g.Refresh(true);
             return g;
+        }
+
+        /// <summary>22.11 a gate over the river: iron bars from it down to the riverbed (part of the gate — they go when it opens).</summary>
+        public void Grate(float depth)
+        {
+            Parts.Layer = Layers.World;
+            var gr = Parts.Node("Grate", panel, Vector3.zero);
+            var bc = gr.gameObject.AddComponent<BoxCollider>();
+            bc.center = new Vector3(0, -depth / 2, 0); bc.size = new Vector3(width, depth, 0.5f);
+            var iron = Parts.M("3A4A5E", 0.5f, 0.6f);
+            int n = Mathf.Max(2, Mathf.RoundToInt(width / 0.42f));
+            for (int k = 0; k <= n; k++) Parts.B(gr, new Vector3(-width / 2 + k * width / n, -depth / 2, 0), new Vector3(0.1f, depth, 0.1f), iron);
+            foreach (var y in new[] { -0.55f, -depth + 0.4f }) Parts.B(gr, new Vector3(0, y, 0), new Vector3(width, 0.12f, 0.14f), iron);
         }
 
         void Refresh(bool instant)

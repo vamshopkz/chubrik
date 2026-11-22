@@ -7,7 +7,7 @@ namespace Chubrik
     /// The player: third-person platformer controller (run, jump, double jump, glide with wings, jetpack boost),
     /// orbit camera with collision, moving-platform carry, bounce pads, weapon attacks, respawn when falling into water.
     /// </summary>
-    public class PlayerCtl : MonoBehaviour
+    public partial class PlayerCtl : MonoBehaviour   // 22.11: swimming is in Water.cs
     {
         public static PlayerCtl I;
         public Camera Cam;
@@ -134,7 +134,8 @@ namespace Chubrik
             shadow.Set(Mathf.Max(0, look.Idx("shadow")), Catalog.TintOf(look.Of("shadow")));
             shadow.size = Model.SizeScale;
             float s = Model.SizeScale;
-            CC.radius = 0.38f * Mathf.Clamp(s, 0.6f, 1.6f); CC.height = 1.45f * s; CC.center = new Vector3(0, 0.74f * s, 0);
+            BaseCapsule();
+            if (swim != 0) SwimCapsule();
             camDist = 6.5f * Mathf.Clamp(s, 0.8f, 1.5f);
             rends = Model.GetComponentsInChildren<Renderer>(true);
             Hearts = Mathf.Clamp(Hearts, 1, Save.P.maxHearts);
@@ -143,6 +144,7 @@ namespace Chubrik
         public void Teleport(Vector3 pos, float faceYaw = float.NaN)
         {
             CC.enabled = false;
+            EndSwim();
             transform.position = pos;
             CC.enabled = true;
             vel = Vector3.zero;
@@ -203,6 +205,7 @@ namespace Chubrik
 
             if (hang != 0) { HangUpdate(dt); return; }
             if (Riding) { ground = null; vel = Vector3.zero; Grounded = true; Anim.grounded = true; Anim.speed01 = 0.3f; return; }   // the snowboard moves us
+            if (SwimUpdate(dt, mv, jumpQueued || kbJump)) { jumpQueued = false; return; }   // 22.11 in the water: swimming
 
             // ---- ride moving platforms ----
             if (ground != null && Grounded)
@@ -317,18 +320,14 @@ namespace Chubrik
             if (!Grounded && dive == 0 && plunge == 0 && grabCd <= 0 && vel.y < 2.5f && !Frozen && !Snowmobile && TryGrab()) return;
 
             // safe spot for respawns
-            if (Grounded && ground != null && ground.GetComponent<Mover>() == null)
+            bool overWater = Water.At(transform.position, out _, out _);   // 22.11 a swimming river is not the sea
+            if (Grounded && ground != null && ground.GetComponent<Mover>() == null && !overWater)
             {
                 safeT += dt;
                 if (safeT > 0.5f) { safeT = 0; SafePos = transform.position + Vector3.up * 0.2f; }
             }
-            if (transform.position.y < WaterY - 0.5f) { if (Worlds.Level) FellOff(); else FellInWater(); }
-            if (invuln > 0)
-            {
-                invuln -= dt;
-                bool show = invuln <= 0 || ((int)(invuln * 12)) % 2 == 0;
-                if (rends != null) foreach (var r in rends) if (r) r.enabled = show;
-            }
+            if (transform.position.y < WaterY - 0.5f && !overWater) { if (Worlds.Level) FellOff(); else FellInWater(); }
+            TickInvuln(dt);
 
             // ---- animation ----
             Anim.speed01 = Mathf.Clamp01(new Vector3(vel.x, 0, vel.z).magnitude / RunSpeed);
@@ -342,6 +341,15 @@ namespace Chubrik
                 if (idle > 6f && !Anim.emoting && dive == 0) { Anim.PlayEmote(); idle = -4f; }
             }
             attackCd -= dt;
+        }
+
+        /// <summary>After a hit: blinking while you can't be hurt.</summary>
+        void TickInvuln(float dt)
+        {
+            if (invuln <= 0) return;
+            invuln -= dt;
+            bool show = invuln <= 0 || ((int)(invuln * 12)) % 2 == 0;
+            if (rends != null) foreach (var r in rends) if (r) r.enabled = show;
         }
 
         void DoJump(float v, bool air)
@@ -605,7 +613,7 @@ namespace Chubrik
 
         public void Attack()
         {
-            if (Frozen || plunge != 0) return;
+            if (Frozen || plunge != 0 || swim != 0) return;   // in the water B is «dive» (held)
             if (Cheats.Flying && !Grounded) return;   // flying: B is «down», not a plunge
             if (dive == 1 && !Grounded) { attackDownT = Time.time; return; }   // holding B turns the dive into the plunge
             if (attackCd > 0 || dive != 0) return;
@@ -740,6 +748,12 @@ namespace Chubrik
         void LateUpdate()
         {
             if (Cam == null) return;
+            CameraUpdate();
+            Water.CameraFx(Cam);   // 22.11 under the water surface the screen turns light blue
+        }
+
+        void CameraUpdate()
+        {
             if (MenuOrbit)
             {
                 orbitT += Time.deltaTime * 0.08f;
@@ -752,10 +766,12 @@ namespace Chubrik
             if (FootballFans.CameraUpdate(Cam)) return;   // 19.11 watching someone's football
             wCamInit = false;
             float s = Model.SizeScale;
-            var targetPos = transform.position + Vector3.up * (1.15f * s + 0.2f);
-            var rot = Quaternion.Euler(pitch, yaw, 0);
+            // 22.11 diving: the camera follows him under the water — lower, closer, looking along
+            camUnderK = Mathf.MoveTowards(camUnderK, swim == 2 ? 1 : 0, Time.deltaTime * 2.5f);
+            var targetPos = transform.position + Vector3.up * Mathf.Lerp(1.15f * s + 0.2f, 0.45f * s, camUnderK);
+            var rot = Quaternion.Euler(Mathf.Lerp(pitch, Mathf.Min(pitch, 6f), camUnderK), yaw, 0);
             var dir = rot * Vector3.back;
-            float dist = camDist;
+            float dist = Mathf.Lerp(camDist, 3.6f * Mathf.Clamp(s, 0.8f, 1.5f), camUnderK);
             if (Physics.SphereCast(targetPos, 0.25f, dir, out var hit, dist, Layers.SolidMask, QueryTriggerInteraction.Ignore))
                 dist = Mathf.Max(1.2f, hit.distance - 0.1f);
             Cam.transform.position = targetPos + dir * dist;

@@ -35,6 +35,10 @@ namespace Chubrik
         /// <summary>17.11 the plunge: in the air B sends the chubrik straight down head first, arms straight, legs back.</summary>
         public bool plunge;
         float plungeK;
+        /// <summary>22.11 swimming: 0 = no, 1 = on the surface, 2 = under water; swimMove = how fast (0..1).</summary>
+        public int swim;
+        public float swimMove;
+        float swimK, underK, swimPh;
         float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
@@ -266,6 +270,43 @@ namespace Chubrik
                 legL = Quaternion.Slerp(legL, Quaternion.Euler(8 + sw, 0, -4), hangK);
                 legR = Quaternion.Slerp(legR, Quaternion.Euler(8 - sw, 0, 4), hangK);
             }
+            // 22.11 swimming: on the surface tilted forward ~50° with breaststroke arms and kicking legs, under water
+            // lying flat with slower strokes; not moving = treading water (upright, sculling arms, cycling legs)
+            swimK = Mathf.MoveTowards(swimK, swim != 0 ? 1 : 0, dt * 5);
+            underK = Mathf.MoveTowards(underK, swim == 2 ? 1 : 0, dt * 2.5f);
+            if (swimK > 0.001f && hangK < 0.5f)
+            {
+                flipT = -1;
+                float mv = Mathf.Clamp01(swimMove);
+                float stroke = Mathf.Max(mv, underK);   // how much of a real stroke (treading water otherwise)
+                swimPh += dt * Mathf.Lerp(0.75f, 1.25f, mv) * Mathf.Lerp(1f, 0.6f, underK);
+                float c = Mathf.Repeat(swimPh, 1f);
+                float tilt = Mathf.Lerp(Mathf.Lerp(8f, 50f, mv), Mathf.Lerp(80f, 90f, mv), underK) * swimK;
+                var r = Quaternion.Euler(tilt, 0, 0);
+                var pivot = new Vector3(0, 0.55f, 0);
+                m.Body.localRotation = r * m.Body.localRotation;
+                m.Body.localPosition += pivot - r * pivot;
+                m.Head.localRotation = Quaternion.Slerp(m.Head.localRotation, Quaternion.Euler(-tilt * 0.65f, 0, 0), swimK);
+                m.Torso.localRotation = Quaternion.Slerp(m.Torso.localRotation, Quaternion.identity, swimK);
+                // breaststroke: reach ahead -> sweep out -> pull in to the chest -> push ahead again
+                Quaternion ext = Quaternion.Euler(-168, 0, -8), wide = Quaternion.Euler(-115, 0, -72), tuck = Quaternion.Euler(-45, 0, -32);
+                Quaternion strokeL = c < 0.35f ? Quaternion.Slerp(ext, wide, Smooth(c / 0.35f))
+                                   : c < 0.6f ? Quaternion.Slerp(wide, tuck, Smooth((c - 0.35f) / 0.25f))
+                                   : Quaternion.Slerp(tuck, ext, Smooth((c - 0.6f) / 0.4f));
+                float tw = Mathf.Sin(swimPh * Mathf.PI * 2);
+                var treadL = Quaternion.Euler(-28 + tw * 14, tw * 22, -62 + Mathf.Cos(swimPh * Mathf.PI * 2) * 10);
+                var aL = Quaternion.Slerp(treadL, strokeL, stroke);
+                var e = aL.eulerAngles;
+                var aR = Quaternion.Euler(e.x, -e.y, -e.z);   // the right arm mirrors the left one
+                // legs: a flutter kick when swimming, cycling slowly when treading water
+                float kick = Mathf.Sin(swimPh * Mathf.PI * 2 * 2.2f);
+                var kL = Quaternion.Euler(14 + kick * 26, 0, -6); var kR = Quaternion.Euler(14 - kick * 26, 0, 6);
+                var tL = Quaternion.Euler(-22 + tw * 24, 0, -8); var tR = Quaternion.Euler(-22 - tw * 24, 0, 8);
+                armL = Quaternion.Slerp(armL, aL, swimK); armR = Quaternion.Slerp(armR, aR, swimK);
+                legL = Quaternion.Slerp(legL, Quaternion.Slerp(tL, kL, stroke), swimK);
+                legR = Quaternion.Slerp(legR, Quaternion.Slerp(tR, kR, stroke), swimK);
+                sx = Mathf.Lerp(sx, 1, swimK); sy = Mathf.Lerp(sy, 1, swimK);
+            }
             m.Body.localScale = new Vector3(sx * Mathf.Sign(bs.x) * Mathf.Abs(BaseScale(m).x), sy * BaseScale(m).y, sx * BaseScale(m).z);
             m.ArmL.localRotation = armL; m.ArmR.localRotation = armR;
             m.LegL.localRotation = legL; m.LegR.localRotation = legR;
@@ -283,6 +324,7 @@ namespace Chubrik
 
         bool winkL;
         const float FlipTime = 0.55f;
+        static float Smooth(float t) { t = Mathf.Clamp01(t); return t * t * (3 - 2 * t); }
 
         static Vector3 BaseScale(ChubrikModel m)
         {

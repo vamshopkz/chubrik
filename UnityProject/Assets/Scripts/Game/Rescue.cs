@@ -385,6 +385,7 @@ namespace Chubrik
         static bool Clear(Vector3 from, Vector3 to)
         {
             var d = to - from; d.y = 0;
+            if (Water.At(new Vector3(to.x, 0, to.z), out _, out _)) return false;   // 22.11 friends don't walk into the river
             return !Physics.SphereCast(from + Vector3.up * 0.8f, 0.35f, d.normalized, out _, d.magnitude + 0.4f, Layers.SolidMask, QueryTriggerInteraction.Ignore);
         }
 

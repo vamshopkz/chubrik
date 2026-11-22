@@ -56,6 +56,7 @@ namespace Chubrik
             Pickups.Create(null);
             Lobby.Build();
             Rescue.SpawnLobbyFriends();
+            CharStand.Build();   // 22.11: your other chubriks wait at the sides of the start
             Preview.Create();
             Hud.Create();
             Save.Changed += WardrobeUI.Changed;
