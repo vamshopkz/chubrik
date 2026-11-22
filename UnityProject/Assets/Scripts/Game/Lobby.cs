@@ -384,6 +384,10 @@ namespace Chubrik
             for (int i = 0; i < pts.Count; i++) river.Add(pts[i], Left(tan[i]), ws[i], ds[i]);
             for (int j = 1; j <= capB; j++) Cap(pts[L], tan[L], j / (float)capB, tan[L], ws[L], ds[L]);
             river.Seal();
+            // v0.31: in the snowy valley the river is frozen (ice you walk and slide on); from the snow gate on it flows
+            river.speed = 1.7f;
+            river.iceTo = 0;
+            for (int i = 1; i < river.Count; i++) if (river.c[i].x < 26.6f && river.c[i].z < 23.7f) { river.iceTo = i; break; }
             Water.Add(river);
             // the rim outline: along the left bank, round the end, back along the right bank (the tips are shared)
             int N = river.Count;
@@ -651,11 +655,12 @@ namespace Chubrik
                 v.Add(mid + c.n[i] * ww); v.Add(mid - c.n[i] * ww);
                 uv.Add(new Vector2(along / 4f, ww / 4f)); uv.Add(new Vector2(along / 4f, -ww / 4f));
             }
-            for (int i = 0; i < N - 1; i++)
+            for (int i = Mathf.Max(0, c.iceTo - 1); i < N - 1; i++)
             {
                 int l0 = i * 2, r0 = l0 + 1, l1 = l0 + 2, r1 = l0 + 3;
                 tr.Add(l0); tr.Add(l1); tr.Add(r0); tr.Add(r0); tr.Add(l1); tr.Add(r1);
             }
+            if (c.iceTo > 0) FrozenRiver(c);
             var wMesh = new Mesh { name = "RiverWater" };
             wMesh.SetVertices(v); wMesh.SetUVs(0, uv); wMesh.SetTriangles(tr, 0);
             wMesh.RecalculateNormals(); wMesh.RecalculateBounds();
@@ -667,19 +672,70 @@ namespace Chubrik
             // channel's own wide ends now — see PlanRiver)
             // stepping stones over the river by the hub (where they were): stone pillars standing on the riverbed,
             // now straight across from bank to bank (the old row ran half along the river and ended mid-stream)
+            // v0.31: one medium stone in the middle instead of the row of little ones
             var stoneM = M("9AA0A8", 0.3f);
             c.Locate(new Vector3(11.55f, 0, -1.45f), out int sseg, out float st, out _, out _, out _, out _);
-            var sc = Vector3.Lerp(c.c[sseg], c.c[sseg + 1], st); var sn = Vector3.Lerp(c.n[sseg], c.n[sseg + 1], st).normalized;
-            for (int k = 0; k < 5; k++)
+            var sc = Vector3.Lerp(c.c[sseg], c.c[sseg + 1], st);
             {
-                var p = sc + sn * ((k - 2) * 1.25f);
-                float bottom = c.Over(p, out float bot) ? bot - 0.25f : -0.05f, top = 0.18f;
-                Solid(PrimitiveType.Cylinder, new Vector3(p.x, (top + bottom) / 2, p.z), new Vector3(0.9f, (top - bottom) / 2, 0.9f), stoneM).name = "SteppingStone";
+                float bottom = c.Over(sc, out float bot) ? bot - 0.25f : -0.05f, top = 0.22f;
+                Solid(PrimitiveType.Cylinder, new Vector3(sc.x, (top + bottom) / 2, sc.z), new Vector3(1.6f, (top - bottom) / 2, 1.6f), stoneM).name = "SteppingStone";
+                S(root, new Vector3(sc.x, top, sc.z), new Vector3(1.55f, 0.3f, 1.55f), stoneM);
             }
+            StoneSpot = new Vector3(sc.x, top0, sc.z);
             // two wooden bridges where the main paths cross: spawn → the crystal gate, spawn → the jungle gate
             Bridge(new Vector3(14.75f, 0, 2.65f));
             Bridge(new Vector3(9.6f, 0, -15f));
         }
+
+        /// <summary>v0.31: the top of the one stone in the river (autotest).</summary>
+        public static Vector3 StoneSpot;
+        const float top0 = 0.22f;
+
+        /// <summary>v0.31: the river in the snowy valley is frozen: a light blue ice sheet just under the grass, from bank
+        /// to bank, solid and slippery (like World 4's ice), a few white cracks and snow along its edges.</summary>
+        static void FrozenRiver(Water.Channel c)
+        {
+            int n = c.iceTo + 1;
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
+            const float y = -0.06f;
+            float along = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (i > 0) along += Vector3.Distance(c.c[i], c.c[i - 1]);
+                var mid = new Vector3(c.c[i].x, y, c.c[i].z);
+                float w = c.w[i] + 0.05f;
+                v.Add(mid + c.n[i] * w); v.Add(mid - c.n[i] * w);
+                uv.Add(new Vector2(along / 3f, w / 3f)); uv.Add(new Vector2(along / 3f, -w / 3f));
+            }
+            for (int i = 0; i < n - 1; i++)
+            {
+                int l0 = i * 2, r0 = l0 + 1, l1 = l0 + 2, r1 = l0 + 3;
+                tr.Add(l0); tr.Add(l1); tr.Add(r0); tr.Add(r0); tr.Add(l1); tr.Add(r1);
+            }
+            var mesh = new Mesh { name = "RiverIce" };
+            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            var iceM = Mats.Tex(Tex.RiverIce(), new Color(0.82f, 0.94f, 1f), 0.95f);
+            var go = Prim.MeshGO(mesh, root, iceM, "RiverIce");
+            go.layer = Layers.World;
+            go.AddComponent<MeshCollider>().sharedMesh = mesh;
+            go.AddComponent<Ice>();
+            go.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            // white cracks and snow lumps by the banks
+            var white = M("F4FAFF", 0.2f);
+            var rr = new Rng(41);
+            for (int i = 2; i < n - 1; i += 3)
+            {
+                var p = new Vector3(c.c[i].x, y + 0.012f, c.c[i].z) + c.n[i] * rr.F(-c.w[i] * 0.6f, c.w[i] * 0.6f);
+                B(root, p, new Vector3(0.05f, 0.01f, rr.F(0.6f, 1.4f)), white, new Vector3(0, rr.F(0, 180), 0)).name = "IceCrack";
+                foreach (var sd in new[] { -1f, 1f })
+                    if (rr.Chance(0.6f)) S(root, new Vector3(c.c[i].x, y, c.c[i].z) + c.n[i] * sd * (c.w[i] - 0.15f), new Vector3(rr.F(0.5f, 0.9f), 0.22f, rr.F(0.5f, 0.9f)), white).name = "IceSnow";
+            }
+            IceSpot = new Vector3(c.c[n / 2].x, y, c.c[n / 2].z);
+        }
+
+        /// <summary>v0.31: a spot on the frozen river (autotest).</summary>
+        public static Vector3 IceSpot;
 
         /// <summary>A simple wooden bridge straight across the river with railings.</summary>
         static void Bridge(Vector3 near)
@@ -1628,7 +1684,9 @@ namespace Chubrik
     {
         public int need;
         public bool IsOpen { get; private set; }
-        Collider col; Transform panel; TMPro.TextMeshPro front, back; string title; int shown = -1; float openT = -1, hintT, width;
+        /// <summary>The invisible wall over the gate (autotest).</summary>
+        public Collider Barrier => barrier;
+        Collider col, barrier; Transform panel; TMPro.TextMeshPro front, back; string title; int shown = -1; float openT = -1, hintT, width;
 
         public static LobbyGate Spawn(Vector3 p, float yaw, float width, int need, string title, Transform parent)
         {
@@ -1640,6 +1698,12 @@ namespace Chubrik
             var bc = g.gameObject.AddComponent<BoxCollider>();
             bc.center = new Vector3(0, 2.75f, 0); bc.size = new Vector3(width, 5.5f, 0.6f);
             g.col = bc;
+            // v0.31: over a closed gate an invisible wall goes on up (like over the walls) — no climbing over it
+            var bar = new GameObject("GateBarrier") { layer = Layers.Barrier };
+            bar.transform.SetParent(g.transform, false);
+            var bb = bar.AddComponent<BoxCollider>();
+            bb.center = new Vector3(0, 5.5f + Lobby.BarrierH / 2, 0); bb.size = new Vector3(width + 1.2f, Lobby.BarrierH, 1.0f);
+            g.barrier = bb;
             g.panel = Parts.Node("Panel", g.transform, Vector3.zero);
             Parts.B(g.panel, new Vector3(0, 2.75f, 0), new Vector3(width, 5.5f, 0.3f), Parts.Glass("2E6BFF", 0.55f));
             Parts.B(g.panel, new Vector3(0, 5.45f, 0), new Vector3(width + 0.2f, 0.2f, 0.4f), Parts.G("7DB8FF", 1.4f));
@@ -1674,11 +1738,11 @@ namespace Chubrik
             front.text = back.text = txt;
             if (n >= need && !IsOpen)
             {
-                IsOpen = true; col.enabled = false;
+                IsOpen = true; col.enabled = false; barrier.enabled = false;
                 if (instant) panel.gameObject.SetActive(false);
                 else { openT = 0; AudioFx.Play("portal"); Effects.Emit("magic", transform.position + Vector3.up * 3, 60, 1.2f, Vector3.up * 2); Hud.Toast($"Открылся путь: {title}!", UIKit.Lime); }
             }
-            else if (n < need && IsOpen) { IsOpen = false; openT = -1; col.enabled = true; panel.gameObject.SetActive(true); panel.localPosition = Vector3.zero; }   // also stops a running open animation
+            else if (n < need && IsOpen) { IsOpen = false; openT = -1; col.enabled = true; barrier.enabled = true; panel.gameObject.SetActive(true); panel.localPosition = Vector3.zero; }   // also stops a running open animation
         }
 
         void Update()

@@ -10,8 +10,7 @@ namespace Chubrik
     /// </summary>
     public static class Rescue
     {
-        static readonly string[] Names = { "Пончик", "Бублик", "Зефирка", "Кексик", "Пухлик", "Шнурок", "Чипсик", "Тыковка",
-                                           "Вафелька", "Ириска", "Мармелад", "Плюшка", "Сырник", "Леденец", "Пряник", "Карамелька", "Ватрушка", "Крендель" };
+        // v0.31: the names are in Friends.cs
         public static readonly List<Cage> Cages = new List<Cage>();
         static readonly List<GameObject> lobbyFriends = new List<GameObject>();
         /// <summary>22.11 soft restart: cages, friends and keys come from the new profile.</summary>
@@ -26,10 +25,7 @@ namespace Chubrik
             if (id == "vipArtemiy") return "Артемий";
             if (id == "vipArtem") return "Артём";
             if (id == "vipAli") return "Али";
-            int c = id.IndexOf('c');
-            if (id.Length > 1 && id[0] == 'w' && c > 1 && int.TryParse(id.Substring(1, c - 1), out var w) && int.TryParse(id.Substring(c + 1), out var n))
-                return Names[((w - 2) * 8 + n) % Names.Length];
-            return Names[Mathf.Abs(id.GetHashCode()) % Names.Length];
+            return Friends.NameOf(id);   // v0.31: normal names
         }
 
         /// <summary>A random but stable look for the friend of cage <paramref name="id"/>.</summary>
@@ -43,21 +39,7 @@ namespace Chubrik
                 else { v["suit"] = Catalog.RichArtemiy; v["aura"] = "aura_p7"; v["pet"] = "pet_p5"; v["color"] = "color_7"; v["emote"] = "emote_5"; }   // 17.11 the coolest outfit
                 return v;
             }
-            var r = new Rng(id.GetHashCode());
-            var l = Look.Default();
-            void Pick(string dept, float chance)
-            {
-                if (!r.Chance(chance)) return;
-                var d = Catalog.Dept(dept);
-                // 21.11: friends keep ordinary heads and skin patterns (no gold / neon heads, no tinted patterns)
-                var regular = d.items.FindAll(i => !i.Premium && !i.tokens && !i.Reward && !(i.Variant && (dept == "head" || dept == "skin")));
-                l[dept] = regular[r.I(regular.Count)].id;
-            }
-            Pick("head", 1); Pick("hair", 0.9f); Pick("ears", 0.9f); Pick("hat", 0.5f); Pick("eyes", 0.35f);
-            Pick("color", 1); Pick("skin", 0.3f); Pick("top", 0.6f); Pick("neck", 0.3f); Pick("tail", 0.35f);
-            Pick("pants", 0.6f); Pick("shoes", 0.7f); Pick("hands", 0.3f); Pick("back", 0.2f);
-            l["emote"] = "emote_" + r.I(8);
-            return l;
+            return Friends.LookOf(id);   // v0.31: a whole outfit that fits (footballer, pirate, wizard…)
         }
 
         /// <summary>18.11: keys found in this visit (each key opens its own cage). Gone in the lobby.</summary>
@@ -365,8 +347,20 @@ namespace Chubrik
         float wait;
         Rng rng;
 
+        public string Id { get; private set; }
+        float listenT;
+        /// <summary>v0.31: turns to the one who talks to him and stands still for a while.</summary>
+        public void Listen(Vector3 from)
+        {
+            var d = from - transform.position; d.y = 0;
+            if (d.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(d);
+            listenT = 6f; target = transform.position;
+            if (anim) { anim.speed01 = 0; if (anim.emoting) anim.StopEmote(); }
+        }
+
         public void Init(ChubrikModel m, string id)
         {
+            Id = id;
             model = m;
             anim = gameObject.AddComponent<ChubrikAnim>();
             anim.model = m;
@@ -393,6 +387,7 @@ namespace Chubrik
 
         void Update()
         {
+            if (listenT > 0) { listenT -= Time.deltaTime; anim.speed01 = 0; return; }
             var to = target - transform.position; to.y = 0;
             if (to.magnitude < 0.2f)
             {

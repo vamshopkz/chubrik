@@ -37,6 +37,7 @@ namespace Chubrik
                 case "coin": return new Spec { tex = "disc", life = 1f, size = 0.14f, grav = 1.6f, speed = 2.2f, col = Parts.Hex("FFC83A") };
                 case "comet": return new Spec { add = true, life = 0.9f, size = 0.3f, grav = -0.1f, speed = 0.8f, col = Parts.Hex("9FD0FF") };
                 case "rainbow": return new Spec { add = true, life = 1.1f, size = 0.26f, grav = -0.1f, speed = 0.6f, rainbow = true };
+                case "raindrop": return new Spec { tex = "disc", life = 1.6f, size = 0.16f, grav = 1.4f, speed = 5f, rainbow = true };   // v0.31 rainbow drops
                 case "heart": return new Spec { tex = "heart", life = 1.6f, size = 0.22f, grav = -0.35f, speed = 0.5f, col = Parts.Hex("FF6FA8") };
                 case "smoke": return new Spec { life = 1.6f, size = 0.7f, grav = -0.15f, speed = 0.8f, col = new Color(0.75f, 0.75f, 0.8f, 0.7f), grow = true };
                 case "confetti": return new Spec { tex = "square", life = 2.6f, size = 0.12f, grav = 0.8f, speed = 6f, rainbow = true };

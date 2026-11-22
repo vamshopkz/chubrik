@@ -41,6 +41,7 @@ namespace Chubrik
         /// <summary>Hidden token: picked up once forever (id saved in the profile).</summary>
         public void Token(string id, Vector3 pos)
         {
+            Chests.ByToken(id, pos);   // v0.31: sticker chests by the hidden tokens too
             if (Save.P.found.Contains(id)) return;
             Parts.Layer = Layers.Pickup;
             var go = new GameObject("Token " + id) { layer = Layers.Pickup };

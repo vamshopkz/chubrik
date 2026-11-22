@@ -17,6 +17,8 @@ namespace Chubrik
         public const long FlyPrice = 50_000, CoinsPrice = 100_000, AdminPrice = 30_000_000_000L;
         public static bool Flying => Save.P.cheatFly && Save.P.flyOn;
         public static bool EndlessCoins => Save.P.cheatCoins && Save.P.coinsOn;
+        /// <summary>v0.31: the admin panel stands in the corner while playing (bought and switched on).</summary>
+        public static bool AdminOn => Save.P.cheatAdmin && Save.P.adminOn;
 
         public static void Open()
         {
@@ -28,10 +30,9 @@ namespace Chubrik
                     () => { P.cheatFly = true; P.flyOn = true; }, on => P.flyOn = on, UIKit.Cyan);
                 Row(w, "Бесконечные монеты", "Покупки больше не тратят монеты", CoinsPrice, P.cheatCoins, P.coinsOn,
                     () => { P.cheatCoins = true; P.coinsOn = true; }, on => P.coinsOn = on, UIKit.Gold);
-                if (!P.cheatAdmin)
-                    w.Row("Админ-панель", "Копируй любую вещь в игре и ставь её куда хочешь", UIKit.Num(AdminPrice) + " МОНЕТ", UIKit.Red, () => Buy(AdminPrice, () => P.cheatAdmin = true), P.coins >= AdminPrice || EndlessCoins, UIKit.Red);
-                else
-                    w.Row("Админ-панель", $"Поставлено вещей: {P.placed.Count}", "ОТКРЫТЬ", UIKit.Red, () => { Window.Close(); AdminPanel.Open(); }, true, UIKit.Red);
+                // v0.31: the admin panel is shown only when it is bought — and it is switched on / off here
+                Row(w, "Админ-панель", P.cheatAdmin ? $"В левом верхнем углу · поставлено вещей: {P.placed.Count}" : "Копируй любую вещь в игре и ставь её куда хочешь", AdminPrice, P.cheatAdmin, P.adminOn,
+                    () => { P.cheatAdmin = true; P.adminOn = true; }, on => { P.adminOn = on; if (!on) AdminPanel.Close(); }, UIKit.Red);
                 w.Footer.text = "Читы покупаются один раз и включаются / выключаются здесь";
             }, 1000, 640);
         }
@@ -44,7 +45,7 @@ namespace Chubrik
 
         public static void BuyFly() => Buy(FlyPrice, () => { Save.P.cheatFly = true; Save.P.flyOn = true; });
         public static void BuyCoins() => Buy(CoinsPrice, () => { Save.P.cheatCoins = true; Save.P.coinsOn = true; });
-        public static void BuyAdmin() => Buy(AdminPrice, () => Save.P.cheatAdmin = true);
+        public static void BuyAdmin() => Buy(AdminPrice, () => { Save.P.cheatAdmin = true; Save.P.adminOn = true; });
 
         static void Buy(long price, System.Action give)
         {
@@ -62,6 +63,15 @@ namespace Chubrik
     {
         static GameObject root;
         public static bool IsOpen => root != null;
+        public static bool Visible => root != null && root.activeSelf;
+        /// <summary>Hidden while a menu is open (and its buttons for the picked copy too).</summary>
+        public static void Show(bool on)
+        {
+            if (root == null || root.activeSelf == on) return;
+            root.SetActive(on);
+            if (!on && ctlPanel) ctlPanel.SetActive(false);
+            if (on) Refresh();
+        }
         public enum Mode { None, Copy, Place }
         public static Mode Now { get; private set; }
         public static GameObject Template;          // the copied thing (hidden)
@@ -71,38 +81,48 @@ namespace Chubrik
         static RectTransform controls;
         static GameObject marker;
 
+        /// <summary>v0.31: the panel is small (like the friend chat, ≈2×2 cm) in the top left corner — the coins, hearts,
+        /// tokens and keys move to its right. The move / size buttons show up on the right while a copy is picked.</summary>
+        public const float W = RoomChat.W, H = RoomChat.H;
+        static GameObject ctlPanel;
+
         public static void Open()
         {
             Close();
             var safe = UIRoot.Safe();
+            float top = RoomChat.Visible ? RoomChat.H + 22 : 12;
             var panel = UIKit.Img(UIRoot.HudLayer, UIKit.Panel, new Color(1, 1, 1, 0.95f), "AdminPanel", true);
-            UIKit.Place(panel.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-12 - safe.z, 0), new Vector2(430, 780));
+            UIKit.Place(panel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12 + safe.x, -top - safe.w), new Vector2(W, H));
             root = panel.gameObject;
             var P = panel.transform;
-            var t = UIKit.Txt(P, "АДМИН-ПАНЕЛЬ", 32, UIKit.Red, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(t.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -10), new Vector2(330, 50));
-            var x = UIKit.Button(P, "X", UIKit.Red, Close, 28, "Close");
-            UIKit.Place(x.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-10, -8), new Vector2(64, 56));
-            var copy = UIKit.Button(P, "СКОПИРОВАТЬ ВЕЩЬ", UIKit.Blue, StartCopy, 24, "CopyThing");
-            UIKit.Place(copy.Bg.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -72), new Vector2(400, 70));
-            var put = UIKit.Button(P, "ПОСТАВИТЬ ВЕЩЬ", UIKit.Green, StartPlace, 24, "PlaceThing");
-            UIKit.Place(put.Bg.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -150), new Vector2(400, 70));
-            info = UIKit.Txt(P, "", 21, Color.white, TextAlignmentOptions.TopLeft, false);
-            UIKit.Place(info.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -228), new Vector2(400, 80));
-            info.enableAutoSizing = true; info.fontSizeMin = 14; info.fontSizeMax = 21;
-            controls = UIKit.Rect("Controls", P);
-            UIKit.Place(controls, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 12), new Vector2(410, 460));
+            var t = UIKit.Txt(P, "АДМИН-ПАНЕЛЬ", 22, UIKit.Red, TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(t.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -6), new Vector2(220, 36));
+            var x = UIKit.Button(P, "X", UIKit.Red, () => { Save.P.adminOn = false; Save.Write(); Close(); Hud.Toast("Админ-панель выключена. Включить: Настройки → Читы", UIKit.Muted); }, 22, "Close");
+            UIKit.Place(x.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-6, -6), new Vector2(48, 40));
+            var copy = UIKit.Button(P, "СКОПИРОВАТЬ ВЕЩЬ", UIKit.Blue, StartCopy, 18, "CopyThing");
+            UIKit.Place(copy.Bg.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -52), new Vector2(W - 20, 56));
+            var put = UIKit.Button(P, "ПОСТАВИТЬ ВЕЩЬ", UIKit.Green, StartPlace, 18, "PlaceThing");
+            UIKit.Place(put.Bg.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -114), new Vector2(W - 20, 56));
+            info = UIKit.Txt(P, "", 17, Color.white, TextAlignmentOptions.TopLeft, false);
+            UIKit.Place(info.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -178), new Vector2(W - 24, H - 186));
+            info.enableAutoSizing = true; info.fontSizeMin = 12; info.fontSizeMax = 17;
+            // the move / size buttons: on the right side, only while a copy is picked
+            var cp = UIKit.Img(UIRoot.HudLayer, UIKit.Panel, new Color(1, 1, 1, 0.92f), "AdminControls", true);
+            UIKit.Place(cp.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-12 - safe.z, 60), new Vector2(430, 484));
+            ctlPanel = cp.gameObject;
+            controls = UIKit.Rect("Controls", cp.transform);
+            UIKit.Place(controls, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(410, 460));
             BuildControls();
             root.AddComponent<Picker>();
             Now = Mode.None;
             Refresh();
-            Menus.Unlock();
         }
 
         public static void Close()
         {
             if (root) Object.Destroy(root);
-            root = null; Now = Mode.None; Select(null);
+            if (ctlPanel) Object.Destroy(ctlPanel);
+            root = null; ctlPanel = null; Now = Mode.None; Select(null);
         }
 
         static void BuildControls()
@@ -132,35 +152,64 @@ namespace Chubrik
         static void Refresh()
         {
             if (!info) return;
-            controls.gameObject.SetActive(Now == Mode.Place && Selected != null);
+            if (ctlPanel) ctlPanel.SetActive(Now == Mode.Place && Selected != null);
             string have = Template ? $"Скопировано: «{Nice(Template.name)}»" : "Ещё ничего не скопировано";
-            info.text = Now == Mode.Copy ? "Нажми на любую вещь в игре — она скопируется" :
-                        Now == Mode.Place ? (Selected != null ? "Двигай, растягивай, поворачивай. Нажми на другую поставленную вещь — выберешь её" : "Нажми на поставленную вещь — её можно двигать или убрать") + "\n" + have :
+            info.text = Now == Mode.Copy ? "Нажми на любую вещь: стену, гриб, лавочку, дерево…" :
+                        Now == Mode.Place ? (Selected != null ? "Справа: двигай, меняй размер, поворачивай" : "Нажми на поставленную вещь") + "\n" + have :
                         have;
         }
 
         static string Nice(string n) => n.Replace("(Clone)", "").Replace("Placed ", "").Trim();
 
-        public static void StartCopy() { Now = Mode.Copy; Select(null); AudioFx.Play("click"); Refresh(); }
+        public static void StartCopy() { Now = Mode.Copy; Select(null); AudioFx.Play("click"); Refresh(); Menus.Unlock(); }
 
         public static void StartPlace()
         {
             Now = Mode.Place;
+            Menus.Unlock();
             if (Template == null) { Hud.Toast("Сначала скопируй вещь", UIKit.Orange); Refresh(); return; }
             PlaceNew();
         }
 
         // ---------------- picking things with a tap ----------------
 
-        /// <summary>The thing under a tap: the hit collider climbed up to a sensible whole (not the whole world).</summary>
+        /// <summary>The thing under a tap. v0.31: what you SEE is picked — when the tap hits an invisible collider (a wall's
+        /// box, a barrier) the smallest visible thing round the hit point is taken, then climbed up to a sensible whole.</summary>
         public static GameObject ThingAt(Vector2 screen)
         {
             var cam = PlayerCtl.I ? PlayerCtl.I.Cam : Camera.main;
             if (cam == null) return null;
             var ray = cam.ScreenPointToRay(screen);
-            int mask = ~((1 << Layers.Player) | (1 << Layers.Preview) | (1 << Layers.Barrier) | (1 << 5));
-            if (!Physics.Raycast(ray, out var hit, 150, mask, QueryTriggerInteraction.Ignore)) return null;
-            return Whole(hit.collider.transform);
+            int mask = ~((1 << Layers.Player) | (1 << Layers.Preview) | (1 << 5));
+            var hits = Physics.RaycastAll(ray, 200, mask, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (p, q) => p.distance.CompareTo(q.distance));
+            foreach (var hit in hits)
+            {
+                var t = hit.collider.transform;
+                if (t.GetComponentInParent<PlayerCtl>() != null) continue;
+                bool seen = false;
+                foreach (var r in t.GetComponentsInChildren<Renderer>()) if (r.enabled && r.gameObject.activeInHierarchy) { seen = true; break; }
+                if (seen && t.parent != null) return Whole(t);
+                var vis = VisibleAt(hit.point, ray.direction);
+                if (vis != null) return Whole(vis);
+            }
+            return null;
+        }
+
+        /// <summary>The smallest visible mesh whose box holds the point (a wall's own mesh under its separate collider).</summary>
+        static Transform VisibleAt(Vector3 p, Vector3 dir)
+        {
+            Renderer best = null; float bestV = float.MaxValue;
+            foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || r.gameObject.layer == Layers.Player || r.gameObject.layer == Layers.Preview || r.transform.parent == null) continue;
+                var b = r.bounds; b.Expand(0.25f);
+                if (!b.Contains(p) && !b.Contains(p + dir * 0.3f)) continue;
+                if (r.GetComponentInParent<PlayerCtl>() != null || r.GetComponentInParent<TMP_Text>() != null) continue;
+                float v = b.size.x * b.size.y * b.size.z;
+                if (v < bestV) { bestV = v; best = r; }
+            }
+            return best ? best.transform : null;
         }
 
         static Transform TopRoot(Transform t) { while (t.parent != null) t = t.parent; return t; }
@@ -231,6 +280,10 @@ namespace Chubrik
             }
             foreach (var c in go.GetComponentsInChildren<Collider>(true)) if (c.isTrigger) Object.DestroyImmediate(c);
             foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true)) Object.DestroyImmediate(rb);
+            // v0.31: a copy of a thing whose collider lived apart (walls, the lobby's boxes) gets its own: you can stand on it
+            if (go.GetComponentInChildren<Collider>(true) == null)
+                foreach (var mf in go.GetComponentsInChildren<MeshFilter>(true))
+                    if (mf.sharedMesh != null) mf.gameObject.AddComponent<BoxCollider>();
             return go;
         }
 

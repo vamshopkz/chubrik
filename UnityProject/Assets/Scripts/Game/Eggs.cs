@@ -23,7 +23,7 @@ namespace Chubrik
             "Лобби: узкая щель между красным магазином и синим",
             "Лобби: крыша премиум-киоска — двойной прыжок и зацепись за край",
             "Лобби: дальний угол водяной пещеры",
-            "Закулисье: тупик лабиринта (вход — двойной прыжок у Пончика)",
+            "Закулисье: тупик лабиринта (вход — двойной прыжок над Мишей-футболистом)",
             "Закулисье: второй тупик лабиринта, ещё дальше",
             "Закулисье: третий тупик, самый дальний от входа",
             "Мир 2: тайная роща на боковой тропинке, наверху",
@@ -73,6 +73,7 @@ namespace Chubrik
             else Bad.Add(id + " " + pos);
             if (Physics.CheckSphere(pos, 0.15f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) Bad.Add(id + " inside something " + pos);
             Pickups.I.Egg(id, pos);
+            Chests.ByEgg(id, pos);   // v0.31: a sticker chest by every golden egg
         }
 
         /// <summary>Called when an egg is picked up.</summary>

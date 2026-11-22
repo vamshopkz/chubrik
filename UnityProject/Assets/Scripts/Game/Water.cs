@@ -6,7 +6,7 @@ namespace Chubrik
     /// <summary>
     /// 22.11 water you can swim in («like in Super Bear Adventure»): a registry of water volumes. A world adds its rivers,
     /// lakes and pools here (a channel along a centre line, or a plain box); the player asks <see cref="At"/> whether he is
-    /// in water and swims (see the PlayerCtl part below). There is no current anywhere: water never pushes you.
+    /// in water and swims (see the PlayerCtl part below). v0.31: a river channel has a current (<see cref="FlowAt"/>).
     /// Volumes belong to a world's root — a destroyed or hidden root switches its water off by itself.
     /// </summary>
     public static class Water
@@ -19,6 +19,8 @@ namespace Chubrik
             /// <summary>The footprint seen from above (only x and z are used).</summary>
             public Rect area;
             public bool Live => owner != null && owner.gameObject.activeInHierarchy;
+            /// <summary>v0.31: the current here (m/s, world direction); zero for still water.</summary>
+            public virtual Vector3 Flow(Vector3 p) => Vector3.zero;
             /// <summary>Is this point (x, z) over the water? <paramref name="bottom"/> = the floor under it.</summary>
             public abstract bool Over(Vector3 p, out float bottom);
         }
@@ -39,6 +41,21 @@ namespace Chubrik
             public readonly List<Vector3> c = new List<Vector3>(), n = new List<Vector3>();
             public readonly List<float> w = new List<float>(), d = new List<float>();
             public int Count => c.Count;
+            /// <summary>v0.31: samples before this one are frozen (ice you walk on, no water).</summary>
+            public int iceTo;
+            /// <summary>v0.31: how fast the river flows along its line (from the first sample to the last), m/s.</summary>
+            public float speed;
+
+            public override Vector3 Flow(Vector3 p)
+            {
+                if (speed <= 0 || !area.Contains(new Vector2(p.x, p.z))) return Vector3.zero;
+                Locate(p, out int seg, out _, out float dist, out _, out float hw, out _);
+                if (dist >= hw || seg < iceTo) return Vector3.zero;
+                var d = c[Mathf.Min(seg + 1, c.Count - 1)] - c[seg]; d.y = 0;
+                float k = 1 - Mathf.Pow(dist / Mathf.Max(0.1f, hw), 2);   // fastest in the middle, slow by the banks
+                // the wide pool at the end is calm
+                return d.normalized * speed * Mathf.Clamp01(k + 0.2f) * Mathf.Clamp01(hw < 3.2f ? 1 : 3.2f / hw);
+            }
 
             public void Add(Vector3 centre, Vector3 left, float halfW, float depth) { c.Add(centre); n.Add(left); w.Add(halfW); d.Add(depth); }
 
@@ -95,7 +112,7 @@ namespace Chubrik
                 bottom = 0;
                 if (!area.Contains(new Vector2(p.x, p.z))) return false;
                 Locate(p, out int seg, out _, out float dist, out _, out float hw, out float dp);
-                if (dist >= hw || hw < 0.05f) return false;
+                if (dist >= hw || hw < 0.05f || seg < iceTo) return false;
                 float k = dist / hw;
                 bottom = c[seg].y - dp * Mathf.Sqrt(Mathf.Max(0, 1 - k * k));
                 return true;
@@ -131,6 +148,14 @@ namespace Chubrik
                 return true;
             }
             return false;
+        }
+
+        /// <summary>v0.31: the current at this point (the river carries a swimmer along it).</summary>
+        public static Vector3 FlowAt(Vector3 p)
+        {
+            foreach (var v in vols)
+                if (v.owner != null && v.Live && v.Over(p, out _)) return v.Flow(p);
+            return Vector3.zero;
         }
 
         // ---------------- looks ----------------
@@ -384,7 +409,8 @@ namespace Chubrik
             if (wish.sqrMagnitude > 1) wish.Normalize();
             float speed = RunSpeed * 0.6f * (swim == 2 ? 0.9f : 1f) * Mathf.Lerp(1f, 1.25f, Mathf.InverseLerp(1f, 1.8f, s));
             var hv = new Vector3(vel.x, 0, vel.z);
-            hv = Vector3.MoveTowards(hv, wish * speed, (wish.sqrMagnitude > 0.01f ? 9f : 6f) * dt);   // water drag; no current, nothing pushes you
+            var cur = Water.FlowAt(pos);   // v0.31: the river carries you the way it flows (you can still swim against it)
+            hv = Vector3.MoveTowards(hv, wish * speed + cur, (wish.sqrMagnitude > 0.01f ? 9f : 6f) * dt);
             if (wish.sqrMagnitude > 0.01f)
             {
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(wish), dt * 8);

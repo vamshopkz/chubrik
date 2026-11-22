@@ -94,7 +94,7 @@ namespace Chubrik
             UIKit.Place(menuBtn.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-16 - safe.z, -14 - safe.w), new Vector2(150, 66));
 
             toast = T("", 32, Color.white, TextAlignmentOptions.Center, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -238 - safe.w), new Vector2(1300, 50));
-            hint = T(Touch ? "" : "WASD — бег · ПРОБЕЛ — прыжок (держи с крыльями — полёт) · F — удар · Q — эмоция · E — войти · мышь — камера",
+            hint = T(Touch ? "" : "WASD — бег · ПРОБЕЛ — прыжок (держи с крыльями — полёт) · F — удар · Q — стикеры · E — войти · мышь — камера",
                 20, new Color(1, 1, 1, 0.85f), TextAlignmentOptions.Center, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 10 + safe.y), new Vector2(1500, 30));
 
             enterBtn = UIKit.Button(root, "ВОЙТИ", UIKit.Orange, () => Zones.Interact(), 30, "Enter");
@@ -129,8 +129,9 @@ namespace Chubrik
             voiceBtn.gameObject.SetActive(false);
             voiceTxt = T("", 26, UIKit.Violet, TextAlignmentOptions.Right, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-20 - safe.z, -20), new Vector2(420, 40));
             UIKit.Place(hitBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-370 - safe.z, 120 + safe.y), new Vector2(130, 130));
-            emoteBtn = UIKit.Round(touchRoot, "ЭМОЦИЯ", UIKit.Violet, () => PlayerCtl.I.Emote(), 120, 22);
-            UIKit.Place(emoteBtn.Bg.rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-300 - safe.z, 300 + safe.y), new Vector2(120, 120));
+            // v0.31: stickers instead of the emotion button — «СТИКЕРЫ» on top, next to «МЕНЮ»
+            emoteBtn = UIKit.Button(root, "СТИКЕРЫ", UIKit.Pink, Stickers.Open, 24, "Stickers");
+            UIKit.Place(emoteBtn.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-178 - safe.z, -14 - safe.w), new Vector2(190, 66));
             touchRoot.gameObject.SetActive(Touch);
             // the enter button must stay above the invisible camera/joystick areas, or they swallow the tap on phones
             enterBtn.transform.SetAsLastSibling();
@@ -220,7 +221,14 @@ namespace Chubrik
             bool menus = Menus.AnyOpen;
             bool room = Online.I != null && Online.I.RoomPeer != null;
             // v0.27: the chat sits in the top left corner — coins, hearts and the texts move to its right
-            float want = RoomChat.Visible ? RoomChat.W + 14 : 0;
+            if (PlayerCtl.I != null && PlayerCtl.I.GetComponent<Stickers.NickTag>() == null)
+                Stickers.Tag(PlayerCtl.I.gameObject, () => Online.Nick, () => 2.15f * PlayerCtl.I.Model.SizeScale);   // v0.31 our nick over our head
+            // v0.31: the bought admin panel stands in the corner while playing (hidden in menus)
+            bool adminWant = Cheats.AdminOn && PlayerCtl.I != null && !PlayerCtl.I.MenuOrbit && !Menus.MainOpen;
+            if (adminWant && !AdminPanel.IsOpen) AdminPanel.Open();
+            else if (!Cheats.AdminOn && AdminPanel.IsOpen) AdminPanel.Close();
+            AdminPanel.Show(!menus && adminWant);
+            float want = RoomChat.Visible || AdminPanel.Visible ? RoomChat.W + 14 : 0;   // v0.31: the admin panel sits there too
             if (!Mathf.Approximately(want, chatShift))
             {
                 float d = want - chatShift; chatShift = want;

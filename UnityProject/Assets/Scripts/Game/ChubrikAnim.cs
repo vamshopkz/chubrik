@@ -42,6 +42,12 @@ namespace Chubrik
         float flipT = -1;
         public bool Attacking => attackT >= 0 && attackT < 0.35f;
 
+        /// <summary>v0.31: a sticker's body move (0..16, see Stickers.Move) for <see cref="StickerLen"/> seconds.</summary>
+        public int stickerPose = -1;
+        float stickerT;
+        public float StickerLen = 1.8f;
+        public void StickerPose(int pose, float len = 1.8f) { stickerPose = pose; stickerT = 0; StickerLen = len; }
+        static Quaternion Q(float x, float y, float z) => Quaternion.Euler(x, y, z);
         public void PlayEmote() { emoting = true; emoteT = 0; }
         public void StopEmote() { emoting = false; if (coin) Destroy(coin); }
 
@@ -306,6 +312,37 @@ namespace Chubrik
                 legL = Quaternion.Slerp(legL, Quaternion.Slerp(tL, kL, stroke), swimK);
                 legR = Quaternion.Slerp(legR, Quaternion.Slerp(tR, kR, stroke), swimK);
                 sx = Mathf.Lerp(sx, 1, swimK); sy = Mathf.Lerp(sy, 1, swimK);
+            }
+            // v0.31: a sticker's own body move — arms, legs and head (on top of what the chubrik is doing)
+            if (stickerPose >= 0)
+            {
+                stickerT += Time.deltaTime;
+                float u = Mathf.Clamp01(stickerT / StickerLen), env = Mathf.Clamp01(Mathf.Min(u, 1 - u) * 6), w = stickerT * 9;
+                Quaternion aL = armL, aR = armR, lL = legL, lR = legR; Quaternion? hd = null;
+                switch (stickerPose)
+                {
+                    case 0: aL = Q(0, 0, -165); aR = Q(0, 0, 165); break;                                                    // hop: arms up
+                    case 1: aL = Q(0, 0, -90); aR = Q(0, 0, 90); break;                                                      // spin: arms out
+                    case 2: aR = Q(0, 0, 150 + Mathf.Sin(w * 1.6f) * 25); hd = Q(0, 0, Mathf.Sin(w) * 8); break;              // wave hello
+                    case 3: aR = Q(-70, 0, 40); hd = Q(Mathf.Max(0, Mathf.Sin(w * 1.2f)) * 22, 0, 0); break;                   // nod, hand on the heart
+                    case 4: hd = Q(0, Mathf.Sin(w * 2.6f) * 35, 0); aL = Q(0, 0, -35); aR = Q(0, 0, 35); break;              // no-no-no
+                    case 5: aL = Q(-20, 0, -8); aR = Q(-20, 0, 8); hd = Q(16, 0, 0); break;                                    // tired, squashed
+                    case 6: aL = Q(0, 0, -120); aR = Q(0, 0, 120); hd = Q(-15, 0, 0); break;                                   // wow, arms wide
+                    case 7: aL = Q(-80, 40, -30); aR = Q(-80, -40, 30); lL = Q(0, 0, -8 + Mathf.Sin(w * 7) * 4); break;       // brr, hugging himself
+                    case 8: aL = Q(-60, 0, -20); aR = Q(-60, 0, 20); hd = Q(-25 + Mathf.Sin(w * 3) * 6, 0, 0); break;          // laughing, hands on the tummy
+                    case 9: aL = Q(0, 0, -170); aR = Q(0, 0, 170); lL = Q(-40, 0, -10); lR = Q(-40, 0, 10); break;             // twirl, a ballerina
+                    case 10: { float b = Mathf.Sin(w * 1.5f); aL = Q(0, 0, -100 - b * 60); aR = Q(0, 0, 100 + b * 60); break; } // cheering, arm pumps
+                    case 11: aR = Q(0, 0, 160); hd = Q(0, 0, 22); break;                                                       // listening, head tilted
+                    case 12: { float f = Mathf.Sin(w * 2.2f); aL = Q(0, 0, -80 - f * 40); aR = Q(0, 0, 80 + f * 40); break; }   // floating: flapping arms
+                    case 13: aL = Q(0, 0, -60 + Mathf.Sin(w) * 40); aR = Q(0, 0, 60 + Mathf.Cos(w) * 40); hd = Q(Mathf.Sin(w) * 12, 0, Mathf.Cos(w) * 12); break;   // dizzy
+                    case 14: aR = Q(-60, 0, -30); aL = Q(0, 0, -40); break;                                                    // a bow, hand across
+                    case 15: { float r = Mathf.Sin(w * 2.4f); aL = Q(r * 60, 0, -14); aR = Q(-r * 60, 0, 14); lL = Q(-r * 40, 0, -4); lR = Q(r * 40, 0, 4); break; }   // running on the spot
+                    default: { float r = Mathf.Sin(w * 0.9f); aL = Q(0, 0, -150 + r * 20); aR = Q(0, 0, 150 + r * 20); hd = Q(0, 0, r * 10); break; }  // swaying, hands up
+                }
+                armL = Quaternion.Slerp(armL, aL, env); armR = Quaternion.Slerp(armR, aR, env);
+                legL = Quaternion.Slerp(legL, lL, env); legR = Quaternion.Slerp(legR, lR, env);
+                if (hd.HasValue) m.Head.localRotation = Quaternion.Slerp(m.Head.localRotation, hd.Value, env);
+                if (stickerT >= StickerLen) stickerPose = -1;
             }
             m.Body.localScale = new Vector3(sx * Mathf.Sign(bs.x) * Mathf.Abs(BaseScale(m).x), sy * BaseScale(m).y, sx * BaseScale(m).z);
             m.ArmL.localRotation = armL; m.ArmR.localRotation = armR;

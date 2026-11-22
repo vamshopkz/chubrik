@@ -222,9 +222,11 @@ namespace Chubrik
             yield return Wait(0.3f);
             pl.QueueJump();
             yield return Wait(0.12f);
+            pl.HoldAttack = true;   // v0.31: B held after two jumps = straight down + the super bounce
             pl.Attack();
-            bool downBig = pl.PlungeBig;
-            yield return Wait(0.05f);
+            bool downBig = false;
+            for (float tt = 0; tt < 0.4f && !downBig; tt += Time.deltaTime) { downBig = pl.PlungeBig; yield return null; }
+            pl.HoldAttack = false;
             yield return Shot("53_dive");
             for (float tt = 0; tt < 2f && pl.SuperBounces == sb0; tt += Time.deltaTime) yield return null;
             float hBounce = 0;
@@ -232,6 +234,25 @@ namespace Chubrik
             yield return Shot("54_belly");
             Check("A + A + B: straight down, then off the ground higher than a double jump", downBig && pl.SuperBounces == sb0 + 1 && hBounce > hDouble + 0.5f, $"double {hDouble:0.0} m, bounce {hBounce:0.0} m");
             yield return Wait(1f);
+            // v0.31: A + A + B tapped — no hop: down and forward belly first, then lies until A
+            pl.Teleport(Lobby.Spawn, diveYaw);
+            yield return Wait(0.6f);
+            pl.QueueJump(); yield return Wait(0.3f); pl.QueueJump(); yield return Wait(0.15f);
+            int fl0A = pl.Flops; float fy0A = pl.transform.position.y; var fp0A = pl.transform.position;
+            pl.Attack();
+            yield return Wait(0.05f);
+            float fyMaxA = pl.transform.position.y;
+            for (float tt = 0; tt < 0.3f; tt += Time.deltaTime) { fyMaxA = Mathf.Max(fyMaxA, pl.transform.position.y); yield return null; }
+            bool bellyAirA = pl.Diving;
+            yield return Shot("133_aab_dive");
+            for (float tt = 0; tt < 2f && !pl.Lying; tt += Time.deltaTime) yield return null;
+            var fp1A = pl.transform.position;
+            Check("A + A + B: no hop — flies down and forward on the belly", pl.Flops == fl0A + 1 && bellyAirA && fyMaxA < fy0A + 0.25f && new Vector2(fp1A.x - fp0A.x, fp1A.z - fp0A.z).magnitude > 0.8f, $"up {fyMaxA - fy0A:0.00} m, forward {new Vector2(fp1A.x - fp0A.x, fp1A.z - fp0A.z).magnitude:0.0} m");
+            yield return Wait(1.5f);
+            Check("…and lies on the belly until A", pl.Lying);
+            pl.QueueJump();
+            yield return Wait(0.6f);
+            Check("…A stands him up", !pl.Lying && !pl.Diving);
             pl.Teleport(Lobby.Spawn, 0);
             yield return Wait(0.3f);
             pl.Attack();
@@ -1149,8 +1170,13 @@ namespace Chubrik
                     yield return Wait(2f);
                     var sp1 = pl.transform.position;
                     float swimDrift = new Vector2(sp1.x - sp0.x, sp1.z - sp0.z).magnitude;
-                    Check("the river doesn't carry him away (no current)", pl.Swimming && swimDrift < 0.3f, $"drift {swimDrift:0.00} m in 2 s");
-                    Check("in the river he doesn't fall into the sea", pl.Swimming && sp1.y > botY - 0.2f && Vector2.Distance(new Vector2(sp1.x, sp1.z), new Vector2(Lobby.SwimSpot.x, Lobby.SwimSpot.z)) < 1f, $"y {sp1.y:0.00}");
+                    var flowDir = Quaternion.Euler(0, Lobby.SwimYaw, 0) * Vector3.forward;
+                    float along = Vector3.Dot(new Vector3(sp1.x - sp0.x, 0, sp1.z - sp0.z), flowDir);
+                    Check("v0.31: the river carries him the way it flows", pl.Swimming && along > 1.2f, $"carried {along:0.00} m along, {swimDrift:0.00} m in 2 s");
+                    Check("in the river he doesn't fall into the sea", pl.Swimming && sp1.y > botY - 0.2f, $"y {sp1.y:0.00}");
+                    pl.Teleport(new Vector3(Lobby.SwimSpot.x, surfY - 1.0f * sz, Lobby.SwimSpot.z), Lobby.SwimYaw);
+                    yield return Wait(0.4f);
+                    Check("the river has one medium stone (not a row of little ones)", GameObject.FindObjectsByType<Transform>(FindObjectsSortMode.None).Count(t => t.name == "SteppingStone") == 1);
                     pl.HoldAttack = true;
                     yield return Wait(1.0f);
                     float headY = pl.transform.position.y + 0.8f * sz;
@@ -1182,15 +1208,13 @@ namespace Chubrik
                 // passage through the hub–jungle wall is shut by a jungle gate with a grate until 10 friends are rescued ----
                 {
                     float sz = pl.Model.SizeScale;
-                    bool lakeWet = Water.At(Lobby.LakeSpot + Vector3.down * 0.5f, out float lakeS, out float lakeB);
-                    bool lakeJoined = Lobby.RiverPath(Lobby.LakeSpot, Lobby.SwimSpot, out var lakeGates, out string lakeBlocks);
-                    Check("the snowy lake by the water cave is deep river water, joined with the river (nothing but the snow river gate between)",
-                        lakeWet && lakeS - lakeB > 1.6f && lakeJoined && lakeGates.TrueForAll(g => g.need == Lobby.NeedFor(4)) && GameObject.Find("Lake") == null,
-                        $"wet {lakeWet}, depth {lakeS - lakeB:0.00}, gates {lakeGates.Count}, in the way:{lakeBlocks}");
-                    pl.Teleport(new Vector3(Lobby.LakeSpot.x, lakeS - 1.0f * sz, Lobby.LakeSpot.z), 100); pl.yaw = 100; pl.pitch = 16;
-                    yield return Wait(1.4f);
-                    Check("in the snowy lake he swims", pl.Swimming && Mathf.Abs(pl.transform.position.y - (lakeS - pl.FloatDepth())) < 0.3f, $"swimming {pl.Swimming}, y {pl.transform.position.y:0.00}");
-                    yield return Shot("131_snow_lake");
+                    // v0.31: in the snowy valley the river is frozen — you stand and slide on it, no water there
+                    bool lakeWet = Water.At(Lobby.LakeSpot + Vector3.down * 0.5f, out _, out _) || Water.At(Lobby.IceSpot + Vector3.down * 0.5f, out _, out _);
+                    pl.Teleport(Lobby.IceSpot + Vector3.up * 0.6f, 100); pl.yaw = 100; pl.pitch = 16;
+                    yield return Wait(1.2f);
+                    Check("v0.31: the river in the snowy valley is frozen: he stands on the ice and slides, no swimming", !lakeWet && GameObject.Find("RiverIce") != null && pl.Grounded && pl.OnIce && !pl.Swimming && Mathf.Abs(pl.transform.position.y - Lobby.IceSpot.y) < 0.3f,
+                        $"wet {lakeWet}, grounded {pl.Grounded}, ice {pl.OnIce}, y {pl.transform.position.y:0.00}");
+                    yield return Shot("131_snow_ice");
                     Check("the water cave's egg stays on dry ground", !Water.At(new Vector3(35.8f, 0.1f, 41.2f), out _, out _) && Physics.Raycast(new Vector3(35.8f, 0.8f, 41.2f), Vector3.down, 1.2f, Layers.SolidMask, QueryTriggerInteraction.Ignore));
 
                     var keepR = new List<string>(Save.P.rescued);
@@ -1212,6 +1236,7 @@ namespace Chubrik
                     float zShut = pl.transform.position.z;
                     yield return Shot("132_jungle_river_gate");
                     pl.MoveInput = Vector2.zero;
+                    Check("v0.31: over a closed gate there is an invisible wall", jg.Barrier != null && jg.Barrier.enabled && jg.Barrier.bounds.max.y > 25 && jg.Barrier.gameObject.layer == Layers.Barrier);
                     Check("the shut river gate stops a swimmer", pl.Swimming && zShut > Lobby.JunglePass.z + 0.2f, $"z {zShut:0.00} (gate at {Lobby.JunglePass.z:0.0})");
                     Save.P.rescued.Add("test" + (Lobby.NeedFor(5) - 1));
                     yield return Wait(1.8f);   // the gate sinks away
@@ -1371,6 +1396,8 @@ namespace Chubrik
                 Promo.Apply("Лукашарики");
                 yield return Wait(1.5f);
                 yield return Shot("84_cartoon_title");
+                Check("«Лукашарики» opens the episode picker", Cartoon.IsOpen && Cartoon.Episode == 0 && Cartoon.Scene == -1);
+                Cartoon.Play(1);
                 Cartoon.Speed = 4f;
                 for (float t = 0; t < 30 && Cartoon.Scene < 2; t += Time.unscaledDeltaTime) yield return null;
                 yield return Wait(1.5f);
@@ -1378,7 +1405,18 @@ namespace Chubrik
                 for (float t = 0; t < 150 && Cartoon.Scene < Cartoon.Scenes - 1; t += Time.unscaledDeltaTime) yield return null;
                 yield return Wait(0.5f);
                 yield return Shot("86_cartoon_end");
-                Check("«Лукашарики» plays the 3D cartoon to the end", Cartoon.IsOpen && Cartoon.Scene == Cartoon.Scenes - 1, Cartoon.Scene + " of " + Cartoon.Scenes);
+                Check("«Лукашарики» plays the 3D cartoon to the end", Cartoon.IsOpen && Cartoon.Episode == 1 && Cartoon.Scene == Cartoon.Scenes - 1, Cartoon.Scene + " of " + Cartoon.Scenes);
+                for (int ep = 2; ep <= Cartoon.Episodes; ep++)
+                {
+                    Cartoon.Play(ep);
+                    Cartoon.Speed = 4f;
+                    for (float t = 0; t < 12 && Cartoon.Scene < 3; t += Time.unscaledDeltaTime) yield return null;
+                    yield return Shot("86_cartoon_e" + ep + "_mid");
+                    for (float t = 0; t < 120 && Cartoon.IsOpen && Cartoon.Scene < Cartoon.Scenes - 1; t += Time.unscaledDeltaTime) yield return null;
+                    yield return Wait(1.5f);
+                    yield return Shot("86_cartoon_e" + ep);
+                    Check($"«Лукашарики» episode {ep} plays to the end", Cartoon.IsOpen && Cartoon.Episode == ep && Cartoon.Scene == Cartoon.Scenes - 1, Cartoon.Scene + " of " + Cartoon.Scenes);
+                }
                 Cartoon.Speed = 1f;
                 Cartoon.Stop();
                 Check("the cross closes the cartoon", !Cartoon.IsOpen && !pl.Frozen);
@@ -1679,7 +1717,13 @@ namespace Chubrik
                 AdminPanel.DeleteSelected();
                 yield return Wait(0.3f);
                 Check("a placed copy can be taken out of the game", Save.P.placed.Count == pc0 && placedT == null);
-                AdminPanel.Close();
+                yield return null;
+                var apRt = GameObject.Find("AdminPanel")?.GetComponent<RectTransform>();
+                Check("v0.31: the bought admin panel stands small in the top left corner, the coins move to its right", AdminPanel.IsOpen && apRt != null && apRt.anchorMin == new Vector2(0, 1) && apRt.sizeDelta.x <= 320 && GameObject.Find("TopBar").GetComponent<RectTransform>().anchoredPosition.x > 300);
+                yield return Shot("135_admin_corner");
+                Save.P.adminOn = false;
+                yield return null; yield return null;
+                Check("switched off in «Читы» — the panel is gone", !AdminPanel.IsOpen);
                 Save.P.coins = keepCoins; Save.Write();
             }
 
@@ -1884,9 +1928,131 @@ namespace Chubrik
                 for (int i = 0; i < Save.CharCount; i++) if (i != Save.ActiveIndex) otherIdx = i;
                 Check("the other chubrik keeps his outfit for the picker's portrait", otherIdx >= 0 && Save.CharLook(otherIdx).Of("hat") == hatDept.def);
                 Check("a chubrik not played now can be deleted (with his progress)", otherIdx >= 0 && Save.DeleteChar(otherIdx) && Save.CharCount == charsBefore && Save.ActiveIndex == 0 && Save.P.coins == coins1);
-                Check("the played chubrik can't be deleted", !Save.DeleteChar(Save.ActiveIndex) && Save.CharCount == charsBefore);
+                Check("the played chubrik can't be deleted by DeleteChar (CharSlots.Delete moves to another one first)", !Save.DeleteChar(Save.ActiveIndex) && Save.CharCount == charsBefore);
+                // v0.31: a tap on a chubrik opens «Играть / Удалить / Ник» with the progress line; each one has its own nick;
+                // the played one can be deleted too
+                string nick1 = P.nick;
+                restarts = Boot.Restarts;
+                CharSlots.New();
+                yield return WaitRebuilt(restarts);
+                int newIdx2 = Save.ActiveIndex;
+                Save.SetCharNick(newIdx2, "Тестик");
+                CharSlots.Open();
+                yield return Wait(0.4f);
+                CharSlots.Choose(newIdx2);
+                yield return Wait(0.6f);
+                yield return Shot("134_char_choice");
+                Check("a tap on a chubrik: the frame with «ИГРАТЬ», «УДАЛИТЬ», a nick and the progress line", CharSlots.ChoiceOpen && GameObject.Find("Choice") is GameObject chG && chG.transform.Find("Panel/Play") != null && chG.transform.Find("Panel/Delete") != null && chG.transform.Find("Panel/BarHolder/Progress") != null && GameObject.Find("Slot 1") is GameObject s1 && s1.transform.Find("Square/Delete") == null && s1.transform.Find("Square/Progress") != null);
+                Check("every chubrik has his own nick", Save.CharName(newIdx2) == "Тестик" && Online.Nick == "Тестик" && Save.CharName(firstIdx) != "Тестик" && Save.P.nick == "Тестик", $"{Save.CharName(firstIdx)} / {Save.CharName(newIdx2)}");
+                restarts = Boot.Restarts;
+                CharSlots.Delete(newIdx2);
+                yield return WaitRebuilt(restarts);
+                yield return Wait(0.5f);
+                P = Save.P;
+                Check("the played chubrik can be deleted: the game goes on with the other one", Save.CharCount == charsBefore && P.coins == coins1 && P.nick == nick1 && CharSlots.IsOpen, $"chars {Save.CharCount}, coins {P.coins}/{coins1}");
+                CharSlots.Close();
                 Save.Wear("hat", hatDept.def); PlayerCtl.I.ApplyLook(Save.CurrentLook());
                 pl = PlayerCtl.I;
+            }
+
+            // ---- v0.31 stickers, chests, friends' stories, nicknames over the heads ----
+            {
+                pl = PlayerCtl.I;
+                Menus.Play();
+                yield return Wait(0.8f);
+                Check("70 stickers, 10 open from the start, the rest in 30 chests (2 each)", Stickers.All.Count == 70 && Stickers.Free + Chests.Total * Stickers.PerChest == 70);
+                Check("all 15 chests stand on the ground", Chests.Bad.Count == 0 && Chests.All.Count >= 12, $"{Chests.All.Count} built, bad: {string.Join("; ", Chests.Bad)}");
+                Stickers.Open();
+                yield return Wait(0.6f);
+                yield return Shot("136_stickers");
+                Check("«СТИКЕРЫ» opens the picker; locked ones have a padlock", UIRoot.Open != null && GameObject.Find("Sticker 69") != null && GameObject.Find("StickersBtn") == null);
+                Window.Close();
+                yield return Wait(0.3f);
+                int used0 = Stickers.Used;
+                Stickers.Use(0);
+                yield return Wait(0.5f);
+                Check("a sticker pops up over the head", Stickers.Used == used0 + 1 && pl.transform.Find("StickerPop") != null);
+                Check("…and the chubrik himself moves: arms, legs, head", pl.Anim.stickerPose >= 0);
+                var pairs = new HashSet<string>();
+                foreach (var st in Stickers.All) pairs.Add(st.kind + ":" + st.emote + ":" + st.move + ":" + st.pop);
+                // a pet does its own trick for every sticker
+                Save.Give("pet_1"); Save.Wear("pet", "pet_1"); pl.ApplyLook(Save.CurrentLook());
+                yield return Wait(0.6f);
+                int tr0 = pl.PetNow != null ? pl.PetNow.Tricks : -1;
+                Stickers.Use(3);
+                yield return Wait(0.7f);
+                yield return Shot("142_sticker_pet");
+                Check("with a pet: the pet does its own trick for the sticker", pl.PetNow != null && pl.PetNow.Tricks == tr0 + 1 && pl.PetNow.Tricking);
+                Save.Wear("pet", ""); pl.ApplyLook(Save.CurrentLook());
+                yield return Wait(2.5f);
+                int vids = Stickers.All.FindAll(x => x.video).Count;
+                Stickers.Use(4);
+                yield return Wait(0.8f);
+                yield return Shot("141_sticker_video");
+                Check("some stickers show a 3 s mini video over the head: a little chubrik in a frame doing the move", vids >= 15 && pl.transform.Find("StickerPop/Video/Mini/MiniChubrik") != null, vids + " video stickers");
+                yield return Wait(3.5f);
+                Check("every sticker has its own animation (no two the same)", pairs.Count == Stickers.All.Count, pairs.Count + " different");
+                yield return Shot("137_sticker_head");
+                Stickers.Use(7, "Привет всем");
+                yield return Wait(0.5f);
+                var popT = pl.transform.Find("StickerPop")?.GetComponentInChildren<TMPro.TMP_Text>();
+                Check("«Своё слово»: the word over the head", popT != null && popT.text == "Привет всем");
+                Check("Камень, ножницы, бумага: rock beats scissors, scissors beat paper, paper beats rock", Rps.Judge(0, 1) == 1 && Rps.Judge(1, 2) == 1 && Rps.Judge(2, 0) == 1 && Rps.Judge(1, 0) == 2 && Rps.Judge(2, 2) == 0);
+                Rps.Ask();
+                Check("without a friend in the room KNB doesn't start", !Rps.IsOpen);
+                var nt = pl.GetComponent<Stickers.NickTag>();
+                var ntText = pl.GetComponentInChildren<TMPro.TextMeshPro>(true);
+                Check("our nickname is over our head", nt != null);
+                // a chest: locked stickers, B opens it, 4 new stickers
+                var ch = Chests.All.Find(c => c != null && c.gameObject.activeInHierarchy && !c.IsOpen);
+                if (ch != null)
+                {
+                    int before = Stickers.UnlockedCount;
+                    pl.Teleport(ch.transform.position + ch.transform.forward * 1.0f, Quaternion.LookRotation(-ch.transform.forward).eulerAngles.y);
+                    yield return Wait(0.8f);
+                    pl.Attack();
+                    yield return Wait(1f);
+                    yield return Shot("138_chest_open");
+                    Check("B next to a chest opens it (no key) — 2 new stickers", ch.IsOpen && Stickers.UnlockedCount == before + Stickers.PerChest, $"{before} → {Stickers.UnlockedCount}");
+                    Stickers.Use(Stickers.Free + ch.index * Stickers.PerChest);
+                    yield return Wait(0.3f);
+                    Check("a sticker from the chest can be used now", Stickers.LastUsed == Stickers.Free + ch.index * Stickers.PerChest);
+                    yield return Wait(2.5f);
+                }
+                else Check("a closed chest in the lobby", false);
+                // «Взлёт и плюх»
+                pl.Teleport(Lobby.Spawn, 0);
+                yield return Wait(0.6f);
+                Save.P.found.Add("chest0");
+                int sp0 = pl.Splashes;
+                Stickers.Use(10);
+                for (float t = 0; t < 4f && pl.Splashes == sp0; t += Time.deltaTime) yield return null;
+                yield return Shot("139_splash_rainbow");
+                Check("«Взлёт и плюх»: up, down, rainbow drops", pl.Splashes == sp0 + 1);
+                yield return Wait(1f);
+                if (pl.Lying) { pl.QueueJump(); yield return Wait(0.6f); }
+                // a friend tells his story
+                Save.P.rescued.Add("w2c3");
+                Rescue.AddLobbyFriend("w2c3");
+                yield return Wait(0.3f);
+                var fr = GameObject.Find("Friend w2c3");
+                if (fr != null)
+                {
+                    pl.Teleport(fr.transform.position + Vector3.forward * 1.3f, 180);
+                    yield return Wait(0.5f);
+                    int talks0 = Friends.Talks;
+                    pl.Attack();
+                    yield return Wait(0.6f);
+                    yield return Shot("140_friend_story");
+                    Check("B next to a friend: he tells his story", Friends.Talks == talks0 + 1 && !string.IsNullOrEmpty(Friends.LastStory) && GameObject.Find("FriendStory") != null, Friends.LastStory);
+                }
+                else Check("a friend in the lobby", false);
+                var names = new HashSet<string>();
+                for (int w = 2; w <= 6; w++) for (int c = 0; c < 8; c++) names.Add(Rescue.NameOf("w" + w + "c" + c));
+                Check("friends have normal names (40 cages — 40 different names) and whole outfits", names.Count == 40 && !names.Contains("Пончик") && Rescue.LookOf("w2c0").Of("suit") == "suit_3" && Rescue.LookOf("w2c2").Of("hat") == "hat_5", string.Join(",", names));
+                Save.P.rescued.Remove("w2c3");
+                pl.Teleport(Lobby.Spawn, 0);
+                yield return Wait(0.4f);
             }
 
             // ---- main menu ----

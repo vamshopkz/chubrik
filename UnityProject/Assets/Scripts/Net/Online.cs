@@ -287,7 +287,12 @@ namespace Chubrik
                 var peer = kv.Value;
                 if (now - peer.seen > 10f) { gone.Add(kv.Key); continue; }
                 bool show = playing && peer.SameVersion && (peer.id == RoomWith || peer.id == FootballFans.Watching) && peer.world == Worlds.Current && now - peer.stateSeen < 3f;
-                if (show && peer.avatar == null) peer.avatar = RemoteChubrik.Spawn(peer, avatarsRoot);
+                if (show && peer.avatar == null)
+                {
+                    peer.avatar = RemoteChubrik.Spawn(peer, avatarsRoot);
+                    var pp = peer;
+                    Stickers.Tag(peer.avatar.gameObject, () => string.IsNullOrEmpty(pp.nick) ? "Друг" : pp.nick, () => 2.15f);   // v0.31 the nick over the head
+                }
                 else if (!show && peer.avatar != null) { Destroy(peer.avatar.gameObject); peer.avatar = null; }
             }
             foreach (var g in gone) Remove(g);
@@ -384,6 +389,12 @@ namespace Chubrik
                     break;
                 case "C":
                     RoomChat.I?.OnChat(f);
+                    break;
+                case "K":
+                    Stickers.OnNet(f);
+                    break;
+                case "KR":
+                    Rps.OnNet(f);
                     break;
                 case "FW":
                     FootballFans.OnWatch(f, id);
@@ -489,6 +500,7 @@ namespace Chubrik
         ChubrikModel model;
         ChubrikAnim anim;
         Pet pet;
+        public Pet PetNow => pet;
         int lastFlags;
 
         public static RemoteChubrik Spawn(Online.Peer peer, Transform parent)

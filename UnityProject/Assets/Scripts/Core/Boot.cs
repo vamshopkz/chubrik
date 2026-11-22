@@ -31,12 +31,14 @@ namespace Chubrik
             Save.Load();
             if (Testing) Save.FreshForTest();
             bool mobile = Application.isMobilePlatform;
-            bool shadows = !(mobile && WebBridge.IsWeb);
+            // v0.31: the browser looks better — phones in the browser get shadows, post effects and a sharper picture too;
+            // if it gets slow the picture becomes a bit softer by itself (WebQuality in Update)
+            bool shadows = true;
             var urp = GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset;
             if (urp != null)
             {
-                urp.renderScale = mobile ? (WebBridge.IsWeb ? 0.7f : 0.85f) : 1f;
-                urp.shadowDistance = shadows ? 45 : 0;
+                urp.renderScale = mobile ? (WebBridge.IsWeb ? 1f : 0.85f) : 1f;
+                urp.shadowDistance = mobile && WebBridge.IsWeb ? 30 : 45;
                 urp.msaaSampleCount = mobile ? 1 : 4;
                 urp.supportsHDR = !mobile;
             }
@@ -147,13 +149,14 @@ namespace Chubrik
             vig.intensity.Override(0.16f);
             vol.profile = p;
             var data = PlayerCtl.I.Cam.GetUniversalAdditionalCameraData();
-            data.renderPostProcessing = !(mobile && WebBridge.IsWeb);
-            data.antialiasing = mobile ? AntialiasingMode.None : AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            data.renderPostProcessing = true;
+            data.antialiasing = mobile ? (WebBridge.IsWeb ? AntialiasingMode.FastApproximateAntialiasing : AntialiasingMode.None) : AntialiasingMode.SubpixelMorphologicalAntiAliasing;
         }
 
         void Update()
         {
             if (Testing || Restarting) return;
+            if (WebBridge.IsWeb) WebQuality();
             bool locked = Cursor.lockState == CursorLockMode.Locked;
             if (Input.GetKeyDown(KeyCode.Escape))
             {
@@ -163,10 +166,25 @@ namespace Chubrik
                 else if (!Menus.MainOpen) Menus.Pause();
             }
             else if (wasLocked && !locked && !Menus.AnyOpen) Menus.Pause();   // the browser released the mouse (Esc)
-            if (!Hud.Touch && !locked && !Menus.AnyOpen && !AdminPanel.IsOpen && Input.GetMouseButtonDown(0) && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
+            if (!Hud.Touch && !locked && !Menus.AnyOpen && AdminPanel.Now == AdminPanel.Mode.None && Input.GetMouseButtonDown(0) && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
                 Menus.LockCursor();
             if (!Hud.Touch && Menus.AnyOpen && locked) Menus.Unlock();
             wasLocked = Cursor.lockState == CursorLockMode.Locked;
+        }
+
+        float fpsT, fpsFrames;
+        /// <summary>v0.31 the browser: starts sharp; slower than ~38 fps for 4 s → the picture a bit softer (down to 0.6);
+        /// fast again → sharper. Shadows go off only on a really slow phone.</summary>
+        void WebQuality()
+        {
+            fpsT += Time.unscaledDeltaTime; fpsFrames++;
+            if (fpsT < 4f) return;
+            float fps = fpsFrames / fpsT; fpsT = 0; fpsFrames = 0;
+            var urp = GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset;
+            if (urp == null || Menus.AnyOpen) return;
+            if (fps < 38 && urp.renderScale > 0.61f) urp.renderScale = Mathf.Max(0.6f, urp.renderScale - 0.1f);
+            else if (fps < 30 && urp.shadowDistance > 0) { urp.shadowDistance = 0; QualitySettings.shadows = UnityEngine.ShadowQuality.Disable; }
+            else if (fps > 56 && urp.renderScale < 0.99f) urp.renderScale = Mathf.Min(1f, urp.renderScale + 0.05f);
         }
 
         void OnApplicationPause(bool paused) { if (paused && !Restarting) Save.Write(); }

@@ -32,7 +32,8 @@ namespace Chubrik
         public long roomLockUntil;
         public List<SavedOutfit> outfits = new List<SavedOutfit>();   // v0.30 «Мои скины»
         public string updateSeen = "";                       // v0.27: the «Вышло обновление» message was shown for this version                           // 19.11 «Заблокировать комнату» until (unix seconds)                             // 18.11 football difficulty: 0 super easy … 3 hard
-        public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;   // 18.11 cheats (Settings → «Читы»)
+        public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;
+        public bool adminOn = true;                          // v0.31: the bought admin panel is shown (switched in «Читы»)   // 18.11 cheats (Settings → «Читы»)
         public List<string> placed = new List<string>();     // admin panel copies: id|path|pos|rot|scale|1                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)
     }
@@ -252,9 +253,10 @@ namespace Chubrik
         {
             if (i < 0 || i >= meta.slots.Count) return "";
             var c = meta.slots[i];
-            if (!string.IsNullOrEmpty(c.name)) return c.name;
+            // v0.31: the nickname comes first — every chubrik has its own nick (Settings / the picker's «Ник»)
             var nick = i == meta.active ? P.nick : c.nick;
             if (!string.IsNullOrEmpty(nick)) return nick;
+            if (!string.IsNullOrEmpty(c.name)) return c.name;
             return "Чубрик " + (i + 1);
         }
 
@@ -306,6 +308,55 @@ namespace Chubrik
             Fix();
             Write();
             return meta.active;
+        }
+
+        /// <summary>v0.31: how far chubrik <paramref name="i"/> got (0..1): worlds finished, friends rescued, eggs found.</summary>
+        public static float CharProgress(int i, out string text)
+        {
+            text = "";
+            if (i < 0 || i >= meta.slots.Count) return 0;
+            var pr = i == meta.active ? P : ReadProfile(meta.slots[i].file);
+            int worlds = pr.done.Count, friends = pr.rescued.Count, eggs = 0;
+            foreach (var f in pr.found) if (f.StartsWith("egg")) eggs++;
+            text = $"Миров: {worlds} · друзей: {friends} · монет: {UIKit.Num(pr.coins)}";
+            return Mathf.Clamp01(worlds / 8f * 0.5f + Mathf.Min(friends, 60) / 60f * 0.4f + eggs / 10f * 0.1f);
+        }
+
+        /// <summary>v0.31: the nickname of chubrik <paramref name="i"/> (the played one: its profile; another one: its file).</summary>
+        public static void SetCharNick(int i, string nick)
+        {
+            if (i < 0 || i >= meta.slots.Count) return;
+            if (i == meta.active) { P.nick = nick; Write(); return; }
+            var c = meta.slots[i];
+            var pr = ReadProfile(c.file);
+            pr.nick = nick; c.nick = nick;
+            WriteProfile(c.file, pr);
+            WriteMeta();
+            SyncDisk();
+        }
+
+        /// <summary>v0.31: the played chubrik can be deleted too — the game moves to another one first
+        /// (the caller rebuilds the world with <see cref="Boot.Restart"/>). The last one left is replaced by a new one.</summary>
+        public static bool DeleteActive()
+        {
+            int i = meta.active;
+            if (meta.slots.Count <= 1)
+            {
+                int file = meta.slots[0].file;
+                mem.Remove(file);
+                if (Disk)
+                    try { if (File.Exists(FileOf(file))) File.Delete(FileOf(file)); }
+                    catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+                var was = P;
+                P = new Profile { id = Boot.Testing ? "" : NewId(), wolf = true, volume = was.volume, music = was.music, sens = was.sens, quality = was.quality, updateSeen = was.updateSeen };
+                meta.slots[0] = new CharSlot { file = file, name = "" };
+                meta.active = 0;
+                Fix();
+                Write();
+                return true;
+            }
+            SwitchChar(i == 0 ? 1 : 0);
+            return DeleteChar(i);
         }
 
         /// <summary>Deletes a chubrik that is not being played now — with all its progress (its file too).</summary>

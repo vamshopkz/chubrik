@@ -111,8 +111,8 @@
         companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
         productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
         productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
-        // Phones have very dense screens; rendering every physical pixel would make the game slow.
-        devicePixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2),
+        // Phones have very dense screens; up to 2× (the game itself softens the picture if it gets slow).
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 2 : 2.5),   // v0.31: sharper in the browser
       };
 
       var script = document.createElement("script");

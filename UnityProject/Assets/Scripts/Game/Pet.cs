@@ -881,15 +881,44 @@ namespace Chubrik
             if (ChubrikModel.BakeParts) Baker.Bake(b, new HashSet<GameObject>(), pm.meshes);
         }
 
+        // v0.31: every sticker gives the pet its own trick: 10 kinds × 7 ways (faster, bigger, more turns…)
+        int trick = -1, trickWay; float trickT;
+        public const float TrickLen = 2.2f;
+        public bool Tricking => trick >= 0;
+        public int Tricks { get; private set; }
+        public void Trick(int sticker) { trick = sticker % 10; trickWay = sticker / 10; trickT = 0; Tricks++; }
+
         void LateUpdate()
         {
             if (owner == null || body == null) return;
             t += Time.deltaTime;
             var target = owner.position + owner.right * 0.75f * scale - owner.forward * 0.45f * scale + Vector3.up * (1.45f * scale + Mathf.Sin(t * 2.4f) * 0.12f);
-            transform.position = Vector3.SmoothDamp(transform.position, target, ref vel, 0.25f);
+            Vector3 extra = Vector3.zero; float spin = 0, grow = 1;
+            if (trick >= 0)
+            {
+                trickT += Time.deltaTime;
+                float sp = 1 + trickWay * 0.18f, amp = (1 + trickWay * 0.12f) * scale, u = Mathf.Clamp01(trickT / TrickLen), env = Mathf.Sin(u * Mathf.PI), a = trickT * Mathf.PI * 2 * sp;
+                var r = owner.right; var f = owner.forward;
+                switch (trick)
+                {
+                    case 0: extra = (r * Mathf.Cos(a) + f * Mathf.Sin(a)) * 1.1f * amp * env; break;                          // circles round the owner
+                    case 1: extra = (f * Mathf.Sin(a) + Vector3.up * (1 - Mathf.Cos(a))) * 0.7f * amp * env; break;           // a loop-the-loop
+                    case 2: extra = Vector3.up * Mathf.Abs(Mathf.Sin(a * 0.75f)) * 1.3f * amp * env; break;                   // jumps up high
+                    case 3: spin = u * 360 * (2 + trickWay % 3); break;                                                         // spins round
+                    case 4: extra = r * Mathf.Sin(a * 4) * 0.18f * amp * env; break;                                           // shakes with joy
+                    case 5: extra = (r * Mathf.Sin(a) * 0.9f + Vector3.up * Mathf.Abs(Mathf.Sin(a * 2)) * 0.4f) * amp * env; break;   // a zigzag
+                    case 6: grow = 1 + 0.45f * env * Mathf.Abs(Mathf.Sin(a)); break;                                           // puffs up
+                    case 7: extra = Vector3.down * Mathf.Sin(u * Mathf.PI) * 1.1f * amp + f * env * 0.6f * amp; break;        // dives down and back
+                    case 8: extra = (r * Mathf.Sin(a) + Vector3.up * Mathf.Sin(a * 2) * 0.5f) * 0.9f * amp * env; break;      // a figure of eight
+                    default: spin = Mathf.Sin(a) * 40 * env; extra = Vector3.up * env * 0.8f * amp; break;                   // floats up, rocking
+                }
+                if (trickT >= TrickLen) trick = -1;
+            }
+            transform.position = Vector3.SmoothDamp(transform.position, target + extra, ref vel, trick >= 0 ? 0.08f : 0.25f);
             var look = owner.forward + vel * 0.3f; look.y = 0;
             if (look.sqrMagnitude > 0.01f) transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(look), Time.deltaTime * 6);
-            transform.localScale = Vector3.one * scale;
+            if (spin != 0) transform.rotation *= Quaternion.Euler(trick == 3 ? 0 : spin, trick == 3 ? spin : 0, 0);
+            transform.localScale = Vector3.one * scale * grow;
         }
     }
 

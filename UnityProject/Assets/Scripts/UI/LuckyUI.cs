@@ -210,6 +210,53 @@ namespace Chubrik
                 var list = new List<Item>(items);
                 var texs = new Dictionary<string, Texture>();
                 Preview.I.Thumbs(list, (it, tex) => texs[it.id] = tex);
+                if (n > 1)
+                {
+                    // v0.31: ten ordinary lucky blocks fly out of the big one to their places, shake together — and all open at once
+                    var minis = new List<RectTransform>();
+                    var targets = new List<Vector2>();
+                    for (int k = 0; k < n; k++)
+                    {
+                        var mb = Block(body, 0, new Vector2(0, -210), cell * 0.8f);
+                        mb.anchorMin = mb.anchorMax = new Vector2(0.5f, 1);
+                        minis.Add(mb);
+                        var fp = slots[k].frame.rectTransform.anchoredPosition;
+                        targets.Add(new Vector2(fp.x + cell / 2, fp.y - cell * 0.1f));
+                    }
+                    AudioFx.Play("boing");
+                    for (float t = 0; t < 0.6f; t += Time.unscaledDeltaTime)
+                    {
+                        float k01 = Mathf.SmoothStep(0, 1, t / 0.6f);
+                        for (int k = 0; k < n; k++)
+                        {
+                            var a = new Vector2(0, -210); var b = targets[k];
+                            minis[k].anchoredPosition = Vector2.Lerp(a, b, k01) + Vector2.up * Mathf.Sin(k01 * Mathf.PI) * 160;
+                            minis[k].localRotation = Quaternion.Euler(0, 0, (1 - k01) * 360 * (k % 2 == 0 ? 1 : -1));
+                            minis[k].localScale = Vector3.one * Mathf.Lerp(0.3f, 1f, k01);
+                        }
+                        yield return null;
+                    }
+                    for (float t = 0; t < 0.7f; t += Time.unscaledDeltaTime)
+                    {
+                        for (int k = 0; k < n; k++) minis[k].localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * 50 + k) * 12 * t);
+                        yield return null;
+                    }
+                    foreach (var mb in minis) Destroy(mb.gameObject);
+                    AudioFx.Play("open"); AudioFx.Play("token");
+                    for (int k = 0; k < n; k++)
+                    {
+                        var (pic, nm, fr) = slots[k];
+                        fr.gameObject.SetActive(true);
+                        if (texs.TryGetValue(items[k].id, out var tx)) pic.texture = tx;
+                    }
+                    for (float t = 0; t < 0.25f; t += Time.unscaledDeltaTime)
+                    {
+                        foreach (var sl in slots) sl.frame.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.3f, 1.1f, t / 0.25f);
+                        yield return null;
+                    }
+                    foreach (var sl in slots) sl.frame.rectTransform.localScale = Vector3.one;
+                }
+                else
                 for (int k = 0; k < n; k++)
                 {
                     var (pic, nm, fr) = slots[k];

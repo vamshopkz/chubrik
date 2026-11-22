@@ -70,7 +70,7 @@ namespace Chubrik
             var b = sq.gameObject.AddComponent<UIButton>();
             b.Bg = sq;
             int idx = i;
-            b.OnClick = () => Pick(idx);
+            b.OnClick = () => Choose(idx);
 
             // the picture with rounded corners
             var mask = UIKit.Img(sq.transform, UIKit.Btn, Color.white, "Picture");
@@ -98,13 +98,79 @@ namespace Chubrik
                 var nt = UIKit.Txt(now.transform, "СЕЙЧАС", 26, Color.white);
                 UIKit.Fill(nt.rectTransform, 6, 2, 6, 2);
             }
-            else
-            {
-                // a small «×»: delete this chubrik (asks first)
-                var del = UIKit.Round(sq.transform, "×", UIKit.Red, () => AskDelete(idx), 84, 52);
-                UIKit.Place(del.Bg.rectTransform, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -30), new Vector2(84, 84));
-            }
+            // v0.31: no «×» on the chubrik any more — a tap opens the frame «Играть / Удалить / Ник» with the progress line
+            Bar(sq.transform, Save.CharProgress(i, out _), new Vector2(0, 4), size - 60, 12);
         }
+
+        /// <summary>A progress line: a dark track with a green-to-gold fill.</summary>
+        static void Bar(Transform parent, float k, Vector2 pos, float w, float h)
+        {
+            var track = UIKit.Img(parent, UIKit.Pill != null ? UIKit.Pill : UIKit.Btn, new Color(0.05f, 0.1f, 0.25f, 0.7f), "Progress");
+            UIKit.Place(track.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), pos, new Vector2(w, h));
+            var fill = UIKit.Img(track.transform, UIKit.Pill != null ? UIKit.Pill : UIKit.Btn, Color.Lerp(UIKit.Green, UIKit.Gold, k), "Fill");
+            var rt = fill.rectTransform;
+            rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(Mathf.Max(0.04f, k), 1);
+            rt.offsetMin = new Vector2(2, 2); rt.offsetMax = new Vector2(-2, -2);
+        }
+
+        /// <summary>The frame over a tapped chubrik: its picture, name, progress line, «ИГРАТЬ», «УДАЛИТЬ» and a new nickname.</summary>
+        public static void Choose(int i)
+        {
+            if (root == null || i < 0 || i >= Save.CharCount) return;
+            if (confirm) Object.Destroy(confirm);
+            AudioFx.Play("click");
+            var dim = UIKit.Img(root.transform, UIKit.White, new Color(0.02f, 0.06f, 0.18f, 0.6f), "Choice", true);
+            UIKit.Fill(dim.rectTransform);
+            confirm = dim.gameObject;
+            var close = dim.gameObject.AddComponent<UIButton>(); close.Bg = dim; close.OnClick = CloseChoice;
+            var panel = UIKit.Img(dim.transform, UIKit.Panel, Color.white, "Panel", true);
+            UIKit.Place(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1060, 640));
+            var P = panel.transform;
+            var x = UIKit.Button(P, "X", UIKit.Red, CloseChoice, 32, "Close");
+            UIKit.Place(x.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-16, -16), new Vector2(80, 68));
+            // the picture
+            var mask = UIKit.Img(P, UIKit.Btn, Color.white, "Picture");
+            UIKit.Place(mask.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(30, -30), new Vector2(300, 300));
+            mask.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+            var raw = new GameObject("Skin", typeof(RectTransform)).AddComponent<RawImage>();
+            raw.transform.SetParent(mask.transform, false); raw.raycastTarget = false;
+            UIKit.Fill(raw.rectTransform);
+            if (Preview.I != null) { var look = Save.CharLook(i); raw.texture = Preview.I.Portrait(look, "char|" + Online.LookString(look), 384); }
+            var name = UIKit.Txt(P, Save.CharName(i) + (i == Save.ActiveIndex ? "  (сейчас)" : ""), 48, UIKit.Gold, TMPro.TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(name.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -36), new Vector2(560, 70));
+            name.enableAutoSizing = true; name.fontSizeMin = 26; name.fontSizeMax = 48;
+            float k = Save.CharProgress(i, out var about);
+            var pt = UIKit.Txt(P, $"Прогресс: {Mathf.RoundToInt(k * 100)}%", 30, Color.white, TMPro.TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(pt.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -116), new Vector2(640, 46));
+            var track = UIKit.Rect("BarHolder", P);
+            UIKit.Place(track, new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -170), new Vector2(660, 30));
+            Bar(track, k, new Vector2(0, 0), 660, 30);
+            var ab = UIKit.Txt(P, about, 26, UIKit.Muted, TMPro.TextAlignmentOptions.MidlineLeft);
+            UIKit.Place(ab.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -214), new Vector2(660, 44));
+            ab.enableAutoSizing = true; ab.fontSizeMin = 18; ab.fontSizeMax = 26;
+            // a new nickname for this chubrik (each one has its own)
+            var input = UIKit.Input(P, "Ник этого чубрика", 16, 30);
+            input.text = i == Save.ActiveIndex ? Save.P.nick : "";
+            UIKit.Place(input.GetComponent<RectTransform>(), new Vector2(0, 1), new Vector2(0, 1), new Vector2(360, -270), new Vector2(420, 80));
+            int idx = i;
+            var ok = UIKit.Button(P, "СМЕНИТЬ НИК", UIKit.Blue, () =>
+            {
+                var n = Online.Clean(input.text);
+                if (n.Length > 16) n = n.Substring(0, 16);
+                Save.SetCharNick(idx, n);
+                AudioFx.Play("buy");
+                Hud.Toast(n.Length > 0 ? "Новый ник: " + n : "Ник сброшен", UIKit.Green);
+                Open(); Choose(idx);
+            }, 26, "SetNick");
+            UIKit.Place(ok.Bg.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(796, -270), new Vector2(230, 80));
+            var play = UIKit.Button(P, "ИГРАТЬ", UIKit.Green, () => Pick(idx), 44, "Play");
+            UIKit.Place(play.Bg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-230, 40), new Vector2(420, 120));
+            var del = UIKit.Button(P, "УДАЛИТЬ", UIKit.Red, () => AskDelete(idx), 40, "Delete");
+            UIKit.Place(del.Bg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(230, 40), new Vector2(420, 120));
+        }
+
+        public static bool ChoiceOpen => confirm != null;
+        static void CloseChoice() { if (confirm) Object.Destroy(confirm); confirm = null; }
 
         static void Empty(RectTransform cell, float size)
         {
@@ -161,6 +227,18 @@ namespace Chubrik
             Menus.Play();
         }
 
+        /// <summary>v0.31: deletes chubrik <paramref name="i"/>; the played one too — then the game is rebuilt for another chubrik.</summary>
+        public static void Delete(int i)
+        {
+            if (i != Save.ActiveIndex) { if (Save.DeleteChar(i)) AudioFx.Play("click"); Open(); return; }
+            Close();
+            Boot.Restart(() => Save.DeleteActive(), () =>
+            {
+                Open();
+                Hud.Toast("Чубрик удалён", UIKit.Orange);
+            });
+        }
+
         static void AskDelete(int i)
         {
             if (confirm) Object.Destroy(confirm);
@@ -173,11 +251,7 @@ namespace Chubrik
             UIKit.Place(q.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -30), new Vector2(840, 120));
             var sub = UIKit.Txt(panel.transform, "Пропадёт всё, что у него есть: монеты, вещи, друзья и пройденные миры", 28, Color.white);
             UIKit.Place(sub.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -150), new Vector2(820, 90));
-            var yes = UIKit.Button(panel.transform, "УДАЛИТЬ", UIKit.Red, () =>
-            {
-                if (Save.DeleteChar(i)) AudioFx.Play("click");
-                Open();
-            }, 36, "Yes");
+            var yes = UIKit.Button(panel.transform, "УДАЛИТЬ", UIKit.Red, () => Delete(i), 36, "Yes");
             UIKit.Place(yes.Bg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-200, 34), new Vector2(340, 100));
             var no = UIKit.Button(panel.transform, "ОТМЕНА", UIKit.Green, () => { if (confirm) Object.Destroy(confirm); confirm = null; }, 36, "No");
             UIKit.Place(no.Bg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(200, 34), new Vector2(340, 100));

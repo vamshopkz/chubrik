@@ -60,6 +60,8 @@ namespace Chubrik
         /// <summary>The Shipozavr crown keeps ordinary spikes from hurting.</summary>
         public bool SpikeProof => look != null && look.Of("hat") == Catalog.ShipoCrown;
         Pet pet;
+        /// <summary>v0.31: the pet (it does a trick for every sticker).</summary>
+        public Pet PetNow => pet;
         Aura aura;
         BlobShadow shadow;
 
@@ -188,7 +190,7 @@ namespace Chubrik
                 kbJump = Input.GetKeyDown(KeyCode.Space);
                 JumpHeld = Input.GetKey(KeyCode.Space) || Hud.JumpButtonHeld || HoldJump;
                 kbAttack = Input.GetKeyDown(KeyCode.F) || (Cursor.lockState == CursorLockMode.Locked && Input.GetMouseButtonDown(0));
-                if (Input.GetKeyDown(KeyCode.Q)) Emote();
+                if (Input.GetKeyDown(KeyCode.Q)) Stickers.Open();   // v0.31 stickers instead of emotions
                 if (Input.GetKeyDown(KeyCode.E)) { if (!Zones.Interact()) Attack(); }
                 if (Cursor.lockState == CursorLockMode.Locked)
                     LookDelta += new Vector2(Input.GetAxisRaw("Mouse X"), -Input.GetAxisRaw("Mouse Y")) * 2.2f * Save.P.sens;
@@ -259,6 +261,14 @@ namespace Chubrik
                 wantJump = false;
             }
             if (dive == 1 || plunge != 0) wantJump = false;
+            if (splashAt > 0 && Time.time > splashAt) { splashAt = -1; if (!Grounded) StartPlunge(true); else splashFx = false; }
+            if (twoB >= 0 && !Grounded && hang == 0 && !Riding)
+            {
+                // v0.31 after two jumps: B held — straight down with the super bounce; B just tapped — the belly flop
+                if (AttackHeld && Time.time - twoB > 0.15f) { twoB = -1; StartPlunge(true); superBounce = true; }
+                else if (!AttackHeld) { twoB = -1; StartFlop(); }
+            }
+            else if (Grounded) twoB = -1;
             if (attackDownT >= 0 && !Grounded && plunge != 2 && hang == 0 && !Riding)
             {
                 if (!AttackHeld) attackDownT = -1;
@@ -301,6 +311,13 @@ namespace Chubrik
             if ((flags & CollisionFlags.Above) != 0 && vel.y > 0) vel.y = 0;
             if (Grounded && ground != null) { groundLocal = ground.InverseTransformPoint(transform.position); groundRot = ground.rotation; }
             if (plunge != 0 && Grounded) PlungeLand();
+            else if (dive == 1 && Grounded && flop)
+            {
+                flop = false; SetDive(2);   // v0.31: the A-A-B dive lands on the belly and lies there until A
+                vel = new Vector3(0, vel.y, 0);
+                AudioFx.Play("land4", 0.4f);
+                Effects.Emit("dust", transform.position, 8, 0.35f);
+            }
             else if (dive == 1 && Grounded)
             {
                 SetDive(2);
@@ -441,6 +458,38 @@ namespace Chubrik
             AudioFx.Play("jump4", 0.6f);
         }
 
+        bool splashFx; float splashAt = -1;
+        /// <summary>v0.31 sticker «Взлёт и плюх»: up high, then straight down — rainbow drops splash round you.</summary>
+        public void StickerSplash()
+        {
+            if (Riding || Snowmobile || swim != 0) return;
+            Launch(15f);
+            splashAt = Time.time + 0.6f; splashFx = true;
+            AudioFx.Play("boing");
+        }
+        /// <summary>v0.31 stickers «Ракета», «Прыжок до неба», «Сальто»: a jump up.</summary>
+        public void StickerJump(float v) { if (Riding || Snowmobile || swim != 0) return; Launch(v); }
+        public int Splashes { get; private set; }
+
+        float twoB = -1;
+        public int Flops { get; private set; }
+        bool flop;
+        /// <summary>v0.31 (A, A, B tapped): no hop — he flies down and forward belly first, arms straight ahead,
+        /// and on the ground simply stands up again (no flop, no slide).</summary>
+        void StartFlop()
+        {
+            if (plunge != 0 || dive != 0) return;
+            EndLeap();
+            superBounce = false;
+            Flops++;
+            var f = transform.forward; f.y = 0; f = f.sqrMagnitude > 0.01f ? f.normalized : Vector3.forward;
+            vel = f * 9f + Vector3.down * 7f;
+            flop = true;
+            SetDive(1);   // flying belly first (no steering)
+            AudioFx.Play("swing"); AudioFx.Play("boing", 0.5f);
+            Effects.Emit("stardust", transform.position + Vector3.up * 0.6f, 8, 0.3f);
+        }
+
         void StartPlunge(bool big)
         {
             if (big && plunge == 2) return;
@@ -462,6 +511,7 @@ namespace Chubrik
         {
             bool big = plunge == 2;
             plunge = 0; Anim.plunge = false;
+            if (splashFx) { splashFx = false; Splashes++; Stickers.Rainbow(transform.position); }
             if (big && superBounce)
             {
                 // the super bounce: higher than a double jump
@@ -493,6 +543,7 @@ namespace Chubrik
         void SetDive(int d)
         {
             dive = d;
+            if (d != 1) flop = false;
             if (Anim) Anim.belly = d != 0;
         }
 
@@ -631,9 +682,9 @@ namespace Chubrik
             }
             if (!Grounded && airJumped && !Riding && hang == 0 && !Snowmobile)
             {
-                // 18.11: A + A + B — straight down, and off the ground you bounce up higher than a double jump
-                StartPlunge(true);
-                superBounce = true;
+                // v0.31: A + A, then B: tapped — a hop up and a flop down on the belly, arms straight ahead;
+                // held — 18.11's straight down with the bounce higher than a double jump (decided in Update)
+                twoB = Time.time;
                 attackCd = 0.4f;
                 return;
             }
@@ -642,6 +693,8 @@ namespace Chubrik
             if (Football.TryKick(this)) return;   // 18.11: B next to the football kicks it
             if (Grounded && new Vector3(vel.x, 0, vel.z).magnitude > RunSpeed * 0.35f) leapReady = Time.time + 0.6f;   // B then A on the run = the leap
             if (Grounded && Zones.HitEnter()) { AudioFx.Play("punch"); return; }   // a hit next to a shop goes in
+            if (Grounded && Chests.OpenNear(transform.position)) return;   // v0.31: B next to a chest opens it
+            if (Grounded && Friends.TalkNear(transform.position)) return;   // v0.31: B next to a friend — he tells a story
             Rescue.HitNear(transform.position);   // a hit next to a cage opens it (with a key)
             World3.HitNear(transform.position);   // singing crystals of the Masters' riddle
             World4.HitNear(transform.position, !Grounded);   // snowmen, ice cubes (a jump attack breaks them), the chimney

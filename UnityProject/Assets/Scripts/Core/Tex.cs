@@ -352,6 +352,8 @@ namespace Chubrik
         });
 
         public static Texture2D Asphalt() => Speckle("asphalt", "3a3c40", new[] { "2d2f33", "4a4c51", "55575c" }, 2500, 0.5f, 1.4f, 0.05f, 71);
+        /// <summary>v0.31: frozen river ice — light blue with white flecks.</summary>
+        public static Texture2D RiverIce() => Speckle("riverice", "bfe6fb", new[] { "e6f6ff", "a8d8f5", "ffffff" }, 500, 0.6f, 2.2f, 0.03f, 73);
         public static Texture2D Snow() => Speckle("snow", "eef3f8", new[] { "dfe8f1", "ffffff", "d3dee9" }, 900, 0.8f, 2.4f, 0.02f, 72);
         public static Texture2D MoonGround() => C("moon", () =>
         {

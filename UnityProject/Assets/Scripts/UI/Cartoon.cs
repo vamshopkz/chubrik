@@ -25,14 +25,17 @@ namespace Chubrik
         static GameObject root;
         public static bool IsOpen => root != null;
         public static int Scene { get; private set; } = -1;
-        public const int Scenes = 16;
         /// <summary>Speeds the whole cartoon up (animation, waits, voices); tests set 4.</summary>
         public static float Speed = 1f;
         static readonly Vector3 Origin = new Vector3(0, 600, -6000);
 
-        public static void Play()
+        /// <summary>22.11: opens the episode picker (7 episodes, CartoonEpisodes.cs); <see cref="Play(int)"/> skips it.</summary>
+        public static void Play() => Open(0);
+
+        static void Open(int episode)
         {
             Stop();
+            Episode = episode;
             Menus.Unlock();
             if (PlayerCtl.I) PlayerCtl.I.Frozen = true;
             var bg = UIKit.Img(UIRoot.TopLayer, UIKit.White, new Color(0, 0, 0, 0), "Cartoon", true);
@@ -435,7 +438,7 @@ namespace Chubrik
                 for (int i = 0; i < 3; i++) { vsrc[i] = gameObject.AddComponent<AudioSource>(); vsrc[i].playOnAwake = false; }
                 mus = gameObject.AddComponent<AudioSource>();
                 mus.clip = Tune(); mus.loop = true; mus.volume = 0.13f; mus.playOnAwake = false;
-                StartCoroutine(Run());
+                StartCoroutine(Begin());
             }
 
             void OnDestroy()
@@ -1765,17 +1768,8 @@ namespace Chubrik
                 foreach (var t in five) if (t != chi) { t.Land(0.3f); t.lean = -15; }
                 yield return Act(0.6f, t => { foreach (var a in five) if (a != chi) a.lean = Mathf.Lerp(-15, 0, t / 0.6f); });
                 yield return Wait(Mathf.Max(0, len * 0.65f - 0.9f));
-                Hush();
-                var again = UIKit.Button(transform, "ЕЩЁ РАЗ", UIKit.Green, Play, 32, "Again");
-                UIKit.Place(again.Bg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(300, 86));
-                againBtn = again.gameObject;
-                foreach (var t in five) t.bob = 0.3f;
-                var c = FO + new Vector3(0, 2.4f, 0);
-                yield return Act(99999f, t =>
-                {
-                    float a = Mathf.Sin(t * 0.25f) * 0.5f;
-                    camRig = () => (c + new Vector3(Mathf.Sin(a) * 12, 0.2f, -Mathf.Cos(a) * 12), c);
-                });
+                // 22.11: «все серии» / «следующая серия» / «выход» (CartoonEpisodes.cs)
+                yield return EndCard(FO + new Vector3(0, 2.4f, 0), 12);
             }
 
             void ApplyCamNow()
