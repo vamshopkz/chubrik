@@ -127,6 +127,63 @@ namespace Chubrik
         }
 
         /// <summary>Thumbnails of items (the current look wearing each one), cached; the mannequin is restored after.</summary>
+        int thumbGen;
+        /// <summary>v0.30: the pictures that are not ready yet are drawn a few per frame (≈6 ms a frame), so opening a
+        /// wardrobe department with 88 things doesn't freeze the game. A new call cancels the old one.</summary>
+        public void ThumbsAsync(IList<Item> items, System.Action<Item, Texture> done)
+        {
+            var todo = new List<Item>();
+            foreach (var it in items)
+            {
+                if (thumbs.TryGetValue(it.id, out var t) && t && t.IsCreated()) done(it, t);
+                else todo.Add(it);
+            }
+            thumbGen++;
+            if (todo.Count > 0) StartCoroutineSafe(ThumbsRun(todo, done, thumbGen, items.Count));
+        }
+
+        void StartCoroutineSafe(System.Collections.IEnumerator e)
+        {
+            if (!gameObject.activeInHierarchy) Show(true);
+            StartCoroutine(e);
+        }
+
+        System.Collections.IEnumerator ThumbsRun(List<Item> todo, System.Action<Item, Texture> done, int gen, int keepCount)
+        {
+            var keep = Model.look.Copy();
+            var basis = Save.CurrentLook();
+            bool bake = ChubrikModel.BakeParts;
+            int i = 0;
+            while (i < todo.Count)
+            {
+                if (gen != thumbGen) break;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Show(true);
+                cam.targetTexture = thumbRT;
+                ChubrikModel.BakeParts = false;
+                while (i < todo.Count && (sw.ElapsedMilliseconds < 6 || i == 0))
+                {
+                    var it = todo[i++];
+                    if (thumbs.TryGetValue(it.id, out var have) && have && have.IsCreated()) { done(it, have); continue; }
+                    var t = (RenderTexture)One(it, basis);
+                    thumbs[it.id] = t;
+                    thumbOrder.Remove(it.id); thumbOrder.Add(it.id);
+                    done(it, t);
+                    if (sw.ElapsedMilliseconds >= 6) break;
+                }
+                ChubrikModel.BakeParts = bake;
+                cam.targetTexture = RT;
+                yield return null;
+            }
+            while (thumbOrder.Count > MaxThumbs && thumbOrder.Count > keepCount)
+            {
+                var id = thumbOrder[0]; thumbOrder.RemoveAt(0);
+                if (thumbs.TryGetValue(id, out var o) && o) { o.Release(); Destroy(o); }
+                thumbs.Remove(id);
+            }
+            if (gen == thumbGen) { SetLook(keep); Show(false); }
+        }
+
         public void Thumbs(IList<Item> items, System.Action<Item, Texture> done)
         {
             var todo = new List<Item>();
@@ -247,6 +304,17 @@ namespace Chubrik
         }
 
         readonly Dictionary<string, RenderTexture> portraits = new Dictionary<string, RenderTexture>();
+
+        /// <summary>22.11 soft restart (another chubrik): the pictures go with the old game.</summary>
+        void OnDestroy()
+        {
+            void Free(RenderTexture t) { if (t) { t.Release(); Destroy(t); } }
+            Free(RT); Free(thumbRT);
+            foreach (var t in thumbs.Values) Free(t);
+            foreach (var t in portraits.Values) Free(t);
+            thumbs.Clear(); thumbOrder.Clear(); portraits.Clear();
+            if (I == this) I = null;
+        }
 
         /// <summary>A whole-body picture of someone else's chubrik (online players list), cached by their look.</summary>
         public Texture Portrait(Look l, string key, int size = 0)

@@ -6,7 +6,9 @@ namespace Chubrik
 {
     /// <summary>
     /// 22.11: «ИГРАТЬ» on the title screen → pick a chubrik. Three big squares: your chubriks on see-through squares,
-    /// free places with a big «+» (a new chubrik). Coins and things are shared, each chubrik has its own name and outfit.
+    /// free places with a big «+» (a new chubrik). Each chubrik has its own progress (coins, things, friends,
+    /// worlds); picking another one rebuilds the game for it (<see cref="Boot.Restart"/>). This is the only place
+    /// to choose whom to play — the other chubriks don't stand anywhere in the game.
     /// </summary>
     public static class CharSlots
     {
@@ -20,7 +22,7 @@ namespace Chubrik
         public static void Open()
         {
             Close();
-            var dim = UIKit.Img(UIRoot.TopLayer, UIKit.White, new Color(0.05f, 0.14f, 0.34f, 0.55f), "CharSlots", true);
+            var dim = UIKit.Img(UIRoot.TopLayer, UIKit.White, new Color(0.05f, 0.12f, 0.3f, 0.96f), "CharSlots", true);
             UIKit.Fill(dim.rectTransform);
             root = dim.gameObject;
             var safe = UIRoot.Safe();
@@ -43,11 +45,11 @@ namespace Chubrik
             {
                 var cell = UIKit.Rect("Slot " + (i + 1), row);
                 UIKit.Place(cell, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(i * (size + gap), 0), new Vector2(size, size));
-                if (i < Save.P.chars.Count) Filled(cell, i, size);
+                if (i < Save.CharCount) Filled(cell, i, size);
                 else Empty(cell, size);
             }
 
-            var tip = UIKit.Txt(dim.transform, "Монеты, вещи и спасённые друзья — общие. Имя и наряд у каждого чубрика свои", 28, Color.white);
+            var tip = UIKit.Txt(dim.transform, "У каждого чубрика всё своё: монеты, вещи, друзья и пройденные миры", 28, Color.white);
             UIKit.Place(tip.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 30 + safe.y), new Vector2(Mathf.Min(1300, width - 80), 80));
         }
 
@@ -63,7 +65,7 @@ namespace Chubrik
 
         static void Filled(RectTransform cell, int i, float size)
         {
-            bool active = i == Save.P.activeChar;
+            bool active = i == Save.ActiveIndex;
             var sq = Square(cell, 0.25f, Color.white, active ? UIKit.Gold : new Color(1, 1, 1, 0.85f));
             var b = sq.gameObject.AddComponent<UIButton>();
             b.Bg = sq;
@@ -125,30 +127,38 @@ namespace Chubrik
             root = null; confirm = null;
         }
 
-        /// <summary>Play as chubrik <paramref name="i"/>: its outfit goes on, then the usual «Играть».</summary>
+        /// <summary>Play as chubrik <paramref name="i"/>: the same one — just «Играть»; another one — its own
+        /// progress is loaded and the game is built again for it, then «Играть».</summary>
         public static void Pick(int i)
         {
-            if (i < 0 || i >= Save.P.chars.Count) return;
-            if (i != Save.P.activeChar)
-            {
-                Save.SwitchChar(i);
-                PlayerCtl.I.ApplyLook(Save.CurrentLook());
-                CharStand.Build();
-            }
+            if (i < 0 || i >= Save.CharCount) return;
             Close();
-            Menus.Play();
+            if (i == Save.ActiveIndex) { Menus.Play(); return; }
+            Boot.Restart(() => Save.SwitchChar(i), () =>
+            {
+                StartPlaying();
+                Hud.Toast($"Ты играешь за: {Save.CharName(Save.ActiveIndex)}!", UIKit.Lime);
+            });
         }
 
-        /// <summary>The «+»: a new chubrik in the starting outfit, played right away.</summary>
+        /// <summary>The «+»: a new chubrik with a brand new progress (50 coins, nothing found yet), played right away.</summary>
         public static void New()
         {
-            if (Save.NewChar() < 0) return;
-            PlayerCtl.I.ApplyLook(Save.CurrentLook());
-            CharStand.Build();
+            if (Save.CharCount >= Save.MaxChars) return;
             Close();
+            Boot.Restart(() => Save.NewChar(), () =>
+            {
+                StartPlaying();
+                AudioFx.Play("buy");
+                Hud.Toast("Новый чубрик! Всё с самого начала — наряди его в гардеробе", UIKit.Lime);
+            });
+        }
+
+        /// <summary>After the rebuild: like pressing «ИГРАТЬ» on the title screen (the start of the lobby).</summary>
+        static void StartPlaying()
+        {
+            if (PlayerCtl.I != null) PlayerCtl.I.MenuOrbit = true;
             Menus.Play();
-            AudioFx.Play("buy");
-            Hud.Toast("Новый чубрик! Наряди его в гардеробе", UIKit.Lime);
         }
 
         static void AskDelete(int i)
@@ -161,11 +171,11 @@ namespace Chubrik
             UIKit.Place(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(900, 440));
             var q = UIKit.Txt(panel.transform, $"Удалить чубрика «{Save.CharName(i)}»?", 44, UIKit.Gold);
             UIKit.Place(q.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -30), new Vector2(840, 120));
-            var sub = UIKit.Txt(panel.transform, "Его имя и наряд пропадут. Монеты и вещи останутся", 28, Color.white);
+            var sub = UIKit.Txt(panel.transform, "Пропадёт всё, что у него есть: монеты, вещи, друзья и пройденные миры", 28, Color.white);
             UIKit.Place(sub.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -150), new Vector2(820, 90));
             var yes = UIKit.Button(panel.transform, "УДАЛИТЬ", UIKit.Red, () =>
             {
-                if (Save.DeleteChar(i)) { AudioFx.Play("click"); CharStand.Build(); }
+                if (Save.DeleteChar(i)) AudioFx.Play("click");
                 Open();
             }, 36, "Yes");
             UIKit.Place(yes.Bg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-200, 34), new Vector2(340, 100));

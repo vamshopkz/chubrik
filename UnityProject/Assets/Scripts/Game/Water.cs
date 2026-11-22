@@ -251,6 +251,8 @@ namespace Chubrik
         static float fogStartWas, fogEndWas, fogDensityWas;
         static readonly Color UnderFog = new Color(0.40f, 0.74f, 0.93f);
         public static bool CameraUnder => camUnder;
+        /// <summary>22.11 soft restart: no water and the camera is dry (the new lobby registers its river again).</summary>
+        internal static void ResetStatics() { vols.Clear(); camUnder = false; }
 
         /// <summary>Every frame after the camera moved: under the surface the screen turns light blue (fog + a see-through
         /// blue sheet in front of the lens); out of the water everything is back as it was.</summary>

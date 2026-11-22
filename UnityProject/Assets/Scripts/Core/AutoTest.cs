@@ -283,12 +283,12 @@ namespace Chubrik
             Check("10 hidden tokens", Lobby.TokenSpots.Count == 10, Lobby.TokenSpots.Count.ToString());
 
             // ---- the lobby after the drawn map: blue gates open with rescued friends ----
-            Check("5 blue gates (snow ×2, jungle, crystal, glitch)", Lobby.Gates.Count == 5);
+            Check("6 blue gates (snow ×2, jungle ×2 — one over the river, crystal, glitch)", Lobby.Gates.Count == 6);
             Check("with no friends rescued only the ruins are open", Lobby.Open(2) && !Lobby.Open(4) && Lobby.Gates.TrueForAll(g => !g.IsOpen));
             var keepRescued = new List<string>(Save.P.rescued);
             for (int i = 0; i < 10; i++) Save.P.rescued.Add("test" + i);
             yield return null;
-            Check("10 friends: snow and jungle gates open, crystal and glitch shut", Lobby.Gates.FindAll(g => g.IsOpen).Count == 3 && Lobby.Open(5) && !Lobby.Open(3));
+            Check("10 friends: snow and jungle gates open, crystal and glitch shut", Lobby.Gates.FindAll(g => g.IsOpen).Count == 4 && Lobby.Open(5) && !Lobby.Open(3));
             for (int i = 10; i < 25; i++) Save.P.rescued.Add("test" + i);
             yield return null;
             Check("25 friends: every gate is open", Lobby.Gates.TrueForAll(g => g.IsOpen));
@@ -414,9 +414,25 @@ namespace Chubrik
             bool lukyBtn = false, noCoinPrice = true;
             foreach (var tx in FindObjectsByType<TMPro.TextMeshProUGUI>(FindObjectsSortMode.None)) { if (tx.text == "ОТКРЫТЬ ЛАКИ-БЛОК") lukyBtn = true; if (tx.text.EndsWith(" МОНЕТ") && tx.transform.parent.name.StartsWith("Tile")) noCoinPrice = false; }
             Check("wardrobe: «Открыть лаки-блок» button, skins are not sold for coins", lukyBtn && noCoinPrice);
+            // v0.30: the department opens at once (pictures come a few per frame) and «Сохранить скин» works
+            var swDept = System.Diagnostics.Stopwatch.StartNew();
             WardrobeUI.SelectDept("wings");
-            yield return Wait(0.8f);
+            long deptMs = swDept.ElapsedMilliseconds;
+            Check("a wardrobe department with 88 things opens without a freeze", deptMs < 400, deptMs + " ms");
+            yield return Wait(1.5f);
             yield return Shot("11_wardrobe_wings");
+            int outfits0 = Save.P.outfits.Count;
+            SavedSkins.Open();
+            yield return Wait(0.3f);
+            SavedSkins.SaveCurrent();
+            yield return Wait(0.6f);
+            yield return Shot("130_my_skins");
+            bool saved = Save.P.outfits.Count == outfits0 + 1;
+            var savedLook = Save.P.outfits[Save.P.outfits.Count - 1].look;
+            Save.Wear("hat", ""); PlayerCtl.I.ApplyLook(Save.CurrentLook());
+            SavedSkins.Wear(Save.P.outfits.Count - 1);
+            Check("«Сохранить скин» → «Мои скины»: save the outfit, put it on again", saved && Online.LookString(Save.CurrentLook()) == savedLook && !SavedSkins.IsOpen);
+            Save.P.outfits.RemoveAt(Save.P.outfits.Count - 1);
             WardrobeUI.SelectDept("suit");
             yield return Wait(0.8f);
             yield return Shot("12_wardrobe_suits");
@@ -1162,6 +1178,60 @@ namespace Chubrik
                     yield return Wait(0.4f);
                 }
 
+                // ---- 22.11 the snowy lake by the water cave and the jungle pool are the river's own water; the river's
+                // passage through the hub–jungle wall is shut by a jungle gate with a grate until 10 friends are rescued ----
+                {
+                    float sz = pl.Model.SizeScale;
+                    bool lakeWet = Water.At(Lobby.LakeSpot + Vector3.down * 0.5f, out float lakeS, out float lakeB);
+                    bool lakeJoined = Lobby.RiverPath(Lobby.LakeSpot, Lobby.SwimSpot, out var lakeGates, out string lakeBlocks);
+                    Check("the snowy lake by the water cave is deep river water, joined with the river (nothing but the snow river gate between)",
+                        lakeWet && lakeS - lakeB > 1.6f && lakeJoined && lakeGates.TrueForAll(g => g.need == Lobby.NeedFor(4)) && GameObject.Find("Lake") == null,
+                        $"wet {lakeWet}, depth {lakeS - lakeB:0.00}, gates {lakeGates.Count}, in the way:{lakeBlocks}");
+                    pl.Teleport(new Vector3(Lobby.LakeSpot.x, lakeS - 1.0f * sz, Lobby.LakeSpot.z), 100); pl.yaw = 100; pl.pitch = 16;
+                    yield return Wait(1.4f);
+                    Check("in the snowy lake he swims", pl.Swimming && Mathf.Abs(pl.transform.position.y - (lakeS - pl.FloatDepth())) < 0.3f, $"swimming {pl.Swimming}, y {pl.transform.position.y:0.00}");
+                    yield return Shot("131_snow_lake");
+                    Check("the water cave's egg stays on dry ground", !Water.At(new Vector3(35.8f, 0.1f, 41.2f), out _, out _) && Physics.Raycast(new Vector3(35.8f, 0.8f, 41.2f), Vector3.down, 1.2f, Layers.SolidMask, QueryTriggerInteraction.Ignore));
+
+                    var keepR = new List<string>(Save.P.rescued);
+                    Save.P.rescued.Clear();
+                    for (int i = 0; i < Lobby.NeedFor(5) - 1; i++) Save.P.rescued.Add("test" + i);
+                    yield return Wait(0.5f);
+                    var jg = Lobby.JungleRiverGate;
+                    bool poolWet = Water.At(Lobby.PoolSpot + Vector3.down * 0.5f, out float poolS, out float poolB);
+                    Lobby.RiverPath(Lobby.SwimSpot, Lobby.PoolSpot, out var shutGates, out string shutBlocks);
+                    Check("the jungle pool is deep river water", poolWet && poolS - poolB > 1.8f, $"wet {poolWet}, depth {poolS - poolB:0.00}");
+                    Check($"{Lobby.NeedFor(5) - 1} friends: the river's way into the jungle is shut by a jungle gate down to the riverbed",
+                        jg != null && !jg.IsOpen && jg.need == Lobby.NeedFor(5) && shutGates.Contains(jg) && shutBlocks.Length == 0,
+                        $"gate {(jg != null ? jg.IsOpen.ToString() : "none")}, gates in the way {shutGates.Count}, other:{shutBlocks}");
+                    var north = new Vector3(Lobby.JunglePass.x, 0, Lobby.JunglePass.z + 3.5f);
+                    pl.Teleport(new Vector3(north.x, Lobby.RiverSurface - 1.0f * sz, north.z), 180); pl.yaw = 180; pl.pitch = 16;
+                    yield return Wait(0.8f);
+                    pl.MoveInput = Vector2.up;
+                    yield return Wait(2.6f);
+                    float zShut = pl.transform.position.z;
+                    yield return Shot("132_jungle_river_gate");
+                    pl.MoveInput = Vector2.zero;
+                    Check("the shut river gate stops a swimmer", pl.Swimming && zShut > Lobby.JunglePass.z + 0.2f, $"z {zShut:0.00} (gate at {Lobby.JunglePass.z:0.0})");
+                    Save.P.rescued.Add("test" + (Lobby.NeedFor(5) - 1));
+                    yield return Wait(1.8f);   // the gate sinks away
+                    bool passOpen = Lobby.RiverPath(Lobby.SwimSpot, Lobby.PoolSpot, out var openGates, out string openBlocks);
+                    Check($"{Lobby.NeedFor(5)} friends: the river gate opens with the jungle, the way is clear", jg != null && jg.IsOpen && Lobby.Open(5) && passOpen && openGates.Count == 0,
+                        $"open {(jg != null && jg.IsOpen)}, gates {openGates.Count}, in the way:{openBlocks}");
+                    pl.Teleport(new Vector3(north.x, Lobby.RiverSurface - 1.0f * sz, north.z), 180); pl.yaw = 180;
+                    yield return Wait(0.6f);
+                    pl.MoveInput = Vector2.up;
+                    float zOpen = pl.transform.position.z;
+                    for (float t = 0; t < 5f && zOpen > Lobby.JunglePass.z - 3f; t += Time.deltaTime) { yield return null; zOpen = pl.transform.position.z; }
+                    pl.MoveInput = Vector2.zero;
+                    Check("through the open river gate he swims into the jungle", zOpen < Lobby.JunglePass.z - 3f && pl.Swimming, $"z {zOpen:0.00}, swimming {pl.Swimming}");
+                    Save.P.rescued.Clear(); Save.P.rescued.AddRange(keepR);
+                    yield return null;
+                    Check("the river gate shuts again with fewer friends (test only)", jg != null && jg.IsOpen == Lobby.Open(5));
+                    pl.Teleport(Lobby.Spawn, 0); pl.pitch = 16;
+                    yield return Wait(0.4f);
+                }
+
                 // ledge grab: jump at a ledge that is too high — he catches the edge and climbs up
                 var lt = new GameObject("LedgeTest").transform;
                 var lfloor = Lobby.Solid(PrimitiveType.Cube, new Vector3(500, 99.75f, 500), new Vector3(20, 0.5f, 20), Mats.Lit(Color.gray), default, lt);
@@ -1723,60 +1793,100 @@ namespace Chubrik
             }
 
 
-            // ---- 22.11 several chubriks: «ИГРАТЬ» → the picker, «+» makes a new one, the old one waits in the lobby ----
+            // ---- 22.11 several chubriks, each with its OWN progress: «ИГРАТЬ» → the picker, «+» = a new chubrik from zero ----
+            // (at the very end: the game is rebuilt for him, then for the first one again — the rest of the test ran on one profile)
             {
                 Window.Close();
                 if (Worlds.Current != 1) yield return Enter(1);
                 var hatDept = Catalog.Dept("hat");
                 var hatItem = hatDept.items.Find(it => it.id != hatDept.def && !string.IsNullOrEmpty(it.id));
                 string hatId = hatItem != null ? hatItem.id : hatDept.def;
-                Save.Give(hatId); Save.Wear("hat", hatId); pl.ApplyLook(Save.CurrentLook());
-                int charsBefore = Save.P.chars.Count;
-                var firstSlot = Save.ActiveChar;
+                Save.Give(hatId); Save.Wear("hat", hatId); PlayerCtl.I.ApplyLook(Save.CurrentLook());
+                // the first chubrik's progress (after the whole test it has coins, friends, worlds, found things)
+                var firstP = Save.P;
+                long coins1 = Save.P.coins, tokens1 = Save.P.tokens;
+                int rescued1 = Save.P.rescued.Count, found1 = Save.P.found.Count, owned1 = Save.P.owned.Count, foot1 = Save.P.footLevel;
+                string done1 = string.Join(",", Save.P.done), rescuedIds1 = string.Join(",", Save.P.rescued);
+                // the lobby's 10 hidden tokens («t0»…«t9») still lying there (the worlds' tokens are in Pickups too)
+                int LobbyTokens() { int n = 0; if (Pickups.I != null) foreach (Transform c in Pickups.I.transform) if (c.gameObject.activeSelf && c.name.Length > 7 && c.name.StartsWith("Token t") && char.IsDigit(c.name[7])) n++; return n; }
+                int tokensLeft1 = LobbyTokens();
+                int charsBefore = Save.CharCount, firstIdx = Save.ActiveIndex;
+                int LobbyFriends() { int n = 0; if (Lobby.root != null) foreach (Transform c in Lobby.root) if (c.name.StartsWith("Friend ")) n++; return n; }
+                bool NoStands() { foreach (var go in gameObject.scene.GetRootGameObjects()) if (go.name.StartsWith("CharStand")) return false; return Lobby.root == null || !Lobby.root.Cast<Transform>().Any(c => c.name.StartsWith("CharStand")); }
+                IEnumerator WaitRebuilt(int before)
+                {
+                    for (float t = 0; t < 15 && (Boot.Restarting || Boot.Restarts == before); t += Time.unscaledDeltaTime) yield return null;
+                    yield return Wait(1.5f);
+                    Window.Close();
+                }
+                IEnumerator Walks(string who)
+                {
+                    var p = PlayerCtl.I;
+                    p.Teleport(Lobby.Spawn, 0); p.yaw = 0; p.pitch = 10;
+                    yield return Wait(0.6f);
+                    var from = p.transform.position;
+                    p.MoveInput = new Vector2(0, 1);
+                    yield return Wait(1.2f);
+                    p.MoveInput = Vector2.zero;
+                    float moved = Vector3.Distance(new Vector3(from.x, 0, from.z), new Vector3(p.transform.position.x, 0, p.transform.position.z));
+                    Check($"{who}: the lobby is there and the chubrik runs in it", Lobby.root != null && Worlds.Current == 1 && moved > 1.5f && p.transform.position.y > -1, moved.ToString("0.0") + " m");
+                }
+                Check("before: one chubrik, no other chubriks standing in the lobby", charsBefore == 1 && NoStands(), charsBefore.ToString());
                 Menus.Main();
                 yield return Wait(0.5f);
                 CharSlots.Open();
                 yield return Wait(0.8f);
                 Check("«ИГРАТЬ» opens the chubrik picker with 3 squares", CharSlots.IsOpen && CharSlots.Squares == Save.MaxChars, CharSlots.Squares.ToString());
                 yield return Shot("127_char_slots");
+
+                int restarts = Boot.Restarts;
                 CharSlots.New();
-                yield return Wait(1.2f);
-                Window.Close();
-                int newIdx = Save.P.activeChar;
-                Check("«+» makes a new chubrik and plays it in the starting outfit", Save.P.chars.Count == charsBefore + 1 && Save.P.chars[newIdx] != firstSlot && Save.Worn("hat") == hatDept.def && pl.Model.look.Of("hat") == hatDept.def,
-                      $"{Save.P.chars.Count} chars, hat {Save.Worn("hat")}");
-                Check("the new chubrik gets its own name", Save.CharName(newIdx).StartsWith("Чубрик "), Save.CharName(newIdx));
-                yield return Wait(0.3f);
-                StandingChar stand = null;
-                foreach (var st in CharStand.Stands) if (st && st.Slot == firstSlot) stand = st;
-                Check("the first chubrik stands in the lobby as an NPC in his own outfit", stand != null && stand.Model.look.Of("hat") == hatId && Vector3.Distance(stand.transform.position, Lobby.Spawn) < 12,
-                      stand != null ? stand.transform.position.ToString() : "none");
-                if (stand != null)
-                {
-                    var spot = CharStand.SpotOf(stand.Spot);
-                    var toSpawn = Lobby.Spawn - spot; toSpawn.y = 0; toSpawn = toSpawn.normalized;
-                    var at = spot + toSpawn * 2f + Vector3.up * 0.3f;
-                    float yawTo = Mathf.Atan2(-toSpawn.x, -toSpawn.z) * Mathf.Rad2Deg;
-                    pl.Teleport(at, yawTo); pl.yaw = yawTo; pl.pitch = 12;
-                    yield return Wait(1f);
-                    yield return Shot("128_char_stand");
-                    var zone = Zones.Near();
-                    Check("next to him the button says «ИГРАТЬ ЗА: …»", zone != null && zone.label.StartsWith("ИГРАТЬ ЗА"), zone != null ? zone.label : "no zone");
-                    Zones.Interact();
-                    yield return Wait(0.6f);
-                    Check("«ВОЙТИ» switches back to the first chubrik — his hat is on again", Save.ActiveChar == firstSlot && Save.Worn("hat") == hatId && pl.Model.look.Of("hat") == hatId, Save.Worn("hat"));
-                    StandingChar other = null;
-                    foreach (var st in CharStand.Stands) if (st && st.Slot != firstSlot) other = st;
-                    Check("the new chubrik now waits there instead, in the starting outfit", other != null && other.Spot == stand.Spot && other.Model.look.Of("hat") == hatDept.def,
-                          other != null ? other.Name : "none");
-                }
+                yield return WaitRebuilt(restarts);
+                int newIdx = Save.ActiveIndex;
+                var P = Save.P;
+                Check("«+» makes a 2nd chubrik, plays him, the game is built again", Save.CharCount == charsBefore + 1 && newIdx != firstIdx && Boot.Restarts == restarts + 1 && !Boot.Restarting && PlayerCtl.I != null && PlayerCtl.I != pl,
+                      $"{Save.CharCount} chubriks, restarts {Boot.Restarts - restarts}");
+                Check("the new chubrik's progress is fresh: 50 coins, no friends, no worlds, nothing found", P != firstP && P.coins == 50 && P.tokens == 0 && P.rescued.Count == 0 && P.done.Count == 0 && P.found.Count == 0 && P.keys == 0,
+                      $"coins {P.coins}, tokens {P.tokens}, rescued {P.rescued.Count}, done {P.done.Count}, found {P.found.Count}");
+                Check("…and nothing bought: default things only, football level 1, no cheats, no sets, no admin copies", P.owned.Count < owned1 && P.sets.Count == 0 && P.footLevel == 1 && !P.cheatFly && !P.cheatCoins && !P.cheatAdmin && P.placed.Count == 0 && !P.promo && P.maxHearts == 3,
+                      $"owned {P.owned.Count} (first {owned1}), foot {P.footLevel}");
+                Check("the new chubrik wears the starting outfit and has his own name", Save.Worn("hat") == hatDept.def && PlayerCtl.I.Model.look.Of("hat") == hatDept.def && Save.CharName(newIdx).StartsWith("Чубрик "),
+                      $"{Save.CharName(newIdx)}, hat {Save.Worn("hat")}");
+                Check("his lobby: no rescued friends walk there, the gates are closed, every hidden token is back", LobbyFriends() == 0 && Lobby.Gates.Count > 0 && Lobby.Gates.TrueForAll(g => g != null && !g.IsOpen) && LobbyTokens() >= tokensLeft1 && LobbyTokens() > 0,
+                      $"friends {LobbyFriends()}, gates {Lobby.Gates.Count}, tokens {LobbyTokens()} (first {tokensLeft1})");
+                Check("no other chubrik stands in the lobby (whom to play is chosen only in the picker)", NoStands());
+                var roots = gameObject.scene.GetRootGameObjects();
+                Check("one HUD, one player, one lobby after the rebuild (the old ones are gone)", FindObjectsByType<PlayerCtl>(FindObjectsSortMode.None).Length == 1 && FindObjectsByType<Hud>(FindObjectsSortMode.None).Length == 1 && roots.Count(g => g.name == "Lobby") == 1 && roots.Count(g => g.name == "UI") == 1 && World2.Root == null,
+                      $"{roots.Count(g => g.name == "Lobby")} lobbies, {roots.Length} roots");
+                yield return Walks("the new chubrik");
+                yield return Shot("128_char_new");
+                yield return Enter(2);
+                Check("the new chubrik can go into World 2: its cages are there, nobody rescued yet", Worlds.Current == 2 && World2.Root != null && Rescue.Total("w2c") >= 8 && P.rescued.Count == 0, $"world {Worlds.Current}, cages {Rescue.Total("w2c")}");
+                yield return Enter(1);
+                Check("…and back to his lobby", Worlds.Current == 1);
+
+                CharSlots.Open();
+                yield return Wait(0.8f);
+                Check("the picker shows both chubriks and one «+»", CharSlots.IsOpen && CharSlots.Squares == Save.MaxChars && Save.CharCount == 2);
+                yield return Shot("129_char_slots_two");
+                restarts = Boot.Restarts;
+                CharSlots.Pick(firstIdx);
+                yield return WaitRebuilt(restarts);
+                P = Save.P;
+                Check("picking the first chubrik rebuilds the game for him", Save.ActiveIndex == firstIdx && Boot.Restarts == restarts + 1 && !Boot.Restarting);
+                Check("the first chubrik's progress is untouched: coins, friends, worlds, found things, items", P.coins == coins1 && P.tokens == tokens1 && P.rescued.Count == rescued1 && string.Join(",", P.rescued) == rescuedIds1 && string.Join(",", P.done) == done1 && P.found.Count == found1 && P.owned.Count == owned1 && P.footLevel == foot1,
+                      $"coins {P.coins}/{coins1}, rescued {P.rescued.Count}/{rescued1}, done {string.Join(",", P.done)}/{done1}, found {P.found.Count}/{found1}");
+                Check("…his hat is on again", Save.Worn("hat") == hatId && PlayerCtl.I.Model.look.Of("hat") == hatId, Save.Worn("hat"));
+                Check("…his rescued friends walk in the lobby again, his found tokens stay found", LobbyFriends() == rescued1 && LobbyTokens() == tokensLeft1, $"friends {LobbyFriends()}/{rescued1}, tokens {LobbyTokens()}/{tokensLeft1}");
+                Check("…and still nobody stands in the lobby", NoStands());
+                yield return Walks("the first chubrik again");
                 int otherIdx = -1;
-                for (int i = 0; i < Save.P.chars.Count; i++) if (i != Save.P.activeChar) otherIdx = i;
-                Check("each chubrik keeps its own outfit", otherIdx >= 0 && Save.CharLook(otherIdx).Of("hat") == hatDept.def && Save.CurrentLook().Of("hat") == hatId);
-                Check("a chubrik not played now can be deleted", otherIdx >= 0 && Save.DeleteChar(otherIdx) && Save.P.chars.Count == charsBefore);
-                yield return Wait(0.3f);
-                Check("after deleting him nobody waits in the lobby", CharStand.Stands.Count == 0, CharStand.Stands.Count.ToString());
-                Save.Wear("hat", hatDept.def); pl.ApplyLook(Save.CurrentLook());
+                for (int i = 0; i < Save.CharCount; i++) if (i != Save.ActiveIndex) otherIdx = i;
+                Check("the other chubrik keeps his outfit for the picker's portrait", otherIdx >= 0 && Save.CharLook(otherIdx).Of("hat") == hatDept.def);
+                Check("a chubrik not played now can be deleted (with his progress)", otherIdx >= 0 && Save.DeleteChar(otherIdx) && Save.CharCount == charsBefore && Save.ActiveIndex == 0 && Save.P.coins == coins1);
+                Check("the played chubrik can't be deleted", !Save.DeleteChar(Save.ActiveIndex) && Save.CharCount == charsBefore);
+                Save.Wear("hat", hatDept.def); PlayerCtl.I.ApplyLook(Save.CurrentLook());
+                pl = PlayerCtl.I;
             }
 
             // ---- main menu ----

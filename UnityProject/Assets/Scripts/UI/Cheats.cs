@@ -330,6 +330,8 @@ namespace Chubrik
         static Transform Holder { get { if (holder == null) holder = new GameObject("AdminPlaced").transform; return holder; } }
         static readonly HashSet<string> restored = new HashSet<string>();
         public static int Restored => restored.Count;
+        /// <summary>22.11 soft restart: the new profile's copies are put back with the new lobby.</summary>
+        internal static void ResetStatics() { restored.Clear(); Now = Mode.None; TemplatePath = null; }
 
         /// <summary>Puts back the saved copies whose originals exist now (called when the lobby or a world is built).</summary>
         public static void Restore()

@@ -280,7 +280,6 @@ namespace Chubrik
             {
                 // 18.11: the typhoon blows every skin off the account (the starting look stays)
                 P.owned.Clear(); P.sets.Clear(); P.look.Clear(); P.promo = false;
-                foreach (var c in P.chars) c.look.Clear();   // 22.11: every chubrik of the account loses its skins
                 Save.Fix(); Save.Write();
                 PlayerCtl.I?.ApplyLook(Save.CurrentLook());
                 AudioFx.Play("portal");

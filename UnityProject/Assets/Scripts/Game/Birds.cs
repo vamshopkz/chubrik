@@ -19,6 +19,8 @@ namespace Chubrik
         Rng rng;
 
         static readonly HashSet<int> worlds = new HashSet<int>();
+        /// <summary>22.11 soft restart: the flocks are made again with the lobby.</summary>
+        internal static void ResetStatics() { worlds.Clear(); All.Clear(); }
 
         /// <summary>Flocks in the lobby and the green worlds (once per world).</summary>
         public static void ForWorld(int w)

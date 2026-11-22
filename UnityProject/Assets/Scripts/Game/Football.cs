@@ -35,6 +35,13 @@ namespace Chubrik
         public static int Goals;           // autotest: goals counted
         public static Vector3 NetPos => netPos;
         static float startedAt;
+        /// <summary>22.11 soft restart: no match, the stadium is built again when needed.</summary>
+        internal static void ResetStatics()
+        {
+            Mode = 0; Running = false; Host = true; Friend = null; Me = Them = 0; TimeLeft = 0;
+            Bots.Clear();
+            FootballFans.ResetStatics();
+        }
         static TextMeshProUGUI board;
         static Runner runner;
         static Vector3 netPos, netVel; static float netT;

@@ -14,6 +14,8 @@ namespace Chubrik
                                            "Вафелька", "Ириска", "Мармелад", "Плюшка", "Сырник", "Леденец", "Пряник", "Карамелька", "Ватрушка", "Крендель" };
         public static readonly List<Cage> Cages = new List<Cage>();
         static readonly List<GameObject> lobbyFriends = new List<GameObject>();
+        /// <summary>22.11 soft restart: cages, friends and keys come from the new profile.</summary>
+        internal static void ResetStatics() { Cages.Clear(); lobbyFriends.Clear(); Held.Clear(); }
 
         /// <summary>Cage "w2c5" → its own name: 8 different friends per world.</summary>
         /// <summary>17.11: special friends in the richest outfits, locked deep in the backrooms.</summary>

@@ -350,6 +350,8 @@ namespace Chubrik
         static int songStep;
         public static bool SongSolved => Save.P.found.Contains("w3song");
         static GameObject secretBridge;
+        /// <summary>22.11 soft restart (the world is built again when entered).</summary>
+        internal static void ResetStatics() { singers.Clear(); songStep = 0; crystalN = 0; Enemies.Clear(); }
         static readonly string[] songCols = { "FF5252", "FFD23A", "5FF2FF", "B57CFF" };
 
         static void SongHall(Vector3 c)

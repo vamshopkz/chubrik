@@ -28,7 +28,17 @@ namespace Chubrik
         static ChubrikAnim A => PlayerCtl.I.Anim;
 
         /// <summary>17.11: the try-on goes onto the real chubrik in the world.</summary>
-        static void TryOn(Look l) { PlayerCtl.I.ApplyLook(l); }
+        /// <summary>v0.30: the try-on is applied once per frame (several clicks in one frame build the chubrik once),
+        /// and without the mesh baking while the wardrobe is open (it is baked again when you leave).</summary>
+        static Look pending;
+        static bool bakeWas = true;
+        static void TryOn(Look l) { pending = l.Copy(); }
+        static void ApplyPending()
+        {
+            if (pending == null || PlayerCtl.I == null) return;
+            var l = pending; pending = null;
+            PlayerCtl.I.ApplyLook(l);
+        }
 
         public static void Open(string startDept = null)
         {
@@ -37,6 +47,7 @@ namespace Chubrik
             Menus.Unlock();
             if (startDept != null) dept = startDept;
             PlayerCtl.I.Frozen = true;
+            bakeWas = ChubrikModel.BakeParts; ChubrikModel.BakeParts = false;
             PlayerCtl.I.StartWardrobeView();
             TryOn(Save.CurrentLook());
             var safe = UIRoot.Safe();
@@ -53,10 +64,13 @@ namespace Chubrik
 
             var bar = UIKit.Img(P, UIKit.White, new Color(0.07f, 0.14f, 0.34f, 1f), "TopBar", true);
             UIKit.Place(bar.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(4000, 80));
+            // v0.30: «СОХРАНИТЬ СКИН» in the top left corner opens «Мои скины»
+            var saveSkin = UIKit.Button(P, "СОХРАНИТЬ СКИН", UIKit.Pink, SavedSkins.Open, 22, "SaveSkin");
+            UIKit.Place(saveSkin.Bg.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12 + safe.x, -8), new Vector2(250, 64));
             var title = UIKit.Txt(P, "ГАРДЕРОБ", 44, UIKit.Gold, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(20 + safe.x, -10), new Vector2(300, 60));
+            UIKit.Place(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(278 + safe.x, -10), new Vector2(300, 60));
             money = UIKit.Txt(P, "", 28, Color.white, TextAlignmentOptions.MidlineLeft);
-            UIKit.Place(money.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(330 + safe.x, -12), new Vector2(760, 56));
+            UIKit.Place(money.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(560 + safe.x, -12), new Vector2(620, 56));
             money.enableAutoSizing = true; money.fontSizeMin = 16; money.fontSizeMax = 28;
             var close = UIKit.Button(P, "ГОТОВО", UIKit.Green, Close, 30);
             UIKit.Place(close.Bg.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-14 - safe.z, -7), new Vector2(210, 66));
@@ -114,6 +128,7 @@ namespace Chubrik
             readonly Vector3[] c = new Vector3[4];
             void LateUpdate()
             {
+                ApplyPending();
                 if (!leftPanel || !rightPanel || PlayerCtl.I == null) return;
                 leftPanel.GetWorldCorners(c); float l = c[2].x;
                 rightPanel.GetWorldCorners(c); float r = c[0].x;
@@ -197,7 +212,7 @@ namespace Chubrik
             }
             var list = new List<Item>();
             foreach (var it in d.items) if (raws.ContainsKey(it.id)) list.Add(it);
-            Preview.I.Thumbs(list, (it, tex) => { if (raws.TryGetValue(it.id, out var r) && r) r.texture = tex; });
+            Preview.I.ThumbsAsync(list, (it, tex) => { if (raws.TryGetValue(it.id, out var r) && r) r.texture = tex; });   // v0.30: a few per frame, no freeze
             PlayerCtl.I.WardrobeZoom = d.view == "fx" ? "body" : d.view;
             var worn = Catalog.Get(Save.Worn(id));
             sel = worn ?? (d.items.Count > 0 ? d.items[0] : null);
@@ -312,7 +327,10 @@ namespace Chubrik
         {
             if (root) Object.Destroy(root);
             root = null;
+            pending = null;
+            if (!ChubrikModel.BakeParts) ChubrikModel.BakeParts = bakeWas;
             LuckyUI.Close();
+            SavedSkins.Close();
             if (PlayerCtl.I) { PlayerCtl.I.StopWardrobeView(); PlayerCtl.I.ApplyLook(Save.CurrentLook()); PlayerCtl.I.Frozen = false; }
         }
 

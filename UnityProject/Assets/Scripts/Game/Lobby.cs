@@ -74,6 +74,11 @@ namespace Chubrik
             Gates.Add(LobbyGate.Spawn(new Vector3(19.15f, 0, -21.5f), 0, 11.1f, 10, "ДЖУНГЛИ", root));
             Gates.Add(LobbyGate.Spawn(new Vector3(26.6f, 0, 1.5f), 90, 7f, 20, "КРИСТАЛЬНАЯ ПЕЩЕРА", root));
             Gates.Add(LobbyGate.Spawn(new Vector3(-39.05f, 0, -6.9f), 0, 8.5f, 25, "ГЛЮК-МИР 404", root));
+            // 22.11 the river goes on through the hub–jungle wall into the jungle pool: a jungle gate with a grate down
+            // to the riverbed shuts the passage until the jungle is open (it opens together with the jungle gate)
+            JungleRiverGate = LobbyGate.Spawn(JunglePass, 0, JunglePassW, NeedFor(5), "ДЖУНГЛИ", root);
+            JungleRiverGate.Grate(RiverDepth + 0.5f);
+            Gates.Add(JungleRiverGate);
             Clouds();
             Tokens();
             MakeSolid();
@@ -115,9 +120,10 @@ namespace Chubrik
         {
             // 22.11: the sea (300 × 300 m) has a hole under the river: the channel is deeper than the sea level,
             // and the island's ground covers the hole everywhere else
+            // (22.11 later: the river reaches the snowy lake and the jungle pool, so its bounding box would stick out of
+            // the island — the hole follows the channel itself in 1 m cells under the island instead)
             float y = PlayerCtl.I != null ? PlayerCtl.I.WaterY : -0.9f;
             const float H = 150;
-            var hole = river != null ? new Rect(river.area.xMin - 0.5f, river.area.yMin - 0.5f, river.area.width + 1, river.area.height + 1) : new Rect(0, 0, 0, 0);
             var v = new List<Vector3>(); var uv = new List<Vector2>(); var tr = new List<int>();
             void Quad(float x0, float z0, float x1, float z1)
             {
@@ -126,11 +132,24 @@ namespace Chubrik
                 foreach (var (x, z) in new[] { (x0, z0), (x0, z1), (x1, z1), (x1, z0) }) { v.Add(new Vector3(x, 0, z)); uv.Add(new Vector2((x + H) / (2 * H), (z + H) / (2 * H))); }
                 tr.Add(b); tr.Add(b + 1); tr.Add(b + 2); tr.Add(b); tr.Add(b + 2); tr.Add(b + 3);
             }
-            if (hole.width <= 0) Quad(-H, -H, H, H);
+            if (river == null) Quad(-H, -H, H, H);
             else
             {
-                Quad(-H, -H, H, hole.yMin); Quad(-H, hole.yMax, H, H);
-                Quad(-H, hole.yMin, hole.xMin, hole.yMax); Quad(hole.xMax, hole.yMin, H, hole.yMax);
+                const float X0 = -86, X1 = 54, Z0 = -56, Z1 = 52, C = 1;   // the island with a margin, cut in 1 m cells
+                Quad(-H, -H, H, Z0); Quad(-H, Z1, H, H);
+                Quad(-H, Z0, X0, Z1); Quad(X1, Z0, H, Z1);
+                int nx = Mathf.RoundToInt((X1 - X0) / C), nz = Mathf.RoundToInt((Z1 - Z0) / C);
+                for (int j = 0; j < nz; j++)
+                {
+                    float z = Z0 + j * C; int run = -1;
+                    for (int i = 0; i <= nx; i++)
+                    {
+                        // a cell stays sea when it lies wholly outside the channel; rows are merged into strips
+                        bool sea = i < nx && river.Edge(new Vector3(X0 + (i + 0.5f) * C, 0, z + C / 2)) > C * 0.75f;
+                        if (sea && run < 0) run = i;
+                        else if (!sea && run >= 0) { Quad(X0 + run * C, z, X0 + i * C, z + C); run = -1; }
+                    }
+                }
             }
             var mesh = new Mesh { name = "Sea" };
             mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tr, 0);
@@ -303,11 +322,33 @@ namespace Chubrik
 
         static Vector3 Left(Vector3 t) => new Vector3(-t.z, 0, t.x);
 
-        /// <summary>The river's centre line (the old water strip's line; it starts at the lake's edge and ends at the jungle pool),
-        /// samples every 0.9 m with rounded ends, registered as swimmable water.</summary>
+        // 22.11 (later the same day, the kid asked): the snowy lake by the water cave and the jungle pool are the river's
+        // own water now — the same carved half-pipe, only wider and a bit deeper there, one channel from the lake's
+        // far end over the cave through the hub and the hub–jungle wall (a gated passage) into the jungle pool.
+        public const float LakeHalfW = 2.8f, LakeDepth = 2.2f, PoolHalfW = 5.6f, PoolDepth = 2.3f;
+        /// <summary>Autotest: a deep spot in the snowy lake (over the water cave) and in the jungle pool.</summary>
+        public static Vector3 LakeSpot, PoolSpot;
+        /// <summary>Where the river crosses the hub–jungle wall (z −21.5) and the width of the gated passage there.</summary>
+        public static Vector3 JunglePass;
+        public static float JunglePassW;
+        /// <summary>The gate with a grate over the river's passage into the jungle (opens with the jungle).</summary>
+        public static LobbyGate JungleRiverGate;
+
+        /// <summary>The channel's half width and depth along its line: the lake (north of the river's old start, z &gt; 36.5),
+        /// the river, the jungle pool (south of the wall, z &lt; −22.5).</summary>
+        static void Profile(Vector3 p, out float w, out float d)
+        {
+            w = RiverHalfW; d = RiverDepth;
+            if (p.z > 36.5f) { float t = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(36.5f, 40.5f, p.z)); w = Mathf.Lerp(RiverHalfW, LakeHalfW, t); d = Mathf.Lerp(RiverDepth, LakeDepth, t); }
+            else if (p.z < -22.5f) { float t = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(-22.5f, -27.5f, p.z)); w = Mathf.Lerp(RiverHalfW, PoolHalfW, t); d = Mathf.Lerp(RiverDepth, PoolDepth, t); }
+        }
+
+        /// <summary>The river's centre line (22.11: from the far end of the snowy lake — along the top over the water cave,
+        /// round the corner, down past the cave's way in — through the hub, under the hub–jungle wall, to the end of the
+        /// jungle pool), samples every 0.9 m with rounded ends, registered as swimmable water.</summary>
         static void PlanRiver()
         {
-            var line = Round(new[] { P(39f, 34.8f), P(39f, 25f, 4), P(35f, 17f, 4), P(29f, 10.5f, 4), P(22f, 9f, 4), P(16f, 5f, 4), P(12f, -2.5f, 4), P(10f, -12f, 4), P(9f, -21f) }, false);
+            var line = Round(new[] { P(20.6f, 46.35f), P(42f, 46.35f, 5), P(42f, 35.5f, 4), P(39f, 25f, 4), P(35f, 17f, 4), P(29f, 10.5f, 4), P(22f, 9f, 4), P(16f, 5f, 4), P(12f, -2.5f, 4), P(10f, -12f, 4), P(9f, -21f, 3), P(13.4f, -31.5f) }, false);
             var pts = new List<Vector3> { line[0] };
             float acc = 0; const float step = 0.9f;
             for (int i = 0; i < line.Count - 1; i++)
@@ -321,12 +362,27 @@ namespace Chubrik
             if ((pts[pts.Count - 1] - line[line.Count - 1]).magnitude > 0.35f) pts.Add(line[line.Count - 1]); else pts[pts.Count - 1] = line[line.Count - 1];
             var tan = new List<Vector3>();
             for (int i = 0; i < pts.Count; i++) { var d = pts[Mathf.Min(i + 1, pts.Count - 1)] - pts[Mathf.Max(i - 1, 0)]; d.y = 0; tan.Add(d.normalized); }
+            // the width and depth at every sample (the lake and the pool are wider); in a bend the width never gets
+            // bigger than the bend's radius (the inner bank would fold over itself)
+            var ws = new List<float>(); var ds = new List<float>();
+            for (int i = 0; i < pts.Count; i++)
+            {
+                Profile(pts[i], out float w0, out float d0);
+                if (i > 0 && i < pts.Count - 1)
+                {
+                    float ang = Vector3.Angle(tan[i - 1], tan[i + 1]) * Mathf.Deg2Rad;
+                    if (ang > 1e-3f) w0 = Mathf.Min(w0, 0.85f * (pts[i + 1] - pts[i - 1]).magnitude / ang);
+                }
+                ws.Add(w0); ds.Add(d0);
+            }
             river = new Water.Channel { owner = root, surface = RiverSurface };
             // the ends are round (a quarter of a ball): width and depth go down to 0
-            void Cap(Vector3 from, Vector3 outward, float u, Vector3 t) { float k = Mathf.Sqrt(Mathf.Max(0, 1 - u * u)); river.Add(from + outward * u * RiverHalfW, Left(t), RiverHalfW * k, RiverDepth * k); }
-            for (int j = RiverCapN; j >= 1; j--) Cap(pts[0], -tan[0], j / (float)RiverCapN, tan[0]);
-            for (int i = 0; i < pts.Count; i++) river.Add(pts[i], Left(tan[i]), RiverHalfW, RiverDepth);
-            for (int j = 1; j <= RiverCapN; j++) Cap(pts[pts.Count - 1], tan[tan.Count - 1], j / (float)RiverCapN, tan[tan.Count - 1]);
+            void Cap(Vector3 from, Vector3 outward, float u, Vector3 t, float w0, float d0) { float k = Mathf.Sqrt(Mathf.Max(0, 1 - u * u)); river.Add(from + outward * u * w0, Left(t), w0 * k, d0 * k); }
+            int L = pts.Count - 1;
+            int capA = Mathf.Max(RiverCapN, Mathf.CeilToInt(ws[0] / 0.45f)), capB = Mathf.Max(RiverCapN, Mathf.CeilToInt(ws[L] / 0.45f));   // the wide pool's end gets more rings
+            for (int j = capA; j >= 1; j--) Cap(pts[0], -tan[0], j / (float)capA, tan[0], ws[0], ds[0]);
+            for (int i = 0; i < pts.Count; i++) river.Add(pts[i], Left(tan[i]), ws[i], ds[i]);
+            for (int j = 1; j <= capB; j++) Cap(pts[L], tan[L], j / (float)capB, tan[L], ws[L], ds[L]);
             river.Seal();
             Water.Add(river);
             // the rim outline: along the left bank, round the end, back along the right bank (the tips are shared)
@@ -343,7 +399,55 @@ namespace Chubrik
             var flow = river.c[best + 1] - river.c[best]; flow.y = 0;
             SwimSpot = river.c[best]; SwimYaw = Quaternion.LookRotation(flow).eulerAngles.y;
             var west = -river.n[best];
-            SwimBank = river.c[best] + west * (RiverHalfW - 1.3f); SwimBankYaw = Quaternion.LookRotation(west).eulerAngles.y;
+            SwimBank = river.c[best] + west * (river.w[best] - 1.3f); SwimBankYaw = Quaternion.LookRotation(west).eulerAngles.y;
+            // 22.11 the lake over the water cave, the middle of the jungle pool, the passage through the hub–jungle wall
+            LakeSpot = river.c[Nearest(new Vector3(29, 0, 46.35f))];
+            PoolSpot = river.c[Nearest(new Vector3(12.6f, 0, -29.6f))];
+            JunglePass = new Vector3(9, 0, -21.5f); JunglePassW = RiverHalfW * 2 + 2;
+            for (int i = 0; i < N - 1; i++)
+                if (river.c[i].z >= -21.5f && river.c[i + 1].z < -21.5f)
+                {
+                    float t = Mathf.InverseLerp(river.c[i].z, river.c[i + 1].z, -21.5f);
+                    JunglePass = new Vector3(Mathf.Lerp(river.c[i].x, river.c[i + 1].x, t), 0, -21.5f);
+                    JunglePassW = Mathf.Lerp(river.w[i], river.w[i + 1], t) * 2 + 2;
+                    break;
+                }
+        }
+
+        /// <summary>The river sample nearest to a point.</summary>
+        public static int Nearest(Vector3 p)
+        {
+            int best = 0; float bd = float.MaxValue;
+            for (int i = 0; i < river.Count; i++) { float dd = (river.c[i].x - p.x) * (river.c[i].x - p.x) + (river.c[i].z - p.z) * (river.c[i].z - p.z); if (dd < bd) { bd = dd; best = i; } }
+            return best;
+        }
+
+        /// <summary>
+        /// Autotest: swimming along the river's middle from one spot to another, half a metre under the surface —
+        /// is it water all the way (and deep), and what stands in the way? Gates (their grates) are listed apart,
+        /// the stepping stones don't count (you swim round them).
+        /// </summary>
+        public static bool RiverPath(Vector3 from, Vector3 to, out List<LobbyGate> gates, out string blocks)
+        {
+            gates = new List<LobbyGate>(); blocks = "";
+            if (river == null) { blocks = "no river"; return false; }
+            Physics.SyncTransforms();
+            int a = Nearest(from), b = Nearest(to), step = b >= a ? 1 : -1;
+            bool wet = true;
+            for (int i = a; i != b; i += step)
+            {
+                var p = river.c[i]; var q = river.c[i + step];
+                if (!Water.At(new Vector3(p.x, RiverSurface - 0.5f, p.z), out _, out float bot) || bot > RiverSurface - 1.2f) { wet = false; blocks += $" dry@{p.x:0.0},{p.z:0.0}"; }
+                var o = new Vector3(p.x, RiverSurface - 0.6f, p.z); var dir = new Vector3(q.x, o.y, q.z) - o;
+                foreach (var h in Physics.RaycastAll(o, dir.normalized, dir.magnitude, ~(1 << Layers.Player), QueryTriggerInteraction.Ignore))
+                {
+                    var g = h.collider.GetComponentInParent<LobbyGate>();
+                    if (g != null) { if (!gates.Contains(g)) gates.Add(g); continue; }
+                    if (h.collider.name == "SteppingStone" || h.collider.GetComponentInParent<PlayerCtl>() != null) continue;
+                    blocks += $" {h.collider.name}@{h.point.x:0.0},{h.point.z:0.0}";
+                }
+            }
+            return wet && blocks.Length == 0;
         }
 
         /// <summary>Is a point on the river's rim (an edge of a carved ground piece along the river)?</summary>
@@ -559,11 +663,8 @@ namespace Chubrik
             water.layer = Layers.World;
             var wr = water.GetComponent<Renderer>(); wr.shadowCastingMode = ShadowCastingMode.Off;
             water.AddComponent<WaterFlow>();   // the texture slides from the snowy lake towards the jungle
-            // the lake in the snowy valley: along the top and down the right
-            Prim.Make(PrimitiveType.Cube, root, new Vector3(31.8f, 0.03f, 46.6f), new Vector3(31, 0.04f, 6.4f), waterM, "Lake", Layers.World).AddComponent<WaterScroll>();
-            Prim.Make(PrimitiveType.Cube, root, new Vector3(42.6f, 0.03f, 42.8f), new Vector3(9.8f, 0.04f, 10.4f), waterM, "Lake", Layers.World);
-            // the jungle pool where the river ends
-            Prim.Make(PrimitiveType.Cylinder, root, new Vector3(13, 0.035f, -29.5f), new Vector3(16, 0.02f, 13.5f), waterM, "Pool", Layers.World);
+            // (22.11: the snowy lake and the jungle pool used to be flat blue sheets on the ground; they are the
+            // channel's own wide ends now — see PlanRiver)
             // stepping stones over the river by the hub (where they were): stone pillars standing on the riverbed,
             // now straight across from bank to bank (the old row ran half along the river and ended mid-stream)
             var stoneM = M("9AA0A8", 0.3f);
@@ -752,7 +853,11 @@ namespace Chubrik
         {
             // the hub: left side with the shop corner, the wardrobe corner, the dip with the snow gate, the ruins corner
             style = WallStyle.Grass;
-            WallPath(5.5f, P(13.6f, -21.5f), P(-11, -21.5f, 3), P(-11, -4.6f));                       // jungle line left of the gate, shop corner
+            // jungle line left of the gate, shop corner; 22.11 with a gap where the river goes on into the jungle
+            // (its own gate with a grate stands in it), so no wall and no stone plugs over the channel there
+            float px0 = JunglePass.x - JunglePassW / 2, px1 = JunglePass.x + JunglePassW / 2;
+            if (px1 < 13.4f) WallPath(5.5f, P(13.6f, -21.5f), P(px1, -21.5f));
+            WallPath(5.5f, P(px0, -21.5f), P(-11, -21.5f, 3), P(-11, -4.6f));
             WallPath(5.5f, P(-11, -0.8f), P(-11, 23, 3), P(2.3f, 23, 2), P(2.3f, 16.3f));              // (a way into the park at the bottom), wardrobe corner
             WallPath(5.5f, P(10, 16.3f), P(10, 23.7f, 2), P(26.6f, 23.7f, 3), P(26.6f, 12.6f));        // snow gate between the corners, ruins corner
             WallPath(5.5f, P(26.6f, 8.2f), P(26.6f, 5));                                                // river gate above, crystal gate below
@@ -1200,7 +1305,7 @@ namespace Chubrik
             // the water cave (15.11): a real cave under the lake shore — rock walls, a rocky snow-capped roof,
             // a little underground pool, glowing ice crystals and icicles; in from the river, out into the hollow
             var rock = M("8A93A0", 0.2f); var rockD = M("6E7682", 0.2f);
-            Box(new Vector3(26.4f, 2.75f, 44.1f), new Vector3(21.4f, 5.5f, 1.4f), rock);                     // the lake side
+            Box(new Vector3(26.4f, 1.45f, 44.1f), new Vector3(21.4f, 8.1f, 1.4f), rock);                     // the lake side (22.11: down to under the lake's bed — a cliff into the water)
             Box(new Vector3(25.6f, 2.75f, 37.65f), new Vector3(19.6f, 5.5f, 0.3f), rockD);                   // lining of the valley wall
             var rr = new Rng(77);
             for (float x = 16.5f; x <= 37; x += 3.2f)
@@ -1228,8 +1333,9 @@ namespace Chubrik
                 var l = lg.AddComponent<Light>(); l.type = LightType.Point; l.color = Hex("8FE6FF"); l.range = 10; l.intensity = 2.2f; l.shadows = LightShadows.None;
             }
             // the rock on the far side of the river
-            Box(new Vector3(44.6f, 2.5f, 32.4f), new Vector3(5.8f, 5, 10.6f), rock);
-            for (int k = 0; k < 3; k++) S(root, new Vector3(44.6f, 5f, 28.6f + k * 3.6f), new Vector3(6.4f, 2.4f, 4f), rock);
+            // (22.11: narrower — the river runs further east by the cave now, leaving a path to the cave's way in)
+            Box(new Vector3(46.15f, 2.5f, 32.4f), new Vector3(2.7f, 5, 10.6f), rock);
+            for (int k = 0; k < 3; k++) S(root, new Vector3(46.15f, 5f, 28.6f + k * 3.6f), new Vector3(3.2f, 2.4f, 4f), rock);
             TokenSpots.Add(new Vector3(26, 1, 40.5f));
             Sign(new Vector3(33.4f, 0, 35.6f), 0, "ПЕЩЕРА С ВОДОЙ", "35E0FF", 4);
         }
@@ -1572,7 +1678,7 @@ namespace Chubrik
                 if (instant) panel.gameObject.SetActive(false);
                 else { openT = 0; AudioFx.Play("portal"); Effects.Emit("magic", transform.position + Vector3.up * 3, 60, 1.2f, Vector3.up * 2); Hud.Toast($"Открылся путь: {title}!", UIKit.Lime); }
             }
-            else if (n < need && IsOpen) { IsOpen = false; col.enabled = true; panel.gameObject.SetActive(true); panel.localPosition = Vector3.zero; }
+            else if (n < need && IsOpen) { IsOpen = false; openT = -1; col.enabled = true; panel.gameObject.SetActive(true); panel.localPosition = Vector3.zero; }   // also stops a running open animation
         }
 
         void Update()

@@ -14,6 +14,8 @@ namespace Chubrik
         /// <summary>Spots where no ground was found under an egg (the autotest wants 0).</summary>
         public static readonly List<string> Bad = new List<string>();
         static readonly HashSet<int> spawned = new HashSet<int>();
+        /// <summary>22.11 soft restart: eggs are put again (the found ones stay hidden).</summary>
+        internal static void ResetStatics() { spawned.Clear(); Bad.Clear(); }
 
         /// <summary>17.11 promo code «Секрет» shows where every nook is.</summary>
         public static readonly string[] Where =

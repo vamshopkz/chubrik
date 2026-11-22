@@ -186,6 +186,16 @@ namespace Chubrik
             Hud.Toast("Ты вышел из комнаты", UIKit.Cyan);
         }
 
+        /// <summary>22.11: switching to another chubrik — the room is left without a word on screen, the new
+        /// chubrik says hello and puts its own line into the records table soon.</summary>
+        public void LeaveQuiet()
+        {
+            if (RoomWith != null) Send($"L|{Id}|{RoomWith}");
+            RoomWith = null;
+            Invited.Clear(); InviteFrom = null;
+            helloT = 0; recordT = 2f + Time.unscaledTime; lastRecord = "";
+        }
+
         public static string WorldName(int w) => w switch
         {
             2 => "Парящие руины", 3 => "Кристальные пещеры", 4 => "Снежная долина", 5 => "Джунгли", 6 => "Глюк-мир", 7 => "Мир 67", 8 => "Мемный мир", _ => "Лобби",
@@ -198,7 +208,7 @@ namespace Chubrik
             return sb.ToString();
         }
 
-        static Look ParseLook(string s)
+        public static Look ParseLook(string s)
         {
             var l = Look.Default();
             foreach (var part in s.Split(';'))

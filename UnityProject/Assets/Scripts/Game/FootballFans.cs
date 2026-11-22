@@ -22,6 +22,7 @@ namespace Chubrik
         static TextMeshProUGUI tv;
         static GameObject stopBtn;
         static float sendT, watchStart;
+        internal static void ResetStatics() { Seats.Clear(); Fans.Clear(); Watching = null; WatchSeen = -99; }
 
         /// <summary>Seats on the stands (rows of blue chairs), built with the stadium.</summary>
         public static void Build(Transform stadium, float bx, float bz)

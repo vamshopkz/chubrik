@@ -30,22 +30,48 @@ namespace Chubrik
         public int footLevel = 1;
         public int footDiff = 1;
         public long roomLockUntil;
+        public List<SavedOutfit> outfits = new List<SavedOutfit>();   // v0.30 «Мои скины»
         public string updateSeen = "";                       // v0.27: the «Вышло обновление» message was shown for this version                           // 19.11 «Заблокировать комнату» until (unix seconds)                             // 18.11 football difficulty: 0 super easy … 3 hard
         public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;   // 18.11 cheats (Settings → «Читы»)
         public List<string> placed = new List<string>();     // admin panel copies: id|path|pos|rot|scale|1                            // 18.11 football: the first level not yet won
         public bool teapot, butter;                          // teapot: old «Чайник» code (unused); «BUTTER» (everything made of butter)
-        // 22.11: up to 3 chubriks on one account — coins, items, friends and worlds are shared, each has its own name and outfit.
-        // `look` above is always the active one's outfit (kept in chars[activeChar].look too).
-        public List<CharSlot> chars = new List<CharSlot>();
-        public int activeChar;
     }
 
-    /// <summary>One of the player's chubriks: its name ("" = the nickname / «Чубрик 1») and outfit ("dept=item").</summary>
+    /// <summary>v0.30: a saved outfit («Мои скины» in the wardrobe): a name and "dept=item;…".</summary>
+    [Serializable]
+    public class SavedOutfit
+    {
+        public string name = "";
+        public string look = "";
+    }
+
+    /// <summary>
+    /// One of the player's chubriks (22.11: up to 3, each with its OWN progress — a whole Profile in its own file).
+    /// The list of them (names and outfits for the picker's portraits) lives in a small file of its own.
+    /// </summary>
     [Serializable]
     public class CharSlot
     {
         public string name = "";
-        public List<string> look = new List<string>();
+        public string nick = "";                              // the profile's nickname (a copy, for the picker)
+        public int file;                                      // 0 = chubrik.json, 1 = chubrik_1.json, 2 = chubrik_2.json
+        public List<string> look = new List<string>();        // its outfit (a copy, for the picker's portrait)
+    }
+
+    /// <summary>chubrik_chars.json: which chubrik is played and the list of them.</summary>
+    [Serializable]
+    class CharsMeta
+    {
+        public int active;
+        public List<CharSlot> slots = new List<CharSlot>();
+    }
+
+    /// <summary>v0.29 saves: several chubriks sharing one profile (read once to split them up).</summary>
+    [Serializable]
+    class LegacyChars
+    {
+        public List<CharSlot> chars = new List<CharSlot>();
+        public int activeChar;
     }
 
     /// <summary>Local profile: coins, tokens, owned items, current look, settings (JSON in persistentDataPath).</summary>
@@ -53,21 +79,154 @@ namespace Chubrik
     {
         public static Profile P = new Profile();
         public static string FileName = "chubrik.json";
-        static string Path => System.IO.Path.Combine(Application.persistentDataPath, FileName);
         public static event Action Changed;
+
+        // ---------------- 22.11: up to 3 chubriks, each with its own progress ----------------
+        // Every chubrik is a whole Profile in its own file: slot files 0 = chubrik.json (old saves stay there),
+        // 1 = chubrik_1.json, 2 = chubrik_2.json. chubrik_chars.json keeps the list (names + outfits for the picker)
+        // and which one is played. P is always the played one; switching = write it, read the other one.
+
+        public const int MaxChars = 3;
+        static CharsMeta meta = OneChar();
+        static CharsMeta OneChar() { var m = new CharsMeta(); m.slots.Add(new CharSlot { file = 0 }); return m; }
+        /// <summary>The played chubrik's entry in the list.</summary>
+        static CharSlot Cur { get { if (meta.slots.Count == 0) meta.slots.Add(new CharSlot { file = 0 }); meta.active = Mathf.Clamp(meta.active, 0, meta.slots.Count - 1); return meta.slots[meta.active]; } }
+        /// <summary>The last JSON of every slot file (the autotest writes nothing to disk, switching back still works).</summary>
+        static readonly Dictionary<int, string> mem = new Dictionary<int, string>();
+        static string metaWritten = "";
+
+        static string Base => System.IO.Path.GetFileNameWithoutExtension(FileName);
+        static string FileOf(int f) => System.IO.Path.Combine(Application.persistentDataPath, f == 0 ? FileName : Base + "_" + f + ".json");
+        static string MetaPath => System.IO.Path.Combine(Application.persistentDataPath, Base + "_chars.json");
+        static bool Disk => !Boot.Testing || Boot.Has("-keepsave");
+        static string NewId() => Guid.NewGuid().ToString("N").Substring(0, 8);
 
         public static void Load()
         {
-            try { if (File.Exists(Path)) P = JsonUtility.FromJson<Profile>(File.ReadAllText(Path)) ?? new Profile(); }
-            catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); P = new Profile(); }
-            if (string.IsNullOrEmpty(P.id)) P.id = Guid.NewGuid().ToString("N").Substring(0, 8);
-            if (!P.wolf)
+            LoadMeta();
+            P = ReadProfile(Cur.file);
+            Fix();
+        }
+
+        /// <summary>Autotest: one fresh chubrik, nothing from the disk.</summary>
+        public static void FreshForTest()
+        {
+            mem.Clear();
+            meta = OneChar();
+            P = new Profile();
+            Fix();
+        }
+
+        static void LoadMeta()
+        {
+            CharsMeta m = null;
+            try { if (File.Exists(MetaPath)) m = JsonUtility.FromJson<CharsMeta>(File.ReadAllText(MetaPath)); }
+            catch (Exception e) { Debug.LogWarning("[Save] chars: " + e.Message); }
+            bool migrated = m == null || m.slots == null || m.slots.Count == 0;
+            meta = migrated ? Migrate() : m;
+            FixMeta();
+            metaWritten = migrated ? "" : JsonUtility.ToJson(meta);
+            if (migrated) { WriteMeta(); SyncDisk(); }   // at once: the old file no longer lists the v0.29 chubriks
+        }
+
+        /// <summary>No list yet: the old save is chubrik 1. v0.29 had several chubriks sharing one profile —
+        /// each of them gets a copy of that progress (nobody loses anything) in its own file.</summary>
+        static CharsMeta Migrate()
+        {
+            var m = new CharsMeta();
+            string text = null;
+            try { if (File.Exists(FileOf(0))) text = File.ReadAllText(FileOf(0)); } catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+            LegacyChars old = null;
+            try { if (!string.IsNullOrEmpty(text)) old = JsonUtility.FromJson<LegacyChars>(text); } catch { }
+            if (old == null || old.chars == null || old.chars.Count <= 1)
+            {
+                m.slots.Add(new CharSlot { file = 0, name = old != null && old.chars != null && old.chars.Count == 1 ? old.chars[0].name ?? "" : "" });
+                return m;
+            }
+            var baseP = ReadProfile(0);
+            int n = Mathf.Min(old.chars.Count, MaxChars);
+            for (int i = 0; i < n; i++)
+            {
+                var c = old.chars[i] ?? new CharSlot();
+                var copy = JsonUtility.FromJson<Profile>(JsonUtility.ToJson(baseP));
+                copy.look = new List<string>(i == old.activeChar ? baseP.look : c.look ?? new List<string>());
+                if (i > 0) copy.id = NewId();   // its own line in the records table
+                m.slots.Add(new CharSlot { file = i, name = c.name ?? "", nick = copy.nick, look = new List<string>(copy.look) });
+                WriteProfile(i, copy);
+            }
+            m.active = Mathf.Clamp(old.activeChar, 0, n - 1);
+            Debug.Log($"[Save] {n} chubriks of v0.29 split into their own saves");
+            return m;
+        }
+
+        static void FixMeta()
+        {
+            meta.slots.RemoveAll(c => c == null);
+            if (meta.slots.Count == 0) meta.slots.Add(new CharSlot { file = 0 });
+            while (meta.slots.Count > MaxChars) meta.slots.RemoveAt(meta.slots.Count - 1);
+            var used = new HashSet<int>();
+            foreach (var c in meta.slots)
+            {
+                if (c.look == null) c.look = new List<string>();
+                if (c.name == null) c.name = "";
+                if (c.nick == null) c.nick = "";
+                if (c.file < 0 || c.file >= MaxChars || used.Contains(c.file)) c.file = FreeFile(used);
+                used.Add(c.file);
+            }
+            meta.active = Mathf.Clamp(meta.active, 0, meta.slots.Count - 1);
+        }
+
+        static int FreeFile(HashSet<int> used)
+        {
+            for (int f = 0; f < MaxChars; f++) if (!used.Contains(f)) return f;
+            return 0;
+        }
+
+        static Profile ReadProfile(int file)
+        {
+            string json = null;
+            if (!mem.TryGetValue(file, out json))
+                try { if (File.Exists(FileOf(file))) json = File.ReadAllText(FileOf(file)); }
+                catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+            Profile pr = null;
+            try { if (!string.IsNullOrEmpty(json)) pr = JsonUtility.FromJson<Profile>(json); }
+            catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+            if (pr == null) pr = new Profile();
+            if (string.IsNullOrEmpty(pr.id) && !Boot.Testing) pr.id = NewId();
+            if (!pr.wolf)
             {
                 // 15.11: the hero is a wolf now — wolf head, wolf ears, no spiky hair; hats, clothes and colours stay
-                P.wolf = true;
-                P.look.RemoveAll(e => e.StartsWith("head=") || e == "ears=ears_1" || e == "hair=hair_0");
+                pr.wolf = true;
+                pr.look.RemoveAll(e => e.StartsWith("head=") || e == "ears=ears_1" || e == "hair=hair_0");
             }
-            Fix();
+            return pr;
+        }
+
+        static void WriteProfile(int file, Profile pr)
+        {
+            var json = JsonUtility.ToJson(pr);
+            mem[file] = json;
+            if (!Disk) return;
+            try { File.WriteAllText(FileOf(file), json); }
+            catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+        }
+
+        static void WriteMeta()
+        {
+            var json = JsonUtility.ToJson(meta);
+            if (json == metaWritten) return;
+            metaWritten = json;
+            if (!Disk) return;
+            try { File.WriteAllText(MetaPath, json); }
+            catch (Exception e) { Debug.LogWarning("[Save] chars: " + e.Message); }
+        }
+
+        /// <summary>The played chubrik's outfit and nickname go into the list (the picker's portraits).</summary>
+        static void SyncMeta()
+        {
+            var a = Cur;
+            if (a.look.Count != P.look.Count || !a.look.TrueForAll(P.look.Contains)) { a.look.Clear(); a.look.AddRange(P.look); }
+            a.nick = P.nick ?? "";
         }
 
         /// <summary>Default items are always owned; hearts stay in 3..6.</summary>
@@ -80,94 +239,88 @@ namespace Chubrik
             foreach (var set in P.sets) if (!P.setBonus.Contains(set)) P.setBonus.Add(set);
             // 21.11: a thing that left the catalogue (walk_6 «Лунная походка») is taken off: the department's default comes back
             P.look.RemoveAll(e => { int k = e.IndexOf('='); var id = k > 0 ? e.Substring(k + 1) : ""; return k > 0 && id != "" && Catalog.Get(id) == null; });
-            FixChars();
-        }
-
-        // ---------------- 22.11: several chubriks ----------------
-
-        public const int MaxChars = 3;
-
-        /// <summary>Old saves: one chubrik from the current look; the active index in range; the active outfit in its slot.</summary>
-        static void FixChars()
-        {
-            if (P.chars == null) P.chars = new List<CharSlot>();
-            P.chars.RemoveAll(c => c == null);
-            if (P.chars.Count == 0) P.chars.Add(new CharSlot { name = "", look = new List<string>(P.look) });
-            while (P.chars.Count > MaxChars) P.chars.RemoveAt(P.chars.Count - 1);
-            P.activeChar = Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1);
-            foreach (var c in P.chars)
-            {
-                if (c.look == null) c.look = new List<string>();
+            foreach (var c in meta.slots)
                 c.look.RemoveAll(e => { int k = e.IndexOf('='); var id = k > 0 ? e.Substring(k + 1) : ""; return k > 0 && id != "" && Catalog.Get(id) == null; });
-            }
-            SyncActive();
         }
 
-        /// <summary>The active chubrik's slot gets the outfit being worn now.</summary>
-        static void SyncActive()
-        {
-            if (P.chars == null || P.chars.Count == 0) return;
-            P.activeChar = Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1);
-            var a = P.chars[P.activeChar];
-            if (a.look == null) a.look = new List<string>();
-            a.look.Clear(); a.look.AddRange(P.look);
-        }
+        /// <summary>How many chubriks there are and which one is played now.</summary>
+        public static int CharCount => meta.slots.Count;
+        public static int ActiveIndex => meta.active;
 
-        public static CharSlot ActiveChar => P.chars.Count > 0 ? P.chars[Mathf.Clamp(P.activeChar, 0, P.chars.Count - 1)] : null;
-
-        /// <summary>«Чубрик 2»…; the first one is called by the nickname when it is set.</summary>
+        /// <summary>«Чубрик 2»…; without a name — the nickname, then «Чубрик N».</summary>
         public static string CharName(int i)
         {
-            if (i < 0 || i >= P.chars.Count) return "";
-            var n = P.chars[i].name;
-            if (!string.IsNullOrEmpty(n)) return n;
-            if (i == 0 && !string.IsNullOrEmpty(P.nick)) return P.nick;
+            if (i < 0 || i >= meta.slots.Count) return "";
+            var c = meta.slots[i];
+            if (!string.IsNullOrEmpty(c.name)) return c.name;
+            var nick = i == meta.active ? P.nick : c.nick;
+            if (!string.IsNullOrEmpty(nick)) return nick;
             return "Чубрик " + (i + 1);
         }
 
         /// <summary>The outfit of chubrik <paramref name="i"/> (the active one: what is worn now).</summary>
         public static Look CharLook(int i)
         {
-            if (i == P.activeChar || i < 0 || i >= P.chars.Count) return CurrentLook();
-            return LookOf(P.chars[i].look);
+            if (i == meta.active || i < 0 || i >= meta.slots.Count) return CurrentLook();
+            return LookOf(meta.slots[i].look);
         }
 
-        /// <summary>Plays as chubrik <paramref name="i"/> from now on (the player model is not touched here).</summary>
-        public static void SwitchChar(int i)
+        /// <summary>Plays as chubrik <paramref name="i"/> from now on: the played one is saved, the other one's whole
+        /// progress is loaded. Only the data — the game world is rebuilt by <see cref="Boot.Restart"/>.</summary>
+        public static bool SwitchChar(int i)
         {
-            if (i < 0 || i >= P.chars.Count) return;
-            SyncActive();
-            P.activeChar = i;
-            P.look = new List<string>(P.chars[i].look);
+            if (i < 0 || i >= meta.slots.Count || i == meta.active) return false;
+            Write();
+            meta.active = i;
+            P = ReadProfile(meta.slots[i].file);
             Fix();
             Write();
+            return true;
         }
 
-        /// <summary>A new chubrik in the starting outfit, made active. −1 when there are 3 already.</summary>
+        /// <summary>A new chubrik with a brand new progress (50 coins, nothing found, no friends, no worlds), made
+        /// active. The settings (sound, music, sensitivity) come along. −1 when there are 3 already.</summary>
         public static int NewChar()
         {
-            if (P.chars.Count >= MaxChars) return -1;
+            if (meta.slots.Count >= MaxChars) return -1;
             int n = 2;
             for (; n < 100; n++)
             {
                 bool used = false;
-                for (int k = 0; k < P.chars.Count; k++) if (CharName(k) == "Чубрик " + n) used = true;
+                for (int k = 0; k < meta.slots.Count; k++) if (CharName(k) == "Чубрик " + n) used = true;
                 if (!used) break;
             }
-            SyncActive();
-            P.chars.Add(new CharSlot { name = "Чубрик " + n, look = new List<string>() });
-            SwitchChar(P.chars.Count - 1);
-            return P.activeChar;
+            Write();
+            var files = new HashSet<int>();
+            foreach (var c in meta.slots) files.Add(c.file);
+            int file = FreeFile(files);
+            var was = P;
+            P = new Profile
+            {
+                id = Boot.Testing ? "" : NewId(), wolf = true,
+                volume = was.volume, music = was.music, sens = was.sens, quality = was.quality, updateSeen = was.updateSeen,
+            };
+            mem.Remove(file);
+            meta.slots.Add(new CharSlot { name = "Чубрик " + n, file = file });
+            meta.active = meta.slots.Count - 1;
+            Fix();
+            Write();
+            return meta.active;
         }
 
-        /// <summary>Deletes a chubrik that is not being played now (its outfit only — things stay on the account).</summary>
+        /// <summary>Deletes a chubrik that is not being played now — with all its progress (its file too).</summary>
         public static bool DeleteChar(int i)
         {
-            if (i < 0 || i >= P.chars.Count || i == P.activeChar || P.chars.Count <= 1) return false;
-            SyncActive();
-            P.chars.RemoveAt(i);
-            if (i < P.activeChar) P.activeChar--;
-            Write();
+            if (i < 0 || i >= meta.slots.Count || i == meta.active || meta.slots.Count <= 1) return false;
+            int file = meta.slots[i].file;
+            meta.slots.RemoveAt(i);
+            if (i < meta.active) meta.active--;
+            mem.Remove(file);
+            if (Disk)
+                try { if (File.Exists(FileOf(file))) File.Delete(FileOf(file)); }
+                catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+            WriteMeta();
+            SyncDisk();
             return true;
         }
 
@@ -176,16 +329,22 @@ namespace Chubrik
         {
             P.sets.Remove(set);
             P.look.RemoveAll(e => { int k = e.IndexOf('='); return k > 0 && Catalog.SetOf(e.Substring(k + 1)) == set; });
-            foreach (var c in P.chars) c.look.RemoveAll(e => { int k = e.IndexOf('='); return k > 0 && Catalog.SetOf(e.Substring(k + 1)) == set; });
         }
 
         public static void Write()
         {
-            SyncActive();
+            SyncMeta();
             Changed?.Invoke();
-            if (Boot.Testing && !Boot.Has("-keepsave")) return;
-            try { File.WriteAllText(Path, JsonUtility.ToJson(P)); WebBridge.SyncFiles(); }
-            catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
+            WriteProfile(Cur.file, P);
+            WriteMeta();
+            SyncDisk();
+        }
+
+        /// <summary>The browser keeps files in IndexedDB: flush them.</summary>
+        static void SyncDisk()
+        {
+            if (!Disk) return;
+            try { WebBridge.SyncFiles(); } catch (Exception e) { Debug.LogWarning("[Save] " + e.Message); }
         }
 
         public static bool Owns(string id)

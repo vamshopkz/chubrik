@@ -472,6 +472,8 @@ namespace Chubrik
         // ---------------- footprints ----------------
 
         static readonly Queue<GameObject> prints = new Queue<GameObject>();
+        /// <summary>22.11 soft restart (the world is built again when entered).</summary>
+        internal static void ResetStatics() { prints.Clear(); Snowmen.Clear(); Boars.Clear(); Balls.Clear(); Walls.Clear(); }
         static Material printM;
 
         /// <summary>Paw prints in the snow (only where it is snowy, not on ice).</summary>

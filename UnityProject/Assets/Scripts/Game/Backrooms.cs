@@ -40,6 +40,8 @@ namespace Chubrik
 
         /// <summary>Every frame from the player: the way in (lobby), the way out, the lamp buzz.</summary>
         public static int FromTree;   // autotest
+        /// <summary>22.11 soft restart: the backrooms are built again when entered.</summary>
+        internal static void ResetStatics() { wasInside = false; DeadEnds.Clear(); }
 
         public static void Tick(PlayerCtl pl)
         {
