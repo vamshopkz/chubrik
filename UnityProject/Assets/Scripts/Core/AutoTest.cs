@@ -232,7 +232,7 @@ namespace Chubrik
             float hBounce = 0;
             for (float tt = 0; tt < 1.8f; tt += Time.deltaTime) { hBounce = Mathf.Max(hBounce, pl.transform.position.y - gy); yield return null; }
             yield return Shot("54_belly");
-            Check("A + A + B: straight down, then off the ground higher than a double jump", downBig && pl.SuperBounces == sb0 + 1 && hBounce > hDouble + 0.5f, $"double {hDouble:0.0} m, bounce {hBounce:0.0} m");
+            Check("A + A + B held: straight down; the bounce up comes only sometimes (v0.32)", downBig && (pl.SuperBounces == sb0 || hBounce > hDouble + 0.5f), $"double {hDouble:0.0} m, bounce {hBounce:0.0} m");
             yield return Wait(1f);
             // v0.31: A + A + B tapped — no hop: down and forward belly first, then lies until A
             pl.Teleport(Lobby.Spawn, diveYaw);
@@ -1960,12 +1960,12 @@ namespace Chubrik
                 pl = PlayerCtl.I;
                 Menus.Play();
                 yield return Wait(0.8f);
-                Check("70 stickers, 10 open from the start, the rest in 30 chests (2 each)", Stickers.All.Count == 70 && Stickers.Free + Chests.Total * Stickers.PerChest == 70);
+                Check("72 stickers, 10 + 2 hide-and-seek open from the start, the rest in 30 chests (2 each)", Stickers.All.Count == 72 && Stickers.Free + Chests.Total * Stickers.PerChest == 70);
                 Check("all 15 chests stand on the ground", Chests.Bad.Count == 0 && Chests.All.Count >= 12, $"{Chests.All.Count} built, bad: {string.Join("; ", Chests.Bad)}");
                 Stickers.Open();
                 yield return Wait(0.6f);
                 yield return Shot("136_stickers");
-                Check("«СТИКЕРЫ» opens the picker; locked ones have a padlock", UIRoot.Open != null && GameObject.Find("Sticker 69") != null && GameObject.Find("StickersBtn") == null);
+                Check("«СТИКЕРЫ» opens the picker; locked ones have a padlock", UIRoot.Open != null && GameObject.Find("Sticker 71") != null && GameObject.Find("StickersBtn") == null);
                 Window.Close();
                 yield return Wait(0.3f);
                 int used0 = Stickers.Used;

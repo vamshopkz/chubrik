@@ -289,6 +289,7 @@ namespace Chubrik
                 hv = Vector3.MoveTowards(hv, wish * speed * 1.25f, 12 * dt);
             }
             else vel.y += g * dt;
+            if (flop && dive == 1) { var fh = new Vector3(vel.x, 0, vel.z); if (fh.sqrMagnitude > 0.01f) { vel.y = -fh.magnitude; } }   // v0.32: the A-A-B dive keeps its 45° line
             if (plunge == 2) vel.y = Mathf.Min(vel.y, -24f);
             else if (plunge == 1) vel.y = Mathf.Min(vel.y, -11f);
             if (Cheats.Flying && !Riding && !Frozen)
@@ -483,7 +484,7 @@ namespace Chubrik
             superBounce = false;
             Flops++;
             var f = transform.forward; f.y = 0; f = f.sqrMagnitude > 0.01f ? f.normalized : Vector3.forward;
-            vel = f * 9f + Vector3.down * 7f;
+            vel = f * 11f + Vector3.down * 11f;   // v0.32: straight down and forward along the diagonal
             flop = true;
             SetDive(1);   // flying belly first (no steering)
             AudioFx.Play("swing"); AudioFx.Play("boing", 0.5f);
@@ -512,6 +513,7 @@ namespace Chubrik
             bool big = plunge == 2;
             plunge = 0; Anim.plunge = false;
             if (splashFx) { splashFx = false; Splashes++; Stickers.Rainbow(transform.position); }
+            if (big && superBounce && Random.value < 0.5f) superBounce = false;   // v0.32: the bounce up comes only sometimes
             if (big && superBounce)
             {
                 // the super bounce: higher than a double jump
@@ -662,8 +664,13 @@ namespace Chubrik
 
         // ---------------- weapons ----------------
 
+        /// <summary>v0.32 the PvP arena: a hit throws you back.</summary>
+        public void Knock(Vector3 v) { if (hang != 0 || swim != 0) return; vel = v; Grounded = false; coyote = 0; SetDive(0); }
+        public float FallingSpeed => vel.y;
+
         public void Attack()
         {
+            if (!Frozen && PvpArena.Swing(this)) return;   // v0.32: the arena's sword, no cooldown (1.8 style)
             if (Frozen || plunge != 0 || swim != 0) return;   // in the water B is «dive» (held)
             if (Cheats.Flying && !Grounded) return;   // flying: B is «down», not a plunge
             if (dive == 1 && !Grounded) { attackDownT = Time.time; return; }   // holding B turns the dive into the plunge

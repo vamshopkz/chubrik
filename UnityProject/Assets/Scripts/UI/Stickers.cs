@@ -14,7 +14,7 @@ namespace Chubrik
     /// </summary>
     public static class Stickers
     {
-        public enum Kind { Say, Emote, Fx, Word, Rps, Splash, Flip, Rocket, Jump }
+        public enum Kind { Say, Emote, Fx, Word, Rps, Splash, Flip, Rocket, Jump, Prop, Seek }
         public enum Move { Hop, Spin, Wobble, Nod, Shake, Squash, Grow, Shiver, LeanBack, Twirl, Bounce3, Tilt, Float, Dizzy, Bow, Jumpy, Sway, None }
         public enum Face { Happy, Laugh, Cool, Wow, Sad, Angry, Love, Sleepy, Tongue, Wink }
 
@@ -116,6 +116,9 @@ namespace Chubrik
             A("Спокойной ночи", Kind.Say, Face.Sleepy, "9FA8DA");
             A("Прыжок до неба", Kind.Jump, Face.Laugh, "81D4FA", "Ух!");
             A("Мы команда!", Kind.Say, Face.Love, "A5D6A7");
+            // v0.32 hide-and-seek (open from the start)
+            A("Прятки: превратиться", Kind.Prop, Face.Wink, "B39DDB", "Ищи меня!");
+            A("Прятки: я вожу", Kind.Seek, Face.Cool, "455A64", "Считаю!");
             // every sticker its own pair (chubrik move, bubble style): no two the same
             const int M = (int)Move.None;
             for (int i = 0; i < All.Count; i++) { All[i].move = (Move)(i % M); All[i].pop = (i / M + i) % 5; }
@@ -138,7 +141,7 @@ namespace Chubrik
             s.move = m;
         }
 
-        public static bool Unlocked(int i) => i < Free || (i < All.Count && Chests.Opened((i - Free) / PerChest));
+        public static bool Unlocked(int i) => i < Free || i >= Free + Chests.Total * PerChest || (i < All.Count && Chests.Opened((i - Free) / PerChest));
         public static int UnlockedCount { get { int n = 0; for (int i = 0; i < All.Count; i++) if (Unlocked(i)) n++; return n; } }
         public static List<int> FromChest(int chest) { var l = new List<int>(); for (int k = 0; k < PerChest; k++) { int i = Free + chest * PerChest + k; if (i < All.Count) l.Add(i); } return l; }
         public static int Used { get; private set; }
@@ -183,6 +186,8 @@ namespace Chubrik
             if (pl == null) return;
             if (s.kind == Kind.Word && word == null) { AskWord(i); return; }
             if (s.kind == Kind.Rps) { Rps.Ask(); return; }
+            if (s.kind == Kind.Prop) { HideSeek.OpenProps(); return; }
+            if (s.kind == Kind.Seek) { Pop(pl.transform, i, s.text, pl.Model.SizeScale); HideSeek.StartSeek(); return; }
             Used++; LastUsed = i;
             string text = s.kind == Kind.Word ? word : s.text;
             Pop(pl.transform, i, text, pl.Model.SizeScale, pl.Model.look);

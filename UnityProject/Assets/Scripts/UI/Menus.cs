@@ -306,7 +306,7 @@ namespace Chubrik
                 WardrobeUI.Changed();
                 return true;
             }
-            if (n == Norm("Лукашарики"))
+            if (n == Norm("Лукашарики") || n == Norm("Фильм"))   // v0.32: «фильм» opens the cartoon too
             {
                 Window.Close();
                 Cartoon.Play();

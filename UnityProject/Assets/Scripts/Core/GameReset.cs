@@ -22,7 +22,7 @@ namespace Chubrik
             Bird.ResetStatics();
             Rescue.ResetStatics();
             Eggs.ResetStatics();
-            Chests.ResetStatics(); Friends.ResetStatics(); Rps.ResetStatics();
+            Chests.ResetStatics(); Friends.ResetStatics(); Rps.ResetStatics(); HideSeek.ResetStatics(); PvpArena.ResetStatics();
             TitanArena.Bosses.Clear(); TitanArena.Pads.Clear(); TitanArena.Centers.Clear();
             AdminPanel.ResetStatics();
             Water.ResetStatics();

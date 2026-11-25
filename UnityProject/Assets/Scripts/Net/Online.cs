@@ -393,6 +393,12 @@ namespace Chubrik
                 case "K":
                     Stickers.OnNet(f);
                     break;
+                case "KP":
+                    HideSeek.OnNet(f);
+                    break;
+                case "KS":
+                    HideSeek.OnSeekNet(f);
+                    break;
                 case "KR":
                     Rps.OnNet(f);
                     break;
