@@ -30,6 +30,9 @@ namespace Chubrik
         public int footLevel = 1;
         public int footDiff = 1;
         public long roomLockUntil;
+        public float pvpXp;                                   // v0.33 arena level (a quarter per win), up to 140
+        public List<int> pvpKits = new List<int>();          // v0.33 arena abilities owned
+        public int pvpKit = -1;                               // v0.33 the ability chosen for the arena
         public List<SavedOutfit> outfits = new List<SavedOutfit>();   // v0.30 «Мои скины»
         public string updateSeen = "";                       // v0.27: the «Вышло обновление» message was shown for this version                           // 19.11 «Заблокировать комнату» until (unix seconds)                             // 18.11 football difficulty: 0 super easy … 3 hard
         public bool cheatFly, flyOn, cheatCoins, coinsOn, cheatAdmin;

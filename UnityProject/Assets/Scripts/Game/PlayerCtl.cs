@@ -228,6 +228,7 @@ namespace Chubrik
             if (Skates) speed *= 1.2f;
             if (Snowmobile) speed *= 1.8f;
             if (Time.time < SlowUntil) speed *= 0.55f;
+            if (PvpArena.Active) speed *= PvpKits.SpeedK();   // v0.33 arena abilities (racer, speedster, brute…)
             if (Cheats.Flying) speed *= 1.6f;
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
@@ -667,6 +668,8 @@ namespace Chubrik
         /// <summary>v0.32 the PvP arena: a hit throws you back.</summary>
         public void Knock(Vector3 v) { if (hang != 0 || swim != 0) return; vel = v; Grounded = false; coyote = 0; SetDive(0); }
         public float FallingSpeed => vel.y;
+        /// <summary>v0.33 abilities: set the up/down speed (jetpack, glider, spring).</summary>
+        public void SetUpVel(float vy) { vel.y = vy; if (vy > 0) Grounded = false; }
 
         public void Attack()
         {
