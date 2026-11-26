@@ -137,10 +137,10 @@ namespace Chubrik
         // ---------------- the seeker's black square ----------------
 
         public static readonly int[] Seconds = { 5, 10, 15, 20, 25, 30, 35 };
-        static readonly Vector3 RoomPos = new Vector3(0, -400, 0);
+        static readonly Vector3 RoomPos = new Vector3(-3000, 600, 0);   // high up and far away (below the water the game used to send him back)
         static GameObject seekRoom, seekUi;
         static TextMeshProUGUI seekTxt;
-        static Vector3 backPos; static float backYaw;
+        static Vector3 backPos; static float backYaw; static bool fogWas;
         static float seekUntil = -1;
         public static bool Seeking => seekUntil > 0 || seekUi != null;
         public static int SeekDone { get; private set; }
@@ -155,14 +155,16 @@ namespace Chubrik
             {
                 seekRoom = new GameObject("SeekRoom");
                 Parts.Layer = Layers.World;
-                var black = Mats.UnlitTransparent(new Color(0.02f, 0.02f, 0.03f, 1f));
-                var floor = M("111216", 0.1f);
-                Lobby.Solid(PrimitiveType.Cube, RoomPos + new Vector3(0, -0.25f, 0), new Vector3(8, 0.5f, 8), floor, default, seekRoom.transform);
-                Lobby.Solid(PrimitiveType.Cube, RoomPos + new Vector3(0, 6.25f, 0), new Vector3(8, 0.5f, 8), black, default, seekRoom.transform);
+                // a big closed black cube: the camera stays inside, nothing of the world is seen
+                var black = M("000000", 0f);
+                const float W = 34, H = 18;
+                Lobby.Solid(PrimitiveType.Cube, RoomPos + new Vector3(0, -0.5f, 0), new Vector3(W + 2, 1, W + 2), M("060607", 0f), default, seekRoom.transform);
+                Lobby.Solid(PrimitiveType.Cube, RoomPos + new Vector3(0, H + 0.5f, 0), new Vector3(W + 2, 1, W + 2), black, default, seekRoom.transform);
                 foreach (var d in new[] { Vector3.forward, Vector3.back, Vector3.left, Vector3.right })
-                    Lobby.Solid(PrimitiveType.Cube, RoomPos + d * 4 + Vector3.up * 3, d.x != 0 ? new Vector3(0.5f, 6, 8.5f) : new Vector3(8.5f, 6, 0.5f), black, default, seekRoom.transform);
+                    Lobby.Solid(PrimitiveType.Cube, RoomPos + d * (W / 2 + 0.5f) + Vector3.up * H / 2, d.x != 0 ? new Vector3(1, H + 2, W + 2) : new Vector3(W + 2, H + 2, 1), black, default, seekRoom.transform);
             }
             seekRoom.SetActive(true);
+            fogWas = RenderSettings.fog; RenderSettings.fog = false;   // the fog would paint the black walls grey
             pl.Teleport(RoomPos + Vector3.up * 0.2f, 0);
             AudioFx.Play("portal");
             // the choice: 5 … 35 seconds
@@ -198,6 +200,7 @@ namespace Chubrik
             if (seekUi) Object.Destroy(seekUi);
             seekUi = null;
             if (seekRoom) seekRoom.SetActive(false);
+            RenderSettings.fog = fogWas;
             if (pl) pl.Teleport(backPos + Vector3.up * 0.2f, backYaw);
             SeekDone++;
             AudioFx.Play("portal");

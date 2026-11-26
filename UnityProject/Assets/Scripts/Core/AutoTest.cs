@@ -39,14 +39,6 @@ namespace Chubrik
                 Application.Quit();
                 yield break;
             }
-            if (Boot.Has("-pvp"))
-            {
-                // v0.33 photos of the PvP arena (and a quick check that the abilities work)
-                yield return PvpPhotos();
-                File.WriteAllText(Path.Combine(dir, "autotest.txt"), $"RESULT: {pass} passed, {fail} failed\n" + log);
-                Application.Quit();
-                yield break;
-            }
             if (Boot.Arg("-overview") != null)
             {
                 // a photo of the lobby and of every world from straight above (and the backrooms without their ceiling)
@@ -2183,71 +2175,6 @@ namespace Chubrik
             yield return Wait(0.5f);
             for (float t = 0; t < 6 && Worlds.Current != w; t += Time.deltaTime) yield return null;
             yield return Wait(1.3f);
-        }
-
-        IEnumerator PvpPhotos()
-        {
-            var pl = PlayerCtl.I;
-            Menus.Play();
-            yield return Wait(1f);
-            Save.P.coins = 1000000; Save.P.pvpXp = 30.5f;
-            pl.Teleport(PvpArena.PadPos + new Vector3(0, 0.3f, -5), 0); pl.pitch = 14;
-            yield return Wait(1.2f);
-            yield return Shot("pvp_01_pad");
-            PvpArena.Menu();
-            yield return Wait(0.6f);
-            yield return Shot("pvp_02_menu");
-            Window.Close();
-            PvpArena.KitsWindow();
-            yield return Wait(0.6f);
-            yield return Shot("pvp_03_abilities");
-            Window.Close();
-            Save.P.pvpKit = 39; // Некромант
-            PvpArena.Start(1, true);
-            yield return Wait(4.5f);
-            Check("the arena opens with 4 bots", PvpArena.Active && PvpArena.Bots.Count == 4);
-            yield return Shot("pvp_04_ffa_start");
-            pl.MoveInput = Vector2.up;
-            yield return Wait(1.6f);
-            pl.MoveInput = Vector2.zero;
-            for (int k = 0; k < 10; k++) { pl.Attack(); yield return Wait(0.12f); }
-            yield return Shot("pvp_05_fight");
-            PvpKits.Use();
-            yield return Wait(1.2f);
-            yield return Shot("pvp_06_necromancer");
-            string[] tryKits = { "ТНТ", "Строитель", "Инженер", "Маг", "Статика", "Повелитель приливов", "Чумной доктор", "Ниндзя", "Разрушитель", "Счастливый" };
-            int okUses = 0;
-            for (int i = 0; i < tryKits.Length; i++)
-            {
-                int idx = PvpKits.All.FindIndex(k => k.name == tryKits[i]);
-                Save.P.pvpKit = idx; PvpKits.cdUntil = 0;
-                int u0 = PvpKits.Uses;
-                PvpKits.Use();
-                if (PvpKits.Uses == u0 + 1) okUses++;
-                yield return Wait(0.9f);
-                if (i % 3 == 0) yield return Shot("pvp_07_" + i);
-            }
-            Check("abilities fire", okUses == tryKits.Length, okUses + "/" + tryKits.Length);
-            PvpArena.Bow(); PvpArena.Apple();
-            yield return Wait(1.2f);
-            // a high look over the whole arena
-            pl.Frozen = true;
-            var cam = pl.Cam;
-            for (float t = 0; t < 1.5f; t += Time.deltaTime) { cam.transform.position = PvpArena.O + new Vector3(-16, 15, -16); cam.transform.LookAt(PvpArena.O); yield return null; }
-            yield return Shot("pvp_08_overview");
-            pl.Frozen = false;
-            yield return Wait(0.5f);
-            Check("kills give coins and a quarter of a level", PvpArena.Kills == 0 || Save.P.pvpXp > 30.5f, $"kills {PvpArena.Kills}, xp {Save.P.pvpXp}");
-            PvpArena.Leave();
-            yield return Wait(2f);
-            Save.P.pvpKit = 0;
-            PvpArena.Start(2, false);
-            yield return Wait(4f);
-            for (int k = 0; k < 30; k++) { pl.MoveInput = Vector2.up; pl.Attack(); yield return Wait(0.15f); }
-            pl.MoveInput = Vector2.zero;
-            yield return Shot("pvp_09_duel");
-            PvpArena.Leave();
-            yield return Wait(1.5f);
         }
 
         IEnumerator Shot(string name)

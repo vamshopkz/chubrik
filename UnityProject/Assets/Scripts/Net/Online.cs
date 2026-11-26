@@ -393,9 +393,6 @@ namespace Chubrik
                 case "K":
                     Stickers.OnNet(f);
                     break;
-                case "PVI": case "PVA": case "PVN": case "PVH": case "PVS": case "PVD": case "PVQ":
-                    PvpArena.OnNet(f);
-                    break;
                 case "KP":
                     HideSeek.OnNet(f);
                     break;

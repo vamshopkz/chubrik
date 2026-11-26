@@ -312,6 +312,15 @@ namespace Chubrik
                 Cartoon.Play();
                 return true;
             }
+            if (n == Norm("Чубрик"))
+            {
+                // 26.11: every chest opens at once and all the stickers appear
+                int got = Chests.OpenAll();
+                AudioFx.Play("token"); AudioFx.Play("magic"); PlayerCtl.I?.PlayVictory();
+                if (PlayerCtl.I) Effects.Emit("confetti", PlayerCtl.I.transform.position + Vector3.up * 2, 60, 1f, Vector3.up * 4);
+                Hud.Toast(got > 0 ? $"ЧУБРИК! Открыты все {Chests.Total} сундуков — все {Stickers.All.Count} стикеров твои!" : $"Все сундуки уже открыты — все {Stickers.All.Count} стикеров у тебя", UIKit.Gold);
+                return true;
+            }
             if (n == Norm("Секрет"))
             {
                 Window.Close();

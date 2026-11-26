@@ -25,6 +25,8 @@ namespace Chubrik
         public static void ByEgg(string eggId, Vector3 eggPos)
         {
             if (!int.TryParse(eggId.Substring(3), out int n)) return;
+            // 26.11: the premium-roof chest fell inside the closed shop — it now sits on the stone in the pond
+            if (n == 1) { SpawnAt(n, new Vector3(-46.2f, 0.7f, 14.8f), Vector3.forward); return; }
             Spawn(n, eggPos);
         }
 
@@ -35,7 +37,40 @@ namespace Chubrik
         public static void ByToken(string tokenId, Vector3 pos)
         {
             int k = System.Array.IndexOf(TokenChests, tokenId);
-            if (k >= 0) Spawn(10 + k, pos);
+            if (k < 0) return;
+            // 26.11: the chest high over the mushroom ended up in the invisible wall — it now stands on a bridge
+            if ((pos - (Lobby.TestMushroom + Vector3.up * 6.2f)).sqrMagnitude < 1f && OnBridge(out var bp, out var bf)) { SpawnAt(10 + k, bp, bf); return; }
+            Spawn(10 + k, pos);
+        }
+
+        /// <summary>The middle of the south bridge's deck (spawn → the jungle gate), facing along it.</summary>
+        static bool OnBridge(out Vector3 p, out Vector3 fwd)
+        {
+            p = default; fwd = Vector3.forward; float bd = 1e9f; Transform best = null;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if (t.name != "BridgeDeck") continue;
+                float d = (t.position - new Vector3(9.6f, 0, -15f)).sqrMagnitude;
+                if (d < bd) { bd = d; best = t; }
+            }
+            if (best == null) return false;
+            fwd = best.right;   // the deck's local z goes across the river: the chest faces the walkers
+            p = best.position + best.right * 0.55f + Vector3.up * (best.lossyScale.y / 2);
+            Physics.SyncTransforms();
+            if (Physics.Raycast(p + Vector3.up * 1.5f, Vector3.down, out var h, 3f, Layers.SolidMask, QueryTriggerInteraction.Ignore)) p = h.point;
+            return true;
+        }
+
+        static void SpawnAt(int i, Vector3 at, Vector3 face)
+        {
+            if (All.Exists(c => c && c.index == i)) return;
+            var go = new GameObject("Chest " + i);
+            go.transform.SetParent(Pickups.I != null ? Pickups.I.transform : null, false);
+            go.transform.SetPositionAndRotation(at, Quaternion.LookRotation(face));
+            var c = go.AddComponent<Chest>();
+            c.index = i;
+            c.Build();
+            All.Add(c);
         }
 
         static void Spawn(int i, Vector3 near)
@@ -70,6 +105,16 @@ namespace Chubrik
             c.index = i;
             c.Build();
             All.Add(c);
+        }
+
+        /// <summary>26.11 promo «Чубрик»: every chest opens at once — all the stickers are yours. Returns how many were new.</summary>
+        public static int OpenAll()
+        {
+            int n = 0;
+            for (int i = 0; i < Total; i++) if (!Opened(i)) { Save.P.found.Add("chest" + i); n++; }
+            foreach (var c in All) if (c) c.ShowOpen();
+            Save.Write();
+            return n;
         }
 
         /// <summary>B next to a closed chest opens it.</summary>
@@ -133,6 +178,8 @@ namespace Chubrik
             S(transform, new Vector3(0, 0.4f, 0), 1.4f, Add("FFE58A", 0.06f));
             if (IsOpen) lid.localRotation = Quaternion.Euler(110, 0, 0);
         }
+
+        public void ShowOpen() { if (lid && openT < 0 && lid.localRotation.eulerAngles.x < 1) openT = 0; }
 
         public void Open()
         {

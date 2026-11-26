@@ -83,7 +83,6 @@ namespace Chubrik
             Tokens();
             MakeSolid();
             Football.BuildPad(root);
-            PvpArena.BuildPad(root);   // v0.32 the PvP arena pad next to the football   // 18.11 (21.11: in the neon quarter)
             Portal8();                 // 19.11 the portal to World 8 (21.11: at its spot in the neon quarter)
             Eggs.SpawnLobby();
             Bird.ForWorld(1);

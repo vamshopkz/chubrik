@@ -228,7 +228,6 @@ namespace Chubrik
             if (Skates) speed *= 1.2f;
             if (Snowmobile) speed *= 1.8f;
             if (Time.time < SlowUntil) speed *= 0.55f;
-            if (PvpArena.Active) speed *= PvpKits.SpeedK();   // v0.33 arena abilities (racer, speedster, brute…)
             if (Cheats.Flying) speed *= 1.6f;
             var hv = new Vector3(vel.x, 0, vel.z);
             var target = wish * speed;
@@ -673,7 +672,6 @@ namespace Chubrik
 
         public void Attack()
         {
-            if (!Frozen && PvpArena.Swing(this)) return;   // v0.32: the arena's sword, no cooldown (1.8 style)
             if (Frozen || plunge != 0 || swim != 0) return;   // in the water B is «dive» (held)
             if (Cheats.Flying && !Grounded) return;   // flying: B is «down», not a plunge
             if (dive == 1 && !Grounded) { attackDownT = Time.time; return; }   // holding B turns the dive into the plunge
